@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Investment } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';

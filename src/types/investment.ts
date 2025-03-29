@@ -121,15 +121,6 @@ export interface CapitalGainResults {
 
 export type DeferralType = 'none' | 'partial' | 'total';
 
-export interface LMNPData {
-  buildingValue: number;
-  furnitureValue: number;
-  buildingAmortizationYears: number;
-  furnitureAmortizationYears: number;
-  deficitHistory: Record<number, number>;
-  excessAmortization: Record<number, number>;
-}
-
 export interface Investment {
   projectStartDate: string;
   projectEndDate: string;
@@ -169,13 +160,6 @@ export interface Investment {
   taxParameters: TaxParameters;
   taxResults: Record<TaxRegime, TaxResults>;
   capitalGainResults?: Record<TaxRegime, CapitalGainResults>;
-
-  // Nouvelles propriétés pour TaxForm
-  taxType: 'direct' | 'lmnp' | 'sci';
-  taxationMethod: 'real' | 'micro';
-  taxRate: number;
-  manualDeficit: number;
-  lmnpData?: LMNPData;
 }
 
 export const defaultTaxParameters: TaxParameters = {
@@ -291,17 +275,5 @@ export const defaultInvestment: Investment = {
       totalTax: 0,
       netIncome: 0
     }
-  },
-  taxType: 'direct',
-  taxationMethod: 'real',
-  taxRate: 30,
-  manualDeficit: 0,
-  lmnpData: {
-    buildingValue: 0,
-    furnitureValue: 0,
-    buildingAmortizationYears: 25,
-    furnitureAmortizationYears: 10,
-    deficitHistory: {},
-    excessAmortization: {}
   }
 };
