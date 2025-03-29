@@ -1,0 +1,1 @@
+export type TaxRegime = 'micro-foncier' | 'reel-foncier' | 'micro-bic' | 'reel-bic'; 

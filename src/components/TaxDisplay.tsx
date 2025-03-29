@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { Investment, LMNPData } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
+import { GrossYieldChart } from './GrossYieldChart';
 
 interface Props {
   investment: Investment;
@@ -20,6 +21,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
   const [taxHistory, setTaxHistory] = useState<TaxHistory[]>([]);
   const [taxRate, setTaxRate] = useState<number>(investment.taxRate || 30);
   const [manualDeficit, setManualDeficit] = useState<number>(investment.manualDeficit || 0);
+  const [currentView, setCurrentView] = useState<'current' | 'history'>('current');
   
   // LMNP specific state
   const [buildingValue, setBuildingValue] = useState<number>(investment.lmnpData?.buildingValue || 0);
@@ -134,7 +136,8 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
         loanPayment: 0,
         loanInsurance: 0,
         taxBenefit: 0,
-        interest: 0
+        interest: 0,
+        furnishedRent: 0
       });
     } else {
       updatedExpenses[expenseIndex] = {
@@ -490,133 +493,109 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Type d'investissement */}
+      {/* Graphique d'évolution des rendements */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Type d'investissement</h3>
-        <div className="space-y-4">
-          <div>
-            <select
-              value={taxType}
-              onChange={(e) => handleTaxTypeChange(e.target.value as 'direct' | 'lmnp' | 'sci')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="direct">Location nue</option>
-              <option value="lmnp">LMNP</option>
-              <option value="sci">SCI à l'IS</option>
-            </select>
-          </div>
-
-          {taxType === 'direct' && (
-            <div className="space-x-4">
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  value="real"
-                  checked={taxationMethod === 'real'}
-                  onChange={() => handleTaxationMethodChange('real')}
-                  className="form-radio h-4 w-4 text-blue-600"
-                />
-                <span className="ml-2">Frais réels</span>
-              </label>
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  value="micro"
-                  checked={taxationMethod === 'micro'}
-                  onChange={() => handleTaxationMethodChange('micro')}
-                  className="form-radio h-4 w-4 text-blue-600"
-                />
-                <span className="ml-2">Micro foncier</span>
-              </label>
-            </div>
-          )}
-
-          {taxType === 'lmnp' && (
-            <div className="space-x-4">
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  value="real"
-                  checked={taxationMethod === 'real'}
-                  onChange={() => handleTaxationMethodChange('real')}
-                  className="form-radio h-4 w-4 text-blue-600"
-                />
-                <span className="ml-2">Frais réels</span>
-              </label>
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  value="micro"
-                  checked={taxationMethod === 'micro'}
-                  onChange={() => handleTaxationMethodChange('micro')}
-                  className="form-radio h-4 w-4 text-blue-600"
-                />
-                <span className="ml-2">Micro-BIC</span>
-              </label>
-            </div>
-          )}
-        </div>
+        <h3 className="text-lg font-semibold mb-4">Évolution des rendements par régime fiscal</h3>
+        <GrossYieldChart investment={investment} />
       </div>
 
-      {taxType === 'direct' && (
+      {/* Navigation */}
+      <div className="flex space-x-4">
+        <button
+          onClick={() => setCurrentView('current')}
+          className={`px-4 py-2 rounded-md ${
+            currentView === 'current'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Année courante
+        </button>
+        <button
+          onClick={() => setCurrentView('history')}
+          className={`px-4 py-2 rounded-md ${
+            currentView === 'history'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Historique et projection
+        </button>
+      </div>
+
+      {currentView === 'current' ? (
         <>
-          {/* Historique d'imposition */}
+          {/* Type d'investissement */}
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Historique d'imposition</h3>
-            {taxHistory.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Année
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Imposition
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Déficit foncier
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {taxHistory.map((item) => (
-                      <tr key={item.year}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {item.year}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <input
-                            type="number"
-                            value={item.tax}
-                            onChange={(e) => handleTaxHistoryChange(item.year, 'tax', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <input
-                            type="number"
-                            value={item.deficit}
-                            onChange={(e) => handleTaxHistoryChange(item.year, 'deficit', Number(e.target.value))}
-                            disabled={item.tax !== 0}
-                            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-                              item.tax !== 0 ? 'bg-gray-100' : ''
-                            }`}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <h3 className="text-lg font-semibold mb-4">Type d'investissement</h3>
+            <div className="space-y-4">
+              <div>
+                <select
+                  value={taxType}
+                  onChange={(e) => handleTaxTypeChange(e.target.value as 'direct' | 'lmnp' | 'sci')}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="direct">Location nue</option>
+                  <option value="lmnp">LMNP</option>
+                  <option value="sci">SCI à l'IS</option>
+                </select>
               </div>
-            ) : (
-              <p className="text-gray-600">Pas d'historique disponible pour les années précédentes.</p>
-            )}
+
+              {taxType === 'direct' && (
+                <div className="space-x-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="real"
+                      checked={taxationMethod === 'real'}
+                      onChange={() => handleTaxationMethodChange('real')}
+                      className="form-radio h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2">Frais réels</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="micro"
+                      checked={taxationMethod === 'micro'}
+                      onChange={() => handleTaxationMethodChange('micro')}
+                      className="form-radio h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2">Micro foncier</span>
+                  </label>
+                </div>
+              )}
+
+              {taxType === 'lmnp' && (
+                <div className="space-x-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="real"
+                      checked={taxationMethod === 'real'}
+                      onChange={() => handleTaxationMethodChange('real')}
+                      className="form-radio h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2">Frais réels</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="micro"
+                      checked={taxationMethod === 'micro'}
+                      onChange={() => handleTaxationMethodChange('micro')}
+                      className="form-radio h-4 w-4 text-blue-600"
+                    />
+                    <span className="ml-2">Micro-BIC</span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Détails de l'imposition */}
+          {/* Année courante */}
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Détails de l'imposition</h3>
+            <h3 className="text-lg font-semibold mb-4">Année courante</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -688,23 +667,246 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
             </div>
           </div>
 
-          {/* Résultats */}
+          {taxType === 'lmnp' && (
+            <>
+              {/* Paramètres LMNP */}
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h3 className="text-lg font-semibold mb-4">Paramètres d'imposition LMNP</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Valeur du bien immobilier (hors terrain)
+                      <div className="group relative ml-1">
+                        <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
+                          Valeur du bien immobilier hors terrain (environ 85% du prix d'achat)
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={buildingValue}
+                      onChange={(e) => handleLMNPDataChange('buildingValue', Number(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Valeur du mobilier
+                      <div className="group relative ml-1">
+                        <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
+                          Valeur des équipements meublants
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={furnitureValue}
+                      onChange={(e) => handleLMNPDataChange('furnitureValue', Number(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Durée d'amortissement du bien (années)
+                    </label>
+                    <input
+                      type="number"
+                      value={buildingAmortizationYears}
+                      onChange={(e) => handleLMNPDataChange('buildingAmortizationYears', Number(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Durée d'amortissement du mobilier (années)
+                    </label>
+                    <input
+                      type="number"
+                      value={furnitureAmortizationYears}
+                      onChange={(e) => handleLMNPDataChange('furnitureAmortizationYears', Number(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Détails de l'imposition LMNP */}
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h3 className="text-lg font-semibold mb-4">Détails de l'imposition</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Loyers perçus
+                    </label>
+                    <input
+                      type="number"
+                      value={currentYearExpenses?.rent || 0}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Charges imputées au locataire
+                    </label>
+                    <input
+                      type="number"
+                      value={currentYearExpenses?.tenantCharges || 0}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Charges déductibles
+                    </label>
+                    <input
+                      type="number"
+                      value={getDeductibleExpenses(currentYearExpenses)}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Amortissements
+                      <div className="group relative ml-1">
+                        <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
+                          Amortissement annuel = Amortissement du bien + Amortissement du mobilier
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={
+                        (buildingValue > 0 ? (buildingValue * 0.85) / buildingAmortizationYears : 0) +
+                        (furnitureValue > 0 ? furnitureValue / furnitureAmortizationYears : 0)
+                      }
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Déficit reporté
+                      <div className="group relative ml-1">
+                        <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
+                          Déficit fiscal reporté des années précédentes (plafonné à 10 700€ par an)
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={lmnpDeficitHistory[currentYear - 1] || 0}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Amortissements excédentaires reportés
+                      <div className="group relative ml-1">
+                        <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
+                          Amortissements non utilisés des années précédentes (report illimité)
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={excessAmortization[currentYear - 1] || 0}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Résultats LMNP */}
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h3 className="text-lg font-semibold mb-4">Résultats</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Imposition</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {formatCurrency(currentLMNPTaxResult.tax)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Déficit fiscal reportable</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {formatCurrency(currentLMNPTaxResult.deficit)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Amortissements excédentaires</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {formatCurrency(currentLMNPTaxResult.excessAmortization)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Historique d'imposition */}
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Résultats</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Imposition</p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(currentDirectTaxResult.tax)}
-                </p>
+            <h3 className="text-lg font-semibold mb-4">Historique d'imposition</h3>
+            {taxHistory.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Année
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Imposition
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Déficit foncier
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {taxHistory.map((item) => (
+                      <tr key={item.year}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {item.year}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <input
+                            type="number"
+                            value={item.tax}
+                            onChange={(e) => handleTaxHistoryChange(item.year, 'tax', Number(e.target.value))}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <input
+                            type="number"
+                            value={item.deficit}
+                            onChange={(e) => handleTaxHistoryChange(item.year, 'deficit', Number(e.target.value))}
+                            disabled={item.tax !== 0}
+                            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
+                              item.tax !== 0 ? 'bg-gray-100' : ''
+                            }`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Déficit pour l'année à venir</p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(currentDirectTaxResult.nextYearDeficit)}
-                </p>
-              </div>
-            </div>
+            ) : (
+              <p className="text-gray-600">Pas d'historique disponible pour les années précédentes.</p>
+            )}
           </div>
 
           {/* Projection */}
@@ -746,248 +948,56 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
         </>
       )}
 
-      {taxType === 'lmnp' && (
-        <>
-          {/* Paramètres LMNP */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Paramètres LMNP</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Valeur du bien immobilier (hors terrain)
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      Valeur du bien immobilier hors terrain (environ 85% du prix d'achat)
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={buildingValue}
-                  onChange={(e) => handleLMNPDataChange('buildingValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Valeur du mobilier
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      Valeur des équipements meublants
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={furnitureValue}
-                  onChange={(e) => handleLMNPDataChange('furnitureValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement du bien (années)
-                </label>
-                <input
-                  type="number"
-                  value={buildingAmortizationYears}
-                  onChange={(e) => handleLMNPDataChange('buildingAmortizationYears', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement du mobilier (années)
-                </label>
-                <input
-                  type="number"
-                  value={furnitureAmortizationYears}
-                  onChange={(e) => handleLMNPDataChange('furnitureAmortizationYears', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  % d'imposition
-                </label>
-                <input
-                  type="number"
-                  value={taxRate}
-                  onChange={(e) => handleTaxRateChange(Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+      {/* Historique et projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-semibold mb-4">Historique et projection</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Imposition</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {formatCurrency(currentDirectTaxResult.tax)}
+            </p>
           </div>
-
-          {/* Détails de l'imposition LMNP */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Détails de l'imposition</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Déficit pour l'année à venir</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {formatCurrency(currentDirectTaxResult.nextYearDeficit)}
+            </p>
+          </div>
+        </div>
+        <div className="overflow-x-auto mt-4">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Année
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Loyers perçus
-                </label>
-                <input
-                  type="number"
-                  value={currentYearExpenses?.rent || 0}
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Charges imputées au locataire
-                </label>
-                <input
-                  type="number"
-                  value={currentYearExpenses?.tenantCharges || 0}
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Charges déductibles
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      {getDeductibleExpensesBreakdown()}
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={getDeductibleExpenses(currentYearExpenses)}
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Amortissements
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      Amortissement annuel = Amortissement du bien + Amortissement du mobilier
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={
-                    (buildingValue > 0 ? (buildingValue * 0.85) / buildingAmortizationYears : 0) +
-                    (furnitureValue > 0 ? furnitureValue / furnitureAmortizationYears : 0)
-                  }
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Charges locataires
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Déficit reporté
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      Déficit fiscal reporté des années précédentes (plafonné à 10 700€ par an)
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={lmnpDeficitHistory[currentYear - 1] || 0}
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Amortissements excédentaires reportés
-                  <div className="group relative ml-1">
-                    <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-pre-line">
-                      Amortissements non utilisés des années précédentes (report illimité)
-                    </div>
-                  </div>
-                </label>
-                <input
-                  type="number"
-                  value={excessAmortization[currentYear - 1] || 0}
-                  disabled
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Résultats LMNP */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Résultats</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Imposition</p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(currentLMNPTaxResult.tax)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Déficit fiscal reportable</p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(currentLMNPTaxResult.deficit)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Amortissements excédentaires</p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(currentLMNPTaxResult.excessAmortization)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Projection LMNP */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Projection</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Année
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Loyers perçus
-                    </th>
-                    <th className="px-6 py-3 text- left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Charges locataires
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Charges déductibles
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amortissements
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Imposition
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Déficit fiscal
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amort. excédentaires
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {renderLMNPProjectionTable()}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Charges déductibles
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Imposition
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Déficit généré
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {renderDirectProjectionTable()}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {taxType === 'sci' && (
         <div className="bg-white p-6 rounded-lg shadow-md">

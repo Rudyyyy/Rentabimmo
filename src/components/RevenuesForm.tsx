@@ -33,6 +33,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         otherDeductible: 0,
         otherNonDeductible: 0,
         rent: 0,
+        furnishedRent: 0,
         tenantCharges: 0,
         tax: 0,
         deficit: 0,
@@ -52,12 +53,20 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     // Recalculer les projections après chaque modification
     const currentValues = {
       rent: value,
+      furnishedRent: updatedExpenses[expenseIndex]?.furnishedRent || 0,
       tenantCharges: updatedExpenses[expenseIndex]?.tenantCharges || 0
     };
 
     if (field === 'tenantCharges') {
       currentValues.rent = updatedExpenses[expenseIndex]?.rent || 0;
+      currentValues.furnishedRent = updatedExpenses[expenseIndex]?.furnishedRent || 0;
       currentValues.tenantCharges = value;
+    }
+
+    if (field === 'furnishedRent') {
+      currentValues.rent = updatedExpenses[expenseIndex]?.rent || 0;
+      currentValues.furnishedRent = value;
+      currentValues.tenantCharges = updatedExpenses[expenseIndex]?.tenantCharges || 0;
     }
 
     // Mettre à jour les projections pour toutes les années futures
@@ -66,6 +75,11 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
       const projectedRent = calculateProjectedValue(
         currentValues.rent,
         investment.expenseProjection.rentIncrease,
+        yearsAhead
+      );
+      const projectedFurnishedRent = calculateProjectedValue(
+        currentValues.furnishedRent,
+        investment.expenseProjection.furnishedRentIncrease,
         yearsAhead
       );
       const projectedCharges = calculateProjectedValue(
@@ -87,6 +101,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           otherDeductible: 0,
           otherNonDeductible: 0,
           rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
           tenantCharges: projectedCharges,
           tax: 0,
           deficit: 0,
@@ -99,6 +114,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         updatedExpenses[projIndex] = {
           ...updatedExpenses[projIndex],
           rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
           tenantCharges: projectedCharges
         };
       }
@@ -122,6 +138,11 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         field === 'rentIncrease' ? value : investment.expenseProjection.rentIncrease,
         yearsAhead
       );
+      const projectedFurnishedRent = calculateProjectedValue(
+        currentValues.furnishedRent,
+        field === 'furnishedRentIncrease' ? value : investment.expenseProjection.furnishedRentIncrease,
+        yearsAhead
+      );
       const projectedCharges = calculateProjectedValue(
         currentValues.tenantCharges,
         field === 'tenantChargesIncrease' ? value : investment.expenseProjection.tenantChargesIncrease,
@@ -141,6 +162,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           otherDeductible: 0,
           otherNonDeductible: 0,
           rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
           tenantCharges: projectedCharges,
           tax: 0,
           deficit: 0,
@@ -153,6 +175,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         updatedExpenses[expenseIndex] = {
           ...updatedExpenses[expenseIndex],
           rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
           tenantCharges: projectedCharges
         };
       }
@@ -173,10 +196,15 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
   };
 
   const getCurrentYearValues = () => {
-    const currentYearExpenses = investment.expenses.find(e => e.year === years.currentYear);
+    const currentExpense = investment.expenses.find(e => e.year === years.currentYear) || {
+      rent: 0,
+      furnishedRent: 0,
+      tenantCharges: 0
+    };
     return {
-      rent: currentYearExpenses?.rent || 0,
-      tenantCharges: currentYearExpenses?.tenantCharges || 0
+      rent: currentExpense.rent || 0,
+      furnishedRent: currentExpense.furnishedRent || 0,
+      tenantCharges: currentExpense.tenantCharges || 0
     };
   };
 
@@ -192,6 +220,11 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         const projectedRent = year <= years.currentYear ? 0 : calculateProjectedValue(
           currentValues.rent,
           investment.expenseProjection.rentIncrease,
+          yearsAhead
+        );
+        const projectedFurnishedRent = year <= years.currentYear ? 0 : calculateProjectedValue(
+          currentValues.furnishedRent,
+          investment.expenseProjection.furnishedRentIncrease,
           yearsAhead
         );
         const projectedCharges = year <= years.currentYear ? 0 : calculateProjectedValue(
@@ -211,6 +244,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           otherDeductible: 0,
           otherNonDeductible: 0,
           rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
           tenantCharges: projectedCharges,
           tax: 0,
           deficit: 0,
@@ -230,20 +264,102 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     }
   }, [years.startYear, years.endYear]);
 
+  const handleBaseYearChange = (field: keyof Investment['expenseProjection']['baseYear'], value: number) => {
+    const updatedInvestment = {
+      ...investment,
+      expenseProjection: {
+        ...investment.expenseProjection,
+        baseYear: {
+          ...investment.expenseProjection.baseYear,
+          [field]: value
+        }
+      }
+    };
+
+    const updatedExpenses = [...investment.expenses];
+    
+    // Mettre à jour les projections pour toutes les années futures
+    for (let year = years.currentYear + 1; year <= years.endYear; year++) {
+      const yearsAhead = year - 2025; // Utiliser 2025 comme année de référence
+      const projectedRent = calculateProjectedValue(
+        field === 'rent' ? value : investment.expenseProjection.baseYear.rent,
+        investment.expenseProjection.rentIncrease,
+        yearsAhead
+      );
+      const projectedFurnishedRent = calculateProjectedValue(
+        field === 'furnishedRent' ? value : investment.expenseProjection.baseYear.furnishedRent,
+        investment.expenseProjection.furnishedRentIncrease,
+        yearsAhead
+      );
+      const projectedCharges = calculateProjectedValue(
+        field === 'tenantCharges' ? value : investment.expenseProjection.baseYear.tenantCharges,
+        investment.expenseProjection.tenantChargesIncrease,
+        yearsAhead
+      );
+      const projectedTaxBenefit = calculateProjectedValue(
+        field === 'taxBenefit' ? value : investment.expenseProjection.baseYear.taxBenefit,
+        investment.expenseProjection.taxBenefitIncrease,
+        yearsAhead
+      );
+
+      const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
+      if (expenseIndex === -1) {
+        updatedExpenses.push({
+          year,
+          propertyTax: 0,
+          condoFees: 0,
+          propertyInsurance: 0,
+          managementFees: 0,
+          unpaidRentInsurance: 0,
+          repairs: 0,
+          otherDeductible: 0,
+          otherNonDeductible: 0,
+          rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
+          tenantCharges: projectedCharges,
+          tax: 0,
+          deficit: 0,
+          loanPayment: 0,
+          loanInsurance: 0,
+          taxBenefit: projectedTaxBenefit,
+          interest: 0
+        });
+      } else {
+        updatedExpenses[expenseIndex] = {
+          ...updatedExpenses[expenseIndex],
+          rent: projectedRent,
+          furnishedRent: projectedFurnishedRent,
+          tenantCharges: projectedCharges,
+          taxBenefit: projectedTaxBenefit
+        };
+      }
+    }
+
+    onUpdate({
+      ...updatedInvestment,
+      expenses: updatedExpenses.sort((a, b) => a.year - b.year)
+    });
+  };
+
   const renderHistoricalTable = () => {
     const rows = [];
     for (let year = years.startYear; year <= years.currentYear; year++) {
       const expense = investment.expenses.find(e => e.year === year) || {
         year,
         rent: 0,
+        furnishedRent: 0,
         tenantCharges: 0,
         taxBenefit: 0
       };
 
-      const totalRevenue = 
+      const totalNu = 
         Number(expense.rent || 0) +
         Number(expense.tenantCharges || 0) +
         Number(expense.taxBenefit || 0);
+
+      const totalMeuble = 
+        Number(expense.furnishedRent || 0) +
+        Number(expense.tenantCharges || 0);
 
       rows.push(
         <tr key={year} className={year === years.currentYear ? 'bg-blue-50' : ''}>
@@ -255,6 +371,14 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
               type="number"
               value={expense.rent || ''}
               onChange={(e) => handleExpenseChange(year, 'rent', Number(e.target.value))}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <input
+              type="number"
+              value={expense.furnishedRent || ''}
+              onChange={(e) => handleExpenseChange(year, 'furnishedRent', Number(e.target.value))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
           </td>
@@ -275,7 +399,10 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
             />
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(totalNu)}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
+            {formatCurrency(totalMeuble)}
           </td>
         </tr>
       );
@@ -289,10 +416,14 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
       const expense = investment.expenses.find(e => e.year === year);
       if (!expense) continue;
 
-      const totalRevenue = 
+      const totalNu = 
         Number(expense.rent || 0) +
         Number(expense.tenantCharges || 0) +
         Number(expense.taxBenefit || 0);
+
+      const totalMeuble = 
+        Number(expense.furnishedRent || 0) +
+        Number(expense.tenantCharges || 0);
 
       rows.push(
         <tr key={year}>
@@ -301,6 +432,9 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             {formatCurrency(expense.rent || 0)}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatCurrency(expense.furnishedRent || 0)}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             <input
@@ -314,7 +448,10 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
             {formatCurrency(expense.tenantCharges || 0)}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(totalNu)}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
+            {formatCurrency(totalMeuble)}
           </td>
         </tr>
       );
@@ -323,8 +460,8 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Historical Data */}
+    <div className="space-y-6">
+      {/* Tableau d'historique */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Historique
@@ -336,16 +473,22 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
                 Année
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Loyers
+                Loyer nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Loyer meublé
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Aide fiscale
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Charges locataires
+                Charges locataire
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-emerald-700 uppercase tracking-wider">
-                Total recettes
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total meublé
               </th>
             </tr>
           </thead>
@@ -355,43 +498,123 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         </table>
       </div>
 
-      {/* Projection Parameters */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      {/* Base de projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Paramètres de projection
+          Base de projection (2025)
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { key: 'rentIncrease', label: 'Loyers' },
-            { key: 'tenantChargesIncrease', label: 'Charges locataire' }
-          ].map(({ key, label }) => (
-            <div key={key} className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                {label} (%)
-              </label>
-              <div className="flex items-center space-x-4">
-                <input
-                  type="range"
-                  min="-10"
-                  max="10"
-                  step="0.1"
-                  value={investment.expenseProjection[key] || 0}
-                  onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
-                  className="w-full"
-                />
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Loyer nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Loyer meublé
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Aide fiscale
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Charges locataire
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            <tr>
+              <td className="px-6 py-4 whitespace-nowrap">
                 <input
                   type="number"
-                  value={investment.expenseProjection[key] || 0}
-                  onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
-                  className="w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={investment.expenseProjection.baseYear?.rent || 0}
+                  onChange={(e) => handleBaseYearChange('rent', Number(e.target.value))}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
-              </div>
-            </div>
-          ))}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={investment.expenseProjection.baseYear?.furnishedRent || 0}
+                  onChange={(e) => handleBaseYearChange('furnishedRent', Number(e.target.value))}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={investment.expenseProjection.baseYear?.taxBenefit || 0}
+                  onChange={(e) => handleBaseYearChange('taxBenefit', Number(e.target.value))}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={investment.expenseProjection.baseYear?.tenantCharges || 0}
+                  onChange={(e) => handleBaseYearChange('tenantCharges', Number(e.target.value))}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Paramètres de projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-semibold mb-4">Paramètres de projection</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Augmentation annuelle du loyer nu (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={investment.expenseProjection.rentIncrease}
+              onChange={(e) => handleProjectionChange('rentIncrease', Number(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Augmentation annuelle du loyer meublé (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={investment.expenseProjection.furnishedRentIncrease}
+              onChange={(e) => handleProjectionChange('furnishedRentIncrease', Number(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Augmentation annuelle des charges locataire (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={investment.expenseProjection.tenantChargesIncrease}
+              onChange={(e) => handleProjectionChange('tenantChargesIncrease', Number(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Augmentation annuelle de l'aide fiscale (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={investment.expenseProjection.taxBenefitIncrease}
+              onChange={(e) => handleProjectionChange('taxBenefitIncrease', Number(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Projected Data */}
+      {/* Tableau de projection */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Projection
@@ -403,16 +626,22 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
                 Année
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Loyers
+                Loyer nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Loyer meublé
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Aide fiscale
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Charges locataires
+                Charges locataire
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-emerald-700 uppercase tracking-wider">
-                Total recettes
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total meublé
               </th>
             </tr>
           </thead>

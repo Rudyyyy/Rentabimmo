@@ -1,11 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Investment, YearlyExpenses } from '../types/investment';
+import { Investment, YearlyExpenses, ExpenseProjection } from '../types/investment';
 import { HelpCircle } from 'lucide-react';
 import { generateAmortizationSchedule } from '../utils/calculations';
 
 interface Props {
   investment: Investment;
-  onUpdate: (updatedInvestment: Investment) => void;
+  onUpdate: (investment: Investment) => void;
+}
+
+interface BaseYearExpenses {
+  propertyTax: number;
+  condoFees: number;
+  propertyInsurance: number;
+  managementFees: number;
+  unpaidRentInsurance: number;
+  repairs: number;
+  otherDeductible: number;
+  otherNonDeductible: number;
 }
 
 function ExpensesForm({ investment, onUpdate }: Props) {
@@ -153,51 +164,51 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     });
   };
 
-  const handleProjectionChange = (field: keyof Investment['expenseProjection'], value: number) => {
-    const currentValues = getCurrentYearValues();
+  const handleProjectionChange = (field: keyof ExpenseProjection, value: number) => {
+    const baseValues = investment.expenseProjection.baseYear;
     const updatedExpenses = [...investment.expenses];
 
     // Mettre à jour les projections pour toutes les années futures
     for (let year = years.currentYear + 1; year <= years.endYear; year++) {
-      const yearsAhead = year - years.currentYear;
+      const yearsAhead = year - 2025; // Utiliser 2025 comme année de référence
       const projectedValues = {
         propertyTax: calculateProjectedValue(
-          currentValues.propertyTax,
+          baseValues.propertyTax,
           field === 'propertyTaxIncrease' ? value : investment.expenseProjection.propertyTaxIncrease,
           yearsAhead
         ),
         condoFees: calculateProjectedValue(
-          currentValues.condoFees,
+          baseValues.condoFees,
           field === 'condoFeesIncrease' ? value : investment.expenseProjection.condoFeesIncrease,
           yearsAhead
         ),
         propertyInsurance: calculateProjectedValue(
-          currentValues.propertyInsurance,
+          baseValues.propertyInsurance,
           field === 'propertyInsuranceIncrease' ? value : investment.expenseProjection.propertyInsuranceIncrease,
           yearsAhead
         ),
         managementFees: calculateProjectedValue(
-          currentValues.managementFees,
+          baseValues.managementFees,
           field === 'managementFeesIncrease' ? value : investment.expenseProjection.managementFeesIncrease,
           yearsAhead
         ),
         unpaidRentInsurance: calculateProjectedValue(
-          currentValues.unpaidRentInsurance,
+          baseValues.unpaidRentInsurance,
           field === 'unpaidRentInsuranceIncrease' ? value : investment.expenseProjection.unpaidRentInsuranceIncrease,
           yearsAhead
         ),
         repairs: calculateProjectedValue(
-          currentValues.repairs,
+          baseValues.repairs,
           field === 'repairsIncrease' ? value : investment.expenseProjection.repairsIncrease,
           yearsAhead
         ),
         otherDeductible: calculateProjectedValue(
-          currentValues.otherDeductible,
+          baseValues.otherDeductible,
           field === 'otherDeductibleIncrease' ? value : investment.expenseProjection.otherDeductibleIncrease,
           yearsAhead
         ),
         otherNonDeductible: calculateProjectedValue(
-          currentValues.otherNonDeductible,
+          baseValues.otherNonDeductible,
           field === 'otherNonDeductibleIncrease' ? value : investment.expenseProjection.otherNonDeductibleIncrease,
           yearsAhead
         )
@@ -231,12 +242,14 @@ function ExpensesForm({ investment, onUpdate }: Props) {
       }
     }
 
+    const updatedProjection = { ...investment.expenseProjection };
+    if (field !== 'baseYear') {
+      updatedProjection[field] = value;
+    }
+
     onUpdate({
       ...investment,
-      expenseProjection: {
-        ...investment.expenseProjection,
-        [field]: value
-      },
+      expenseProjection: updatedProjection,
       expenses: updatedExpenses.sort((a, b) => a.year - b.year)
     });
   };
@@ -261,13 +274,13 @@ function ExpensesForm({ investment, onUpdate }: Props) {
 
   // Initialisation des projections au montage du composant
   useEffect(() => {
-    const currentValues = getCurrentYearValues();
+    const baseValues = investment.expenseProjection.baseYear;
     const updatedExpenses = [...investment.expenses];
     
     // S'assurer que toutes les années sont présentes
     for (let year = years.startYear; year <= years.endYear; year++) {
       if (!updatedExpenses.some(e => e.year === year)) {
-        const yearsAhead = year - years.currentYear;
+        const yearsAhead = year - 2025; // Utiliser 2025 comme année de référence
         const yearlyInterests = getInterestForYear(year);
         const loanInfo = getLoanInfoForYear(year);
 
@@ -282,42 +295,42 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           otherNonDeductible: 0
         } : {
           propertyTax: calculateProjectedValue(
-            currentValues.propertyTax,
+            baseValues.propertyTax,
             investment.expenseProjection.propertyTaxIncrease,
             yearsAhead
           ),
           condoFees: calculateProjectedValue(
-            currentValues.condoFees,
+            baseValues.condoFees,
             investment.expenseProjection.condoFeesIncrease,
             yearsAhead
           ),
           propertyInsurance: calculateProjectedValue(
-            currentValues.propertyInsurance,
+            baseValues.propertyInsurance,
             investment.expenseProjection.propertyInsuranceIncrease,
             yearsAhead
           ),
           managementFees: calculateProjectedValue(
-            currentValues.managementFees,
+            baseValues.managementFees,
             investment.expenseProjection.managementFeesIncrease,
             yearsAhead
           ),
           unpaidRentInsurance: calculateProjectedValue(
-            currentValues.unpaidRentInsurance,
+            baseValues.unpaidRentInsurance,
             investment.expenseProjection.unpaidRentInsuranceIncrease,
             yearsAhead
           ),
           repairs: calculateProjectedValue(
-            currentValues.repairs,
+            baseValues.repairs,
             investment.expenseProjection.repairsIncrease,
             yearsAhead
           ),
           otherDeductible: calculateProjectedValue(
-            currentValues.otherDeductible,
+            baseValues.otherDeductible,
             investment.expenseProjection.otherDeductibleIncrease,
             yearsAhead
           ),
           otherNonDeductible: calculateProjectedValue(
-            currentValues.otherNonDeductible,
+            baseValues.otherNonDeductible,
             investment.expenseProjection.otherNonDeductibleIncrease,
             yearsAhead
           )
@@ -338,13 +351,149 @@ function ExpensesForm({ investment, onUpdate }: Props) {
       }
     }
 
-    if (updatedExpenses.length > investment.expenses.length) {
+    // Initialiser les valeurs de base avec les données de 2025 si elles ne sont pas déjà définies
+    const baseYearExpenses = updatedExpenses.find(e => e.year === 2025);
+    if (baseYearExpenses && !investment.expenseProjection.baseYear) {
+      onUpdate({
+        ...investment,
+        expenseProjection: {
+          ...investment.expenseProjection,
+          baseYear: {
+            propertyTax: baseYearExpenses.propertyTax,
+            condoFees: baseYearExpenses.condoFees,
+            propertyInsurance: baseYearExpenses.propertyInsurance,
+            managementFees: baseYearExpenses.managementFees,
+            unpaidRentInsurance: baseYearExpenses.unpaidRentInsurance,
+            repairs: baseYearExpenses.repairs,
+            otherDeductible: baseYearExpenses.otherDeductible,
+            otherNonDeductible: baseYearExpenses.otherNonDeductible
+          }
+        },
+        expenses: updatedExpenses.sort((a, b) => a.year - b.year)
+      });
+    } else if (updatedExpenses.length > investment.expenses.length) {
       onUpdate({
         ...investment,
         expenses: updatedExpenses.sort((a, b) => a.year - b.year)
       });
     }
   }, [years.startYear, years.endYear]);
+
+  const handleBaseYearChange = (field: keyof ExpenseProjection['baseYear'], value: number) => {
+    const updatedInvestment = { ...investment };
+    if (!updatedInvestment.expenseProjection) {
+      updatedInvestment.expenseProjection = {
+        propertyTaxIncrease: 2,
+        condoFeesIncrease: 2,
+        propertyInsuranceIncrease: 1,
+        managementFeesIncrease: 1,
+        unpaidRentInsuranceIncrease: 1,
+        repairsIncrease: 2,
+        otherDeductibleIncrease: 1,
+        otherNonDeductibleIncrease: 1,
+        rentIncrease: 2,
+        tenantChargesIncrease: 2,
+        taxIncrease: 1,
+        taxBenefitIncrease: 1,
+        baseYear: {
+          propertyTax: 0,
+          condoFees: 0,
+          propertyInsurance: 0,
+          managementFees: 0,
+          unpaidRentInsurance: 0,
+          repairs: 0,
+          otherDeductible: 0,
+          otherNonDeductible: 0
+        }
+      };
+    }
+    
+    // Mettre à jour la valeur de base
+    updatedInvestment.expenseProjection.baseYear = {
+      ...updatedInvestment.expenseProjection.baseYear,
+      [field]: value
+    };
+
+    // Recalculer les projections pour toutes les années futures
+    const updatedExpenses = [...updatedInvestment.expenses];
+    for (let year = years.currentYear + 1; year <= years.endYear; year++) {
+      const yearsAhead = year - 2025; // Utiliser 2025 comme année de référence
+      const projectedValues = {
+        propertyTax: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.propertyTax,
+          updatedInvestment.expenseProjection.propertyTaxIncrease,
+          yearsAhead
+        ),
+        condoFees: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.condoFees,
+          updatedInvestment.expenseProjection.condoFeesIncrease,
+          yearsAhead
+        ),
+        propertyInsurance: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.propertyInsurance,
+          updatedInvestment.expenseProjection.propertyInsuranceIncrease,
+          yearsAhead
+        ),
+        managementFees: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.managementFees,
+          updatedInvestment.expenseProjection.managementFeesIncrease,
+          yearsAhead
+        ),
+        unpaidRentInsurance: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.unpaidRentInsurance,
+          updatedInvestment.expenseProjection.unpaidRentInsuranceIncrease,
+          yearsAhead
+        ),
+        repairs: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.repairs,
+          updatedInvestment.expenseProjection.repairsIncrease,
+          yearsAhead
+        ),
+        otherDeductible: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.otherDeductible,
+          updatedInvestment.expenseProjection.otherDeductibleIncrease,
+          yearsAhead
+        ),
+        otherNonDeductible: calculateProjectedValue(
+          updatedInvestment.expenseProjection.baseYear.otherNonDeductible,
+          updatedInvestment.expenseProjection.otherNonDeductibleIncrease,
+          yearsAhead
+        )
+      };
+
+      const yearlyInterests = getInterestForYear(year);
+      const loanInfo = getLoanInfoForYear(year);
+
+      const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
+      if (expenseIndex === -1) {
+        updatedExpenses.push({
+          year,
+          ...projectedValues,
+          rent: 0,
+          tenantCharges: 0,
+          tax: 0,
+          deficit: 0,
+          loanPayment: loanInfo.payment,
+          loanInsurance: loanInfo.insurance,
+          taxBenefit: 0,
+          interest: yearlyInterests
+        });
+      } else {
+        updatedExpenses[expenseIndex] = {
+          ...updatedExpenses[expenseIndex],
+          ...projectedValues,
+          loanPayment: loanInfo.payment,
+          loanInsurance: loanInfo.insurance,
+          interest: yearlyInterests
+        };
+      }
+    }
+
+    onUpdate({
+      ...updatedInvestment,
+      expenses: updatedExpenses.sort((a, b) => a.year - b.year)
+    });
+  };
 
   const renderHistoricalTable = () => {
     const rows = [];
@@ -601,6 +750,44 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     investment.startDate
   ]);
 
+  const renderProjectionParameters = () => {
+    const parameters = [
+      { key: 'propertyTaxIncrease' as const, label: 'Taxe foncière' },
+      { key: 'condoFeesIncrease' as const, label: 'Charges copropriété' },
+      { key: 'propertyInsuranceIncrease' as const, label: 'Assurance propriétaire' },
+      { key: 'managementFeesIncrease' as const, label: 'Frais d\'agence' },
+      { key: 'unpaidRentInsuranceIncrease' as const, label: 'Assurance loyers impayés' },
+      { key: 'repairsIncrease' as const, label: 'Travaux' },
+      { key: 'otherDeductibleIncrease' as const, label: 'Autres (déductibles)' },
+      { key: 'otherNonDeductibleIncrease' as const, label: 'Autres (non déductibles)' }
+    ];
+
+    return parameters.map(({ key, label }) => (
+      <div key={key} className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          {label} (%)
+        </label>
+        <div className="flex items-center space-x-4">
+          <input
+            type="range"
+            min="-10"
+            max="10"
+            step="0.1"
+            value={investment.expenseProjection[key]}
+            onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
+            className="w-full"
+          />
+          <input
+            type="number"
+            value={investment.expenseProjection[key]}
+            onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
+            className="w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="space-y-8">
       {/* Historical Data */}
@@ -667,48 +854,121 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           Paramètres de projection
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { key: 'propertyTaxIncrease', label: 'Taxe foncière' },
-            { key: 'condoFeesIncrease', label: 'Charges copropriété' },
-            { key: 'propertyInsuranceIncrease', label: 'Assurance propriétaire' },
-            { key: 'managementFeesIncrease', label: 'Frais d\'agence' },
-            { key: 'unpaidRentInsuranceIncrease', label: 'Assurance loyers impayés' },
-            { key: 'repairsIncrease', label: 'Travaux' },
-            { key: 'otherDeductibleIncrease', label: 'Autres (déductibles)' },
-            { key: 'otherNonDeductibleIncrease', label: 'Autres (non déductibles)' }
-          ].map(({ key, label }) => (
-            <div key={key} className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                {label} (%)
-              </label>
-              <div className="flex items-center space-x-4">
-                <input
-                  type="range"
-                  min="-10"
-                  max="10"
-                  step="0.1"
-                  value={investment.expenseProjection[key] || 0}
-                  onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
-                  className="w-full"
-                />
-                <input
-                  type="number"
-                  value={investment.expenseProjection[key] || 0}
-                  onChange={(e) => handleProjectionChange(key, Number(e.target.value))}
-                  className="w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          ))}
+          {renderProjectionParameters()}
         </div>
       </div>
 
       {/* Base de projection */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Base de projection
+          Base de projection (2025)
         </h3>
-        <p className="text-gray-600">En cours de construction</p>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Année
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Taxe foncière
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Charges copropriété
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assurance propriétaire
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Frais d'agence
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assurance loyers impayés
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Travaux
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Autres déductibles
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Autres non déductibles
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              <tr>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  2025
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.propertyTax || 0}
+                    onChange={(e) => handleBaseYearChange('propertyTax', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.condoFees || 0}
+                    onChange={(e) => handleBaseYearChange('condoFees', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.propertyInsurance || 0}
+                    onChange={(e) => handleBaseYearChange('propertyInsurance', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.managementFees || 0}
+                    onChange={(e) => handleBaseYearChange('managementFees', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.unpaidRentInsurance || 0}
+                    onChange={(e) => handleBaseYearChange('unpaidRentInsurance', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.repairs || 0}
+                    onChange={(e) => handleBaseYearChange('repairs', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.otherDeductible || 0}
+                    onChange={(e) => handleBaseYearChange('otherDeductible', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="number"
+                    value={investment.expenseProjection.baseYear?.otherNonDeductible || 0}
+                    onChange={(e) => handleBaseYearChange('otherNonDeductible', Number(e.target.value))}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Projected Data */}

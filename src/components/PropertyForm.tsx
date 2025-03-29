@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -9,18 +9,23 @@ import AcquisitionForm from './AcquisitionForm';
 import ExpensesForm from './ExpensesForm';
 import RevenuesForm from './RevenuesForm';
 import ResultsDisplay from './ResultsDisplay';
+import CashFlowDisplay from './CashFlowDisplay';
 import SaleEstimation from './SaleEstimation';
-import TaxForm from './TaxForm';
+import TaxDisplay from './TaxDisplay';
 import { calculateFinancialMetrics } from '../utils/calculations';
+import SaleDisplay from './SaleDisplay';
+import BalanceDisplay from './BalanceDisplay';
+import IRRDisplay from './IRRDisplay';
+import MetricsCard from './MetricsCard';
 
 interface PropertyFormData {
   name: string;
   investment_data: Investment;
 }
 
-type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan';
+type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale';
 
-export default function PropertyForm() {
+const PropertyForm: React.FC<{ onSubmit: (data: PropertyFormData) => void; loadedInvestmentData?: Investment }> = ({ onSubmit, loadedInvestmentData }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -28,7 +33,7 @@ export default function PropertyForm() {
   const [metrics, setMetrics] = useState<any>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentView, setCurrentView] = useState<View>('acquisition');
-  const { register, handleSubmit, reset } = useForm<{ name: string }>();
+  const { register, handleSubmit, reset } = useForm<PropertyFormData>();
 
   useEffect(() => {
     if (id) {
@@ -88,7 +93,7 @@ export default function PropertyForm() {
     setMetrics(newMetrics);
   };
 
-  const onSubmit = async (formData: { name: string }) => {
+  const onSubmitForm = async (formData: PropertyFormData) => {
     try {
       setLoading(true);
       const propertyData = {
@@ -110,7 +115,8 @@ export default function PropertyForm() {
         if (error) throw error;
       }
       
-      navigate('/dashboard');
+      // Suppression de la redirection automatique
+      // navigate('/dashboard');
     } catch (error) {
       console.error('Error saving property:', error);
     } finally {
@@ -152,7 +158,7 @@ export default function PropertyForm() {
         );
       case 'imposition':
         return (
-          <TaxForm
+          <TaxDisplay
             investment={investmentData}
             onUpdate={handleInvestmentUpdate}
           />
@@ -181,18 +187,23 @@ export default function PropertyForm() {
             projectionData={getHistoricalAndProjectionData().projectionData}
           />
         );
+      case 'cashflow':
+        return (
+          <CashFlowDisplay
+            investment={investmentData}
+            onUpdate={handleInvestmentUpdate}
+          />
+        );
       case 'bilan':
         return (
-          <SaleEstimation
-            saleProfit={metrics.saleProfit || 0}
-            capitalGain={metrics.capitalGain || 0}
-            appreciationType={investmentData.appreciationType}
-            appreciationValue={investmentData.appreciationValue}
-            purchasePrice={investmentData.purchasePrice}
-            investment={{
-              ...investmentData,
-              remainingBalance: metrics.remainingBalance || 0
-            }}
+          <BalanceDisplay
+            investment={investmentData}
+          />
+        );
+      case 'sale':
+        return (
+          <SaleDisplay
+            investment={investmentData}
             onUpdate={handleInvestmentUpdate}
           />
         );
@@ -323,7 +334,7 @@ export default function PropertyForm() {
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <img
-                src="/rentabimmo.png"
+                src="/logo.png"
                 alt="Rentab'immo"
                 className="h-8 w-auto"
               />
@@ -348,7 +359,7 @@ export default function PropertyForm() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700">
@@ -431,10 +442,57 @@ export default function PropertyForm() {
                 >
                   Bilan
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('cashflow')}
+                  className={`px-4 py-2 rounded-md ${
+                    currentView === 'cashflow'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Cash Flow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('sale')}
+                  className={`px-4 py-2 rounded-md ${
+                    currentView === 'sale'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Revente
+                </button>
               </div>
             </div>
 
             {renderContent()}
+
+            <div className="grid grid-cols-1 gap-6 mt-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900">Résultats</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <MetricsCard
+                    title="Cash Flow"
+                    value={metrics?.cashFlow}
+                    description="Cash flow mensuel moyen"
+                  />
+                  <MetricsCard
+                    title="Rentabilité"
+                    value={metrics?.profitability}
+                    description="Rentabilité brute"
+                    isPercentage
+                  />
+                  <MetricsCard
+                    title="Rendement"
+                    value={metrics?.yield}
+                    description="Rendement net"
+                    isPercentage
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex justify-between pt-6">
               <button
@@ -471,4 +529,6 @@ export default function PropertyForm() {
       </main>
     </div>
   );
-}
+};
+
+export default PropertyForm;

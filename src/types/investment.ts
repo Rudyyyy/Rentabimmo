@@ -22,6 +22,7 @@ export interface YearlyExpenses {
   otherDeductible: number;
   otherNonDeductible: number;
   rent: number;
+  furnishedRent: number;
   tenantCharges: number;
   tax: number;
   deficit: number;
@@ -41,9 +42,23 @@ export interface ExpenseProjection {
   otherDeductibleIncrease: number;
   otherNonDeductibleIncrease: number;
   rentIncrease: number;
+  furnishedRentIncrease: number;
   tenantChargesIncrease: number;
-  taxIncrease: number;
   taxBenefitIncrease: number;
+  baseYear: {
+    propertyTax: number;
+    condoFees: number;
+    propertyInsurance: number;
+    managementFees: number;
+    unpaidRentInsurance: number;
+    repairs: number;
+    otherDeductible: number;
+    otherNonDeductible: number;
+    rent: number;
+    furnishedRent: number;
+    tenantCharges: number;
+    taxBenefit: number;
+  };
 }
 
 export type TaxRegime = 'micro-foncier' | 'reel-foncier' | 'micro-bic' | 'reel-bic';
@@ -62,6 +77,12 @@ export interface TaxParameters {
   // Paramètres spécifiques location nue
   previousDeficit: number; // Déficit foncier reporté des années précédentes
   deficitLimit: number; // Plafond de déduction du déficit foncier (10 700€ par défaut)
+
+  // Paramètres de revenus
+  rent: number; // Loyer nu
+  furnishedRent: number; // Loyer meublé
+  tenantCharges: number; // Charges imputées au locataire
+  taxBenefit: number; // Aide fiscale aux loyers
 }
 
 export interface TaxResults {
@@ -76,10 +97,38 @@ export interface TaxResults {
     building: number;
     furniture: number;
     total: number;
+    used?: number;
   };
 }
 
+export interface CapitalGainResults {
+  regime: TaxRegime;
+  grossCapitalGain: number;
+  taxableCapitalGainIR: number;
+  taxableCapitalGainSocial: number;
+  incomeTax: number;
+  socialCharges: number;
+  totalTax: number;
+  netCapitalGain: number;
+  depreciationTaxable?: number;
+  depreciationTax?: number;
+  shortTermGain?: number;
+  longTermGain?: number;
+  shortTermTax?: number;
+  longTermIncomeTax?: number;
+  longTermSocialCharges?: number;
+}
+
 export type DeferralType = 'none' | 'partial' | 'total';
+
+export interface LMNPData {
+  buildingValue: number;
+  furnitureValue: number;
+  buildingAmortizationYears: number;
+  furnitureAmortizationYears: number;
+  deficitHistory: Record<number, number>;
+  excessAmortization: Record<number, number>;
+}
 
 export interface Investment {
   projectStartDate: string;
@@ -112,10 +161,21 @@ export interface Investment {
   appreciationType: 'global' | 'annual' | 'amount';
   appreciationValue: number;
   saleAgencyFees: number;
+  improvementWorks: number;
+  isLMP: boolean;
+  accumulatedDepreciation: number;
   
   selectedRegime: TaxRegime;
   taxParameters: TaxParameters;
   taxResults: Record<TaxRegime, TaxResults>;
+  capitalGainResults?: Record<TaxRegime, CapitalGainResults>;
+
+  // Nouvelles propriétés pour TaxForm
+  taxType: 'direct' | 'lmnp' | 'sci';
+  taxationMethod: 'real' | 'micro';
+  taxRate: number;
+  manualDeficit: number;
+  lmnpData?: LMNPData;
 }
 
 export const defaultTaxParameters: TaxParameters = {
@@ -126,7 +186,40 @@ export const defaultTaxParameters: TaxParameters = {
   furnitureValue: 0,
   furnitureAmortizationYears: 10,
   previousDeficit: 0,
-  deficitLimit: 10700
+  deficitLimit: 10700,
+  rent: 0,
+  furnishedRent: 0,
+  tenantCharges: 0,
+  taxBenefit: 0
+};
+
+export const defaultExpenseProjection: ExpenseProjection = {
+  propertyTaxIncrease: 2,
+  condoFeesIncrease: 2,
+  propertyInsuranceIncrease: 1,
+  managementFeesIncrease: 1,
+  unpaidRentInsuranceIncrease: 1,
+  repairsIncrease: 2,
+  otherDeductibleIncrease: 1,
+  otherNonDeductibleIncrease: 1,
+  rentIncrease: 2,
+  furnishedRentIncrease: 2,
+  tenantChargesIncrease: 2,
+  taxBenefitIncrease: 1,
+  baseYear: {
+    propertyTax: 0,
+    condoFees: 0,
+    propertyInsurance: 0,
+    managementFees: 0,
+    unpaidRentInsurance: 0,
+    repairs: 0,
+    otherDeductible: 0,
+    otherNonDeductible: 0,
+    rent: 0,
+    furnishedRent: 0,
+    tenantCharges: 0,
+    taxBenefit: 0
+  }
 };
 
 export const defaultInvestment: Investment = {
@@ -155,24 +248,14 @@ export const defaultInvestment: Investment = {
   managementFees: 0,
   unpaidRentInsurance: 0,
   expenses: [],
-  expenseProjection: {
-    propertyTaxIncrease: 2,
-    condoFeesIncrease: 2,
-    propertyInsuranceIncrease: 1,
-    managementFeesIncrease: 1,
-    unpaidRentInsuranceIncrease: 1,
-    repairsIncrease: 2,
-    otherDeductibleIncrease: 1,
-    otherNonDeductibleIncrease: 1,
-    rentIncrease: 2,
-    tenantChargesIncrease: 2,
-    taxIncrease: 1,
-    taxBenefitIncrease: 1
-  },
+  expenseProjection: defaultExpenseProjection,
   saleDate: '',
   appreciationType: 'global',
   appreciationValue: 0,
   saleAgencyFees: 0,
+  improvementWorks: 0,
+  isLMP: false,
+  accumulatedDepreciation: 0,
   selectedRegime: 'micro-foncier',
   taxParameters: defaultTaxParameters,
   taxResults: {
@@ -208,5 +291,17 @@ export const defaultInvestment: Investment = {
       totalTax: 0,
       netIncome: 0
     }
+  },
+  taxType: 'direct',
+  taxationMethod: 'real',
+  taxRate: 30,
+  manualDeficit: 0,
+  lmnpData: {
+    buildingValue: 0,
+    furnitureValue: 0,
+    buildingAmortizationYears: 25,
+    furnitureAmortizationYears: 10,
+    deficitHistory: {},
+    excessAmortization: {}
   }
 };

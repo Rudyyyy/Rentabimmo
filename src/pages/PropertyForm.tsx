@@ -195,136 +195,149 @@ export default function PropertyForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <img
-                src="/rentabimmo.png"
-                alt="Rentab'immo"
-                className="h-8 w-auto"
-              />
-              <h1 className="ml-3 text-2xl font-bold text-gray-900">
-                {id ? 'Modifier le bien' : 'Nouveau bien'}
-              </h1>
-            </div>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Retour
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Nom du bien
-                </label>
-                <input
-                  type="text"
-                  {...register('name', { required: true })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="Ex: Appartement Centre-ville"
+    <div className="min-h-screen relative">
+      {/* Image de fond avec overlay */}
+      <div 
+        className="fixed inset-0 z-0 bg-repeat"
+        style={{ 
+          backgroundImage: 'url("/fond2.jpg")',
+          backgroundSize: '100px 100px',
+          opacity: 1
+        }}
+      />
+      
+      {/* Contenu principal avec fond semi-transparent */}
+      <div className="relative z-10 min-h-screen bg-white/80">
+        <header className="bg-white/80 backdrop-blur-sm shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <img
+                  src="/logo.png"
+                  alt="Rentab'immo"
+                  className="h-8 w-auto"
                 />
+                <h1 className="ml-3 text-2xl font-bold text-gray-900">
+                  {id ? 'Modifier le bien' : 'Nouveau bien'}
+                </h1>
               </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('form')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'form'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Formulaire
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('profitability')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'profitability'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Rentabilité globale
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('sale')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'sale'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Estimation revente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('tax')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'tax'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Imposition
-                </button>
-              </div>
-            </div>
-
-            {renderContent()}
-
-            <div className="flex justify-between pt-6">
               <button
-                type="button"
                 onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="flex items-center text-gray-600 hover:text-gray-900"
               >
-                Annuler
+                <ArrowLeft className="h-5 w-5 mr-2" />
+                Retour
               </button>
-              
-              <div className="flex space-x-4">
-                {id && (
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Nom du bien
+                  </label>
+                  <input
+                    type="text"
+                    {...register('name', { required: true })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: Appartement Centre-ville"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+                <div className="flex space-x-4">
                   <button
                     type="button"
-                    onClick={handleDelete}
-                    className="flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    onClick={() => setCurrentView('form')}
+                    className={`px-4 py-2 rounded-md ${
+                      currentView === 'form'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
-                    <Trash2 className="h-5 w-5 mr-2" />
-                    Supprimer
+                    Formulaire
                   </button>
-                )}
-                
-                <button
-                  type="submit"
-                  disabled={loading || !investmentData}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {id ? 'Enregistrer les modifications' : 'Créer le bien'}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('profitability')}
+                    className={`px-4 py-2 rounded-md ${
+                      currentView === 'profitability'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Rentabilité globale
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('sale')}
+                    className={`px-4 py-2 rounded-md ${
+                      currentView === 'sale'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Estimation revente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('tax')}
+                    className={`px-4 py-2 rounded-md ${
+                      currentView === 'tax'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Imposition
+                  </button>
+                </div>
               </div>
-            </div>
-          </form>
-        )}
-      </main>
+
+              {renderContent()}
+
+              <div className="flex justify-between pt-6">
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard')}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Annuler
+                </button>
+                
+                <div className="flex space-x-4">
+                  {id && (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      className="flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      <Trash2 className="h-5 w-5 mr-2" />
+                      Supprimer
+                    </button>
+                  )}
+                  
+                  <button
+                    type="submit"
+                    disabled={loading || !investmentData}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {id ? 'Enregistrer les modifications' : 'Créer le bien'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
