@@ -1,6 +1,5 @@
 import { Investment, TaxRegime } from '../types/investment';
 import { calculateAllTaxRegimes } from './taxCalculations';
-import { generateAmortizationSchedule } from './calculations';
 
 /**
  * Calcule le Taux de Rentabilité Interne (TRI) d'un investissement immobilier

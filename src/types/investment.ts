@@ -1,5 +1,3 @@
-import { Database } from './supabase';
-
 export interface AmortizationRow {
   month: number;
   date: string;

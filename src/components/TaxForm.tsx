@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import { HelpCircle } from 'lucide-react';
-import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
-import { calculateAllTaxRegimes, getRecommendedRegime } from '../utils/taxCalculations';
+import { Investment, TaxRegime, YearlyExpenses } from '../types/investment';
+import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 
 interface Props {
   investment: Investment;

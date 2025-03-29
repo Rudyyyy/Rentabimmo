@@ -1,3 +1,25 @@
+/**
+ * Composant BalanceDisplay
+ * 
+ * Ce composant affiche une analyse complète de la rentabilité d'un investissement immobilier :
+ * 1. Une synthèse avec le meilleur scénario de revente
+ * 2. Un graphique montrant l'évolution du rendement annuel par régime fiscal
+ * 3. Un tableau détaillé des résultats année par année
+ * 
+ * Fonctionnalités principales :
+ * - Calcul du rendement optimal en tenant compte de tous les régimes fiscaux
+ * - Visualisation de l'évolution du rendement annuel
+ * - Analyse détaillée des flux de trésorerie et des gains
+ * - Persistance du régime fiscal sélectionné
+ * 
+ * Les calculs prennent en compte :
+ * - Les revenus locatifs
+ * - Les charges et dépenses
+ * - L'imposition selon le régime fiscal
+ * - La revente du bien avec revalorisation
+ * - Le remboursement du prêt
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Investment, TaxRegime } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
@@ -28,15 +50,6 @@ interface Props {
   investment: Investment;
 }
 
-interface AmortizationRow {
-  date: string;
-  principal: number;
-  interest: number;
-  insurance: number;
-  total: number;
-  remainingBalance: number;
-}
-
 interface BalanceData {
   years: number[];
   data: Record<TaxRegime, Array<{
@@ -47,6 +60,7 @@ interface BalanceData {
   }>>;
 }
 
+// Labels pour les différents régimes fiscaux
 const REGIME_LABELS: Record<TaxRegime, string> = {
   'micro-foncier': 'Location nue - Micro-foncier',
   'reel-foncier': 'Location nue - Frais réels',
@@ -55,19 +69,21 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
 };
 
 const BalanceDisplay: React.FC<Props> = ({ investment }) => {
+  // Identifiant unique pour le stockage local
   const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
   
-  // Initialiser selectedRegime depuis le localStorage ou utiliser la valeur par défaut
+  // État du régime fiscal sélectionné, persistant dans le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
     const stored = localStorage.getItem(`selectedRegime_${investmentId}`);
     return (stored as TaxRegime) || 'micro-foncier';
   });
 
-  // Sauvegarder selectedRegime dans le localStorage quand il change
+  // Sauvegarde du régime sélectionné dans le localStorage
   useEffect(() => {
     localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
   }, [selectedRegime, investmentId]);
 
+  // État pour stocker les données calculées pour chaque année et régime
   const [balanceData, setBalanceData] = useState<BalanceData>({
     years: [],
     data: {
@@ -77,25 +93,18 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
       'reel-bic': []
     }
   });
-  const [saleParams] = useState(() => {
-    const stored = localStorage.getItem(`saleParameters_${investmentId}`);
-    return stored ? JSON.parse(stored) : {
-      annualIncrease: 2,
-      agencyFees: 0,
-      earlyRepaymentFees: 0,
-      repaidAmount: 0
-    };
-  });
 
-  // Fonction pour formater les montants en euros
+   // Fonctions utilitaires pour le formatage
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
 
-  // Fonction pour formater les pourcentages
   const formatPercent = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
-  // Mémoriser la fonction calculateBalanceData
+  /**
+   * Calcul des données de balance pour chaque année et régime fiscal
+   * Cette fonction est mémorisée pour éviter les recalculs inutiles
+   */
   const calculateBalanceData = React.useCallback(() => {
     const startYear = new Date(investment.projectStartDate).getFullYear();
     const endYear = new Date(investment.projectEndDate).getFullYear();
@@ -198,12 +207,16 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     setBalanceData({ years, data });
   }, [investment, investmentId]);
 
-  // Utiliser useEffect avec la fonction mémorisée
+  // Calcul des données à chaque changement d'investissement
   useEffect(() => {
     calculateBalanceData();
   }, [calculateBalanceData]);
 
-  // Configuration du graphique
+  /**
+   * Configuration des données pour le graphique
+   * Affiche l'évolution du rendement annuel pour chaque régime
+   * Les 2 premières années sont ignorées pour une meilleure lisibilité
+   */
   const chartData = {
     labels: balanceData.years.slice(2), // Ignorer les 2 premières années
     datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
@@ -239,6 +252,10 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     })
   };
 
+  /**
+   * Options de configuration du graphique
+   * Définit l'apparence et le comportement du graphique
+   */
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -282,7 +299,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
 
   return (
     <div className="space-y-6">
-      {/* En-tête avec le titre et la synthèse */}
+      {/* Section de synthèse avec le meilleur scénario */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-semibold text-gray-900">Solde en fin d'opération</h2>
         
@@ -338,14 +355,14 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
         </p>
       </div>
 
-      {/* Graphique */}
+      {/* Graphique d'évolution du rendement annuel */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="h-96">
           <Line data={chartData} options={chartOptions} />
         </div>
       </div>
 
-      {/* Navigation des onglets */}
+      {/* Navigation des régimes fiscaux et tableau détaillé */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
