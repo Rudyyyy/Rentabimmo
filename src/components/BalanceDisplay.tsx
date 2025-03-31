@@ -36,6 +36,7 @@ import {
   Legend
 } from 'chart.js';
 
+// Configuration de Chart.js pour le graphique
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -46,10 +47,12 @@ ChartJS.register(
   Legend
 );
 
+// Interface définissant les props du composant
 interface Props {
   investment: Investment;
 }
 
+// Interface pour stocker les données de balance calculées
 interface BalanceData {
   years: number[];
   data: Record<TaxRegime, Array<{
@@ -94,7 +97,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     }
   });
 
-   // Fonctions utilitaires pour le formatage
+  // Fonctions utilitaires pour le formatage des valeurs
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
 

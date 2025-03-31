@@ -1,4 +1,25 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Composant CashFlowDisplay
+ * 
+ * Ce composant affiche une analyse détaillée des flux de trésorerie d'un investissement immobilier :
+ * 1. Un graphique montrant l'évolution du cash flow net par régime fiscal
+ * 2. Un tableau détaillé des revenus, dépenses et cash flow pour chaque année
+ * 3. Une section explicative des calculs effectués
+ * 
+ * Fonctionnalités principales :
+ * - Comparaison des différents régimes fiscaux (micro-foncier, réel-foncier, micro-bic, réel-bic)
+ * - Calcul automatique des revenus et dépenses selon le régime
+ * - Visualisation de l'évolution du cash flow dans le temps
+ * - Persistance du régime fiscal sélectionné
+ * 
+ * Les calculs prennent en compte :
+ * - Les revenus locatifs (nu ou meublé selon le régime)
+ * - Les charges et dépenses déductibles et non déductibles
+ * - L'imposition selon le régime fiscal
+ * - Les remboursements de prêt
+ */
+
+import { useState, useEffect } from 'react';
 import { Investment } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
@@ -14,6 +35,7 @@ import {
   Legend
 } from 'chart.js';
 
+// Configuration de Chart.js pour le graphique
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -24,10 +46,12 @@ ChartJS.register(
   Legend
 );
 
+// Interface définissant les props du composant
 interface Props {
   investment: Investment;
 }
 
+// Labels pour les différents régimes fiscaux
 const REGIME_LABELS: Record<TaxRegime, string> = {
   'micro-foncier': 'Location nue - Micro-foncier',
   'reel-foncier': 'Location nue - Frais réels',
@@ -38,13 +62,13 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
 const STORAGE_KEY = 'selectedCashFlowRegime';
 
 export default function CashFlowDisplay({ investment }: Props) {
-  // Initialiser avec la valeur stockée ou la valeur par défaut
+  // État du régime fiscal sélectionné, persistant dans le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return (stored as TaxRegime) || 'micro-foncier';
   });
 
-  // Sauvegarder la sélection dans le localStorage
+  // Sauvegarde du régime sélectionné dans le localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, selectedRegime);
   }, [selectedRegime]);
@@ -52,6 +76,10 @@ export default function CashFlowDisplay({ investment }: Props) {
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
+  /**
+   * Préparation des données pour le graphique
+   * Calcule le cash flow net pour chaque année et régime fiscal
+   */
   const prepareChartData = () => {
     const startYear = new Date(investment.projectStartDate).getFullYear();
     const endYear = new Date(investment.projectEndDate).getFullYear();
@@ -95,7 +123,6 @@ export default function CashFlowDisplay({ investment }: Props) {
         // Cash flow
         const cashFlow = revenues - expenses;
         const cashFlowNet = cashFlow - tax;
-        const monthlyCashFlow = cashFlowNet / 12;
 
         return cashFlowNet;
       });
@@ -115,6 +142,11 @@ export default function CashFlowDisplay({ investment }: Props) {
     };
   };
 
+  /**
+   * Fonction utilitaire pour obtenir la couleur associée à un régime fiscal
+   * @param regime Le régime fiscal
+   * @param alpha La transparence (0-1)
+   */
   const getRegimeColor = (regime: TaxRegime, alpha: number = 1) => {
     const colors = {
       'micro-foncier': `rgba(59, 130, 246, ${alpha})`, // blue
@@ -125,6 +157,10 @@ export default function CashFlowDisplay({ investment }: Props) {
     return colors[regime];
   };
 
+  /**
+   * Configuration des options du graphique
+   * Définit l'apparence et le comportement du graphique
+   */
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -158,6 +194,10 @@ export default function CashFlowDisplay({ investment }: Props) {
 
   const chartData = prepareChartData();
 
+  /**
+   * Rendu du tableau de cash flow pour un régime fiscal donné
+   * Affiche les détails année par année
+   */
   const renderCashFlowTable = (regime: TaxRegime) => {
     // Générer les années du projet
     const startYear = new Date(investment.projectStartDate).getFullYear();
@@ -262,6 +302,9 @@ export default function CashFlowDisplay({ investment }: Props) {
     );
   };
 
+  /**
+   * Gestionnaire de changement de régime fiscal
+   */
   const handleRegimeChange = (regime: TaxRegime) => {
     setSelectedRegime(regime);
   };
@@ -270,7 +313,7 @@ export default function CashFlowDisplay({ investment }: Props) {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Cash Flow</h1>
       
-      {/* Graphique */}
+      {/* Graphique d'évolution du cash flow net */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h3 className="text-lg font-semibold mb-4">Évolution du cash flow net par régime fiscal</h3>
         <div className="h-80">

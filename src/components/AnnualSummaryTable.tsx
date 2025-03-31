@@ -1,11 +1,28 @@
+/**
+ * Composant AnnualSummaryTable
+ * 
+ * Ce composant affiche un tableau récapitulatif des résultats fiscaux annuels pour un investissement immobilier.
+ * Il permet de :
+ * 1. Comparer les différents régimes fiscaux (micro-foncier, réel-foncier, micro-BIC, réel-BIC)
+ * 2. Visualiser l'évolution des revenus et charges sur plusieurs années
+ * 3. Calculer automatiquement les impôts et charges sociales selon le régime choisi
+ * 
+ * Fonctionnalités principales :
+ * - Navigation entre les régimes fiscaux via des onglets
+ * - Affichage des loyers (nus ou meublés selon le régime)
+ * - Calcul des revenus imposables
+ * - Calcul des impôts et charges sociales
+ * - Affichage des revenus nets
+ * 
+ * Le tableau est mis à jour automatiquement à chaque changement de régime fiscal
+ * et prend en compte les évolutions des revenus et charges sur la période.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Investment, TaxRegime, TaxResults } from '../types/investment';
 import { calculateTaxResults } from '../utils/taxCalculations';
 
-interface AnnualSummaryTableProps {
-  investment: Investment;
-}
-
+// Labels pour les différents régimes fiscaux
 const TAX_REGIME_LABELS: Record<TaxRegime, string> = {
   'micro-foncier': 'Micro-foncier',
   'reel-foncier': 'Réel-foncier',
@@ -13,21 +30,20 @@ const TAX_REGIME_LABELS: Record<TaxRegime, string> = {
   'reel-bic': 'Réel-BIC'
 };
 
-export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investment }) => {
-  console.log('AnnualSummaryTable rendering with investment:', {
-    startDate: investment.startDate,
-    projectEndDate: investment.projectEndDate,
-    expenses: investment.expenses,
-    taxParameters: investment.taxParameters
-  });
+interface AnnualSummaryTableProps {
+  investment: Investment; // Données de l'investissement
+}
 
+export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investment }) => {
+  // État pour le régime fiscal sélectionné
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>('micro-foncier');
 
+  // Logging pour le débogage
   useEffect(() => {
     console.log('AnnualSummaryTable mounted with investment:', investment);
   }, [investment]);
 
-  // Générer les années
+  // Génération de la liste des années à afficher
   const startYear = new Date(investment.startDate).getFullYear();
   const endYear = new Date(investment.projectEndDate).getFullYear();
   const years = Array.from(
@@ -35,31 +51,23 @@ export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investme
     (_, i) => startYear + i
   );
 
-  console.log('Years to display:', years);
-
-  // Obtenir les résultats fiscaux pour l'année sélectionnée
+  // Fonction pour obtenir les résultats fiscaux d'une année donnée
   const getTaxResults = (year: number): TaxResults => {
     const results = calculateTaxResults(investment, year);
-    console.log(`Tax results for year ${year}:`, results);
     return results[selectedRegime];
   };
 
-  // Obtenir le loyer en fonction du régime
+  // Fonction pour obtenir le loyer en fonction du régime fiscal
   const getRent = (year: number) => {
     const yearExpenses = investment.expenses.find(e => e.year === year);
-    if (!yearExpenses) {
-      console.log(`No expenses found for year ${year}`);
-      return 0;
-    }
+    if (!yearExpenses) return 0;
 
-    console.log(`Expenses for year ${year}:`, yearExpenses);
-
-    // Pour les régimes de location nue
+    // Retourne le loyer nu pour les régimes de location nue
     if (selectedRegime === 'micro-foncier' || selectedRegime === 'reel-foncier') {
       return Number(yearExpenses.rent || 0);
     }
     
-    // Pour les régimes de location meublée
+    // Retourne le loyer meublé pour les régimes de location meublée
     if (selectedRegime === 'micro-bic' || selectedRegime === 'reel-bic') {
       return Number(yearExpenses.furnishedRent || 0);
     }
@@ -70,7 +78,8 @@ export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investme
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold mb-4">Récapitulatif annuel</h2>
-      {/* Onglets des régimes */}
+      
+      {/* Navigation des régimes fiscaux */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           {Object.entries(TAX_REGIME_LABELS).map(([regime, label]) => (
@@ -91,7 +100,7 @@ export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investme
         </nav>
       </div>
 
-      {/* Tableau des résultats */}
+      {/* Tableau des résultats fiscaux */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

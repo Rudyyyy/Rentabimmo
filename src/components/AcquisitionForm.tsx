@@ -149,6 +149,10 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
         'non-professional': { tax: 0, socialCharges: 0, regime: 'non-professional', taxableIncome: 0, totalTax: 0, netIncome: 0 },
         'professional': { tax: 0, socialCharges: 0, regime: 'professional', taxableIncome: 0, totalTax: 0, netIncome: 0 }
       }),
+      monthlyRent: field === 'monthlyRent' ? (value as number) : (initialValues?.monthlyRent || 0),
+      annualRentIncrease: field === 'annualRentIncrease' ? (value as number) : (initialValues?.annualRentIncrease || 0),
+      occupancyRate: field === 'occupancyRate' ? (value as number) : (initialValues?.occupancyRate || 0),
+      rentalStartDate: field === 'rentalStartDate' ? (value as string) : (initialValues?.rentalStartDate || ''),
     };
 
     // Reset deferral-related fields when hasDeferral is set to false

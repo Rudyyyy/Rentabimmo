@@ -1,28 +1,44 @@
-import React, { useState, useMemo, useEffect } from 'react';
+/**
+ * Composant ExpensesForm
+ * 
+ * Ce composant gère la saisie et la projection des dépenses d'un investissement immobilier :
+ * 1. Saisie des dépenses historiques année par année
+ * 2. Configuration des taux d'évolution annuels pour chaque type de dépense
+ * 3. Projection automatique des dépenses futures
+ * 4. Calcul des intérêts et remboursements de prêt
+ * 
+ * Fonctionnalités principales :
+ * - Gestion des dépenses déductibles et non déductibles
+ * - Calcul automatique des projections avec taux d'évolution personnalisables
+ * - Intégration avec le tableau d'amortissement du prêt
+ * - Affichage des totaux et sous-totaux
+ * 
+ * Les types de dépenses gérés :
+ * - Taxe foncière
+ * - Charges de copropriété
+ * - Assurance propriétaire
+ * - Frais d'agence
+ * - Assurance loyers impayés
+ * - Travaux
+ * - Autres charges déductibles et non déductibles
+ */
+
+import { useMemo, useEffect } from 'react';
 import { Investment, YearlyExpenses, ExpenseProjection } from '../types/investment';
-import { HelpCircle } from 'lucide-react';
 import { generateAmortizationSchedule } from '../utils/calculations';
 
+// Interface définissant les props du composant
 interface Props {
   investment: Investment;
   onUpdate: (investment: Investment) => void;
 }
 
-interface BaseYearExpenses {
-  propertyTax: number;
-  condoFees: number;
-  propertyInsurance: number;
-  managementFees: number;
-  unpaidRentInsurance: number;
-  repairs: number;
-  otherDeductible: number;
-  otherNonDeductible: number;
-}
-
 function ExpensesForm({ investment, onUpdate }: Props) {
+  // Fonction utilitaire pour formater les montants en euros
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
+  // Calcul des années de début, fin et année courante
   const years = useMemo(() => {
     const startYear = new Date(investment.projectStartDate).getFullYear();
     const endYear = new Date(investment.projectEndDate).getFullYear();
@@ -30,6 +46,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return { startYear, endYear, currentYear };
   }, [investment.projectStartDate, investment.projectEndDate]);
 
+  /**
+   * Gestionnaire de modification des dépenses
+   * Met à jour les dépenses pour une année donnée et recalcule les projections
+   */
   const handleExpenseChange = (year: number, field: keyof YearlyExpenses, value: number) => {
     const updatedExpenses = [...investment.expenses];
     const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
@@ -46,6 +66,7 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         otherDeductible: 0,
         otherNonDeductible: 0,
         rent: 0,
+        furnishedRent: 0,
         tenantCharges: 0,
         tax: 0,
         deficit: 0,
@@ -139,6 +160,7 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           year: projYear,
           ...projectedValues,
           rent: 0,
+          furnishedRent: 0,
           tenantCharges: 0,
           tax: 0,
           deficit: 0,
@@ -151,8 +173,14 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         updatedExpenses[projIndex] = {
           ...updatedExpenses[projIndex],
           ...projectedValues,
+          rent: 0,
+          furnishedRent: 0,
+          tenantCharges: 0,
+          tax: 0,
+          deficit: 0,
           loanPayment: loanInfo.payment,
           loanInsurance: loanInfo.insurance,
+          taxBenefit: 0,
           interest: yearlyInterests
         };
       }
@@ -164,6 +192,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     });
   };
 
+  /**
+   * Gestionnaire de modification des paramètres de projection
+   * Met à jour les taux d'évolution et recalcule les projections futures
+   */
   const handleProjectionChange = (field: keyof ExpenseProjection, value: number) => {
     const baseValues = investment.expenseProjection.baseYear;
     const updatedExpenses = [...investment.expenses];
@@ -223,6 +255,7 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           year,
           ...projectedValues,
           rent: 0,
+          furnishedRent: 0,
           tenantCharges: 0,
           tax: 0,
           deficit: 0,
@@ -235,8 +268,14 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         updatedExpenses[expenseIndex] = {
           ...updatedExpenses[expenseIndex],
           ...projectedValues,
+          rent: 0,
+          furnishedRent: 0,
+          tenantCharges: 0,
+          tax: 0,
+          deficit: 0,
           loanPayment: loanInfo.payment,
           loanInsurance: loanInfo.insurance,
+          taxBenefit: 0,
           interest: yearlyInterests
         };
       }
@@ -254,22 +293,11 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     });
   };
 
+  /**
+   * Calcule la valeur projetée d'une dépense en fonction du taux d'évolution
+   */
   const calculateProjectedValue = (baseValue: number, increaseRate: number, yearsAhead: number) => {
     return Number(baseValue) * Math.pow(1 + (Number(increaseRate) || 0) / 100, yearsAhead);
-  };
-
-  const getCurrentYearValues = () => {
-    const currentYearExpenses = investment.expenses.find(e => e.year === years.currentYear);
-    return {
-      propertyTax: currentYearExpenses?.propertyTax || 0,
-      condoFees: currentYearExpenses?.condoFees || 0,
-      propertyInsurance: currentYearExpenses?.propertyInsurance || 0,
-      managementFees: currentYearExpenses?.managementFees || 0,
-      unpaidRentInsurance: currentYearExpenses?.unpaidRentInsurance || 0,
-      repairs: currentYearExpenses?.repairs || 0,
-      otherDeductible: currentYearExpenses?.otherDeductible || 0,
-      otherNonDeductible: currentYearExpenses?.otherNonDeductible || 0
-    };
   };
 
   // Initialisation des projections au montage du composant
@@ -340,6 +368,7 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           year,
           ...projectedValues,
           rent: 0,
+          furnishedRent: 0,
           tenantCharges: 0,
           tax: 0,
           deficit: 0,
@@ -366,7 +395,11 @@ function ExpensesForm({ investment, onUpdate }: Props) {
             unpaidRentInsurance: baseYearExpenses.unpaidRentInsurance,
             repairs: baseYearExpenses.repairs,
             otherDeductible: baseYearExpenses.otherDeductible,
-            otherNonDeductible: baseYearExpenses.otherNonDeductible
+            otherNonDeductible: baseYearExpenses.otherNonDeductible,
+            rent: 0,
+            furnishedRent: 0,
+            tenantCharges: 0,
+            taxBenefit: 0
           }
         },
         expenses: updatedExpenses.sort((a, b) => a.year - b.year)
@@ -392,8 +425,8 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         otherDeductibleIncrease: 1,
         otherNonDeductibleIncrease: 1,
         rentIncrease: 2,
+        furnishedRentIncrease: 2,
         tenantChargesIncrease: 2,
-        taxIncrease: 1,
         taxBenefitIncrease: 1,
         baseYear: {
           propertyTax: 0,
@@ -403,7 +436,11 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           unpaidRentInsurance: 0,
           repairs: 0,
           otherDeductible: 0,
-          otherNonDeductible: 0
+          otherNonDeductible: 0,
+          rent: 0,
+          furnishedRent: 0,
+          tenantCharges: 0,
+          taxBenefit: 0
         }
       };
     }
@@ -470,6 +507,7 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           year,
           ...projectedValues,
           rent: 0,
+          furnishedRent: 0,
           tenantCharges: 0,
           tax: 0,
           deficit: 0,
@@ -482,8 +520,14 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         updatedExpenses[expenseIndex] = {
           ...updatedExpenses[expenseIndex],
           ...projectedValues,
+          rent: 0,
+          furnishedRent: 0,
+          tenantCharges: 0,
+          tax: 0,
+          deficit: 0,
           loanPayment: loanInfo.payment,
           loanInsurance: loanInfo.insurance,
+          taxBenefit: 0,
           interest: yearlyInterests
         };
       }
@@ -495,6 +539,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     });
   };
 
+  /**
+   * Rendu du tableau des dépenses historiques
+   * Affiche les dépenses passées avec possibilité de modification
+   */
   const renderHistoricalTable = () => {
     const rows = [];
     for (let year = years.startYear; year <= years.currentYear; year++) {
@@ -628,6 +676,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return rows;
   };
 
+  /**
+   * Rendu du tableau des projections
+   * Affiche les dépenses futures calculées automatiquement
+   */
   const renderProjectedTable = () => {
     const rows = [];
     for (let year = years.currentYear + 1; year <= years.endYear; year++) {
@@ -710,6 +762,9 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return rows;
   };
 
+  /**
+   * Calcule les intérêts d'une année donnée
+   */
   const getInterestForYear = (year: number) => {
     const yearlyPayments = amortizationResult.schedule
       .filter(row => new Date(row.date).getFullYear() === year)
@@ -717,6 +772,9 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return yearlyPayments;
   };
 
+  /**
+   * Calcule les informations de prêt pour une année donnée
+   */
   const getLoanInfoForYear = (year: number) => {
     const yearlyPayments = amortizationResult.schedule
       .filter(row => new Date(row.date).getFullYear() === year)
@@ -729,6 +787,9 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return yearlyPayments;
   };
 
+  /**
+   * Calcul du tableau d'amortissement
+   */
   const amortizationResult = useMemo(() => {
     if (!investment.loanAmount || !investment.interestRate || !investment.loanDuration) {
       return { schedule: [], deferredInterest: 0 };
@@ -750,6 +811,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     investment.startDate
   ]);
 
+  /**
+   * Rendu des paramètres de projection
+   * Affiche les curseurs pour ajuster les taux d'évolution
+   */
   const renderProjectionParameters = () => {
     const parameters = [
       { key: 'propertyTaxIncrease' as const, label: 'Taxe foncière' },

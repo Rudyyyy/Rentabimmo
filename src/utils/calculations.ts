@@ -3,15 +3,12 @@ import { Investment, FinancialMetrics, AmortizationRow, DeferralType } from '../
 export function calculateMonthlyPayment(
   loanAmount: number,
   annualRate: number,
-  years: number,
-  deferralType: DeferralType = 'none',
-  deferredPeriod: number = 0
+  years: number
 ): number {
   // Conversion explicite en nombres
   const amount = Number(loanAmount);
   const rate = Number(annualRate);
   const duration = Number(years);
-  const deferred = Number(deferredPeriod);
 
   if (amount <= 0 || rate <= 0 || duration <= 0) return 0;
   
@@ -259,9 +256,7 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
   const monthlyPayment = calculateMonthlyPayment(
     Number(investment.loanAmount),
     Number(investment.interestRate),
-    Number(investment.loanDuration),
-    investment.deferralType,
-    Number(investment.deferredPeriod)
+    Number(investment.loanDuration)
   );
 
   const monthlyInsurance = (Number(investment.loanAmount) * Number(investment.insuranceRate) / 100) / (Number(investment.loanDuration) * 12);

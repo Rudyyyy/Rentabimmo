@@ -1,3 +1,25 @@
+/**
+ * Composant TaxForm
+ * 
+ * Ce composant gère la partie fiscale d'un investissement immobilier. Il permet de :
+ * 1. Configurer les paramètres fiscaux (taux d'imposition, prélèvements sociaux, etc.)
+ * 2. Comparer les différents régimes fiscaux (micro-foncier, réel, LMNP, etc.)
+ * 3. Visualiser les projections fiscales sur plusieurs années
+ * 
+ * Fonctionnalités principales :
+ * - Calcul automatique des impôts selon le régime choisi
+ * - Comparaison visuelle des régimes via graphiques
+ * - Projection des revenus et charges sur plusieurs années
+ * - Gestion des amortissements pour le régime LMNP
+ * 
+ * Les calculs prennent en compte :
+ * - Les revenus locatifs (nus et meublés)
+ * - Les charges déductibles
+ * - Les amortissements
+ * - Les déficits reportables
+ * - Les prélèvements sociaux
+ */
+
 import { useState, useEffect } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 import { Investment, TaxRegime, YearlyExpenses } from '../types/investment';
@@ -16,11 +38,13 @@ const REGIME_LABELS = {
 };
 
 export default function TaxForm({ investment, onUpdate }: Props) {
+  // État local pour gérer l'année courante et le régime sélectionné
   const [currentYear] = useState(new Date().getFullYear());
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime);
   const [currentView, setCurrentView] = useState<'parameters' | 'projection'>('parameters');
   const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
 
+  // Mise à jour des résultats fiscaux à chaque changement de paramètres
   useEffect(() => {
     const results = calculateAllTaxRegimes(investment, currentYear);
     
@@ -31,6 +55,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     });
   }, [investment.taxParameters, selectedRegime, currentYear, investment.expenses]);
 
+  // Synchronisation des revenus avec les paramètres fiscaux
   useEffect(() => {
     const currentYearExpense = investment.expenses.find(e => e.year === currentYear);
     if (currentYearExpense && (!investment.taxParameters.rent || !investment.taxParameters.furnishedRent || !investment.taxParameters.tenantCharges || !investment.taxParameters.taxBenefit)) {
@@ -47,6 +72,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     }
   }, [currentYear, investment.expenses]);
 
+  // Gestionnaires d'événements pour les changements de paramètres
   const handleTaxParameterChange = (field: keyof Investment['taxParameters'], value: number) => {
     onUpdate({
       ...investment,
@@ -67,11 +93,9 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     });
   };
 
+  // Formatage des montants en euros
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
-
-  const formatPercent = (value: number) =>
-    new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2 }).format(value / 100);
 
   // Données pour le graphique de comparaison
   const chartData = {
@@ -129,59 +153,8 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     }
   };
 
-  const renderProjectionTable = () => {
-    const endYear = new Date(investment.projectEndDate).getFullYear();
-    const rows = [];
-
-    for (let year = currentYear + 1; year <= endYear; year++) {
-      const yearResults = calculateAllTaxRegimes(investment, year);
-      const yearExpense = investment.expenses.find(e => e.year === year);
-      
-      if (!yearExpense) continue;
-
-      rows.push(
-        <tr key={year}>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-            {year}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearExpense.rent || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].taxableIncome)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].tax)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].socialCharges)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].totalTax)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
-            {formatCurrency(yearResults[projectionRegime].netIncome)}
-          </td>
-          {projectionRegime === 'reel-foncier' && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].deficit || 0)}
-            </td>
-          )}
-          {projectionRegime === 'reel-bic' && yearResults[projectionRegime].amortization && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].amortization.total)}
-            </td>
-          )}
-          {projectionRegime === 'reel-bic' && yearResults[projectionRegime].amortization && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].amortization.used || 0)}
-            </td>
-          )}
-        </tr>
-      );
-    }
-
-    return rows;
+  const handleProjectionRegimeChange = (regime: TaxRegime) => {
+    setProjectionRegime(regime);
   };
 
   const renderHistoricalAndProjectionTable = () => {
@@ -334,140 +307,6 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         }
       }
     }
-  };
-
-  const handleProjectionRegimeChange = (regime: TaxRegime) => {
-    setProjectionRegime(regime);
-  };
-
-  const renderRevenueSection = () => {
-    const currentYearExpense = investment.expenses.find(e => e.year === currentYear) || {
-      rent: 0,
-      furnishedRent: 0,
-      tenantCharges: 0,
-      taxBenefit: 0
-    };
-
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Loyer nu
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-              <input
-                type="number"
-                name="rent"
-                value={currentYearExpense.rent || ''}
-                onChange={(e) => handleExpenseChange(currentYear, 'rent', Number(e.target.value))}
-                className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Loyer meublé
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-              <input
-                type="number"
-                name="furnishedRent"
-                value={currentYearExpense.furnishedRent || ''}
-                onChange={(e) => handleExpenseChange(currentYear, 'furnishedRent', Number(e.target.value))}
-                className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Charges imputées au locataire
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-              <input
-                type="number"
-                name="tenantCharges"
-                value={currentYearExpense.tenantCharges || ''}
-                onChange={(e) => handleExpenseChange(currentYear, 'tenantCharges', Number(e.target.value))}
-                className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Aide fiscale aux loyers
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-              <input
-                type="number"
-                name="taxBenefit"
-                value={currentYearExpense.taxBenefit || ''}
-                onChange={(e) => handleExpenseChange(currentYear, 'taxBenefit', Number(e.target.value))}
-                className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const handleExpenseChange = (year: number, field: keyof YearlyExpenses, value: number) => {
-    const updatedExpenses = [...investment.expenses];
-    const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
-    
-    if (expenseIndex === -1) {
-      updatedExpenses.push({
-        year,
-        propertyTax: 0,
-        condoFees: 0,
-        propertyInsurance: 0,
-        managementFees: 0,
-        unpaidRentInsurance: 0,
-        repairs: 0,
-        otherDeductible: 0,
-        otherNonDeductible: 0,
-        rent: 0,
-        furnishedRent: 0,
-        tenantCharges: 0,
-        tax: 0,
-        deficit: 0,
-        loanPayment: 0,
-        loanInsurance: 0,
-        taxBenefit: 0,
-        interest: 0,
-        [field]: value
-      });
-    } else {
-      updatedExpenses[expenseIndex] = {
-        ...updatedExpenses[expenseIndex],
-        [field]: value
-      };
-    }
-
-    onUpdate({
-      ...investment,
-      expenses: updatedExpenses.sort((a, b) => a.year - b.year)
-    });
   };
 
   // Données pour le graphique d'évolution des revenus nets

@@ -1,3 +1,21 @@
+export interface FinancialMetrics {
+  grossYield: number;
+  netYield: number;
+  monthlyPayment: number;
+  monthlyCashFlow: number;
+  annualCashFlow: number;
+  roi: number;
+  annualRentalIncome: number[];
+  rentalYears: string[];
+  monthlyCosts: number;
+  currentMonthlyRent: number;
+  remainingBalance: number;
+  deferredInterest: number;
+  saleProfit?: number;
+  capitalGain?: number;
+  estimatedSalePrice?: number;
+}
+
 export interface AmortizationRow {
   month: number;
   date: string;
@@ -153,6 +171,10 @@ export interface Investment {
   improvementWorks: number;
   isLMP: boolean;
   accumulatedDepreciation: number;
+  monthlyRent: number;
+  annualRentIncrease: number;
+  occupancyRate: number;
+  rentalStartDate: string;
   
   selectedRegime: TaxRegime;
   taxParameters: TaxParameters;
@@ -238,6 +260,10 @@ export const defaultInvestment: Investment = {
   improvementWorks: 0,
   isLMP: false,
   accumulatedDepreciation: 0,
+  monthlyRent: 0,
+  annualRentIncrease: 0,
+  occupancyRate: 0,
+  rentalStartDate: '',
   selectedRegime: 'micro-foncier',
   taxParameters: defaultTaxParameters,
   taxResults: {
