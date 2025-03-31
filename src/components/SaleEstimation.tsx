@@ -1,8 +1,25 @@
-import React, { useState, useMemo } from 'react';
-import { Line } from 'react-chartjs-2';
+/**
+ * Composant SaleEstimation
+ * 
+ * Ce composant gère l'estimation et l'affichage des résultats de revente d'un investissement immobilier.
+ * Il permet de simuler différents scénarios de revente en tenant compte de plusieurs paramètres :
+ * 
+ * Fonctionnalités principales :
+ * - Calcul du solde en fin d'opération (global, annuel, mensuel)
+ * - Simulation de revente avec différents types de revalorisation (global, annuel, montant fixe)
+ * - Gestion des paramètres de revente (frais d'agence, remboursement anticipé)
+ * - Affichage des résultats détaillés (prix de vente, capital restant dû, bénéfice net, plus-value)
+ * - Calcul du solde total de l'opération (avec ou sans revente)
+ * 
+ * Le composant utilise des tooltips pour expliquer les calculs et propose une interface
+ * intuitive pour modifier les paramètres de revente.
+ */
+
+import { useState, useMemo } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { Investment } from '../types/investment';
 
+// Interface définissant les props du composant
 interface Props {
   saleProfit: number;
   capitalGain: number;
@@ -16,21 +33,23 @@ interface Props {
 export default function SaleEstimation({ 
   saleProfit, 
   capitalGain, 
-  appreciationType,
   appreciationValue,
   purchasePrice,
   investment,
   onUpdate
 }: Props) {
+  // États pour gérer l'inclusion de la revente et le remboursement anticipé
   const [includeSale, setIncludeSale] = useState<boolean>(true);
   const [earlyRepayment, setEarlyRepayment] = useState<number>(0);
 
+  // Fonctions utilitaires pour le formatage des valeurs
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
   const formatPercent = (value: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2 }).format(value / 100);
 
+  // Gestionnaire de modification des champs d'investissement
   const handleInputChange = (field: keyof Investment, value: string | number) => {
     const updatedInvestment = {
       ...investment,
@@ -39,6 +58,7 @@ export default function SaleEstimation({
     onUpdate(updatedInvestment);
   };
 
+  // Fonction pour obtenir le libellé de revalorisation selon le type choisi
   const getAppreciationLabel = () => {
     switch (investment.appreciationType) {
       case 'global':
@@ -52,13 +72,14 @@ export default function SaleEstimation({
     }
   };
 
+  // Calcul des métriques d'opération (solde global, mensuel, annuel)
   const operationMetrics = useMemo(() => {
     const startDate = new Date(investment.projectStartDate);
     const endDate = new Date(investment.projectEndDate);
-    const monthsDiff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44); // Moyenne de jours par mois
+    const monthsDiff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
     const yearsDiff = monthsDiff / 12;
 
-    // Calculer le solde global (somme des cash-flows)
+    // Calcul du solde global (somme des cash-flows)
     let globalBalance = 0;
     for (const expense of investment.expenses) {
       const totalRevenue = Number(expense.rent || 0);
@@ -105,12 +126,13 @@ export default function SaleEstimation({
     };
   }, [investment]);
 
+  // Calcul du bénéfice net de revente et du solde total
   const adjustedSaleProfit = saleProfit - earlyRepayment;
   const totalBalance = includeSale ? adjustedSaleProfit + operationMetrics.globalBalance : operationMetrics.globalBalance;
 
   return (
     <div className="space-y-6">
-      {/* Solde en fin d'opération */}
+      {/* Section : Solde en fin d'opération */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">Solde en fin d'opération</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -152,7 +174,7 @@ export default function SaleEstimation({
         </div>
       </div>
 
-      {/* Option de revente */}
+      {/* Section : Option de revente */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="flex items-center space-x-4">
           <h3 className="text-lg font-semibold">Revente</h3>
@@ -181,6 +203,7 @@ export default function SaleEstimation({
 
       {includeSale ? (
         <>
+          {/* Section : Paramètres de revente */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold mb-4">Paramètres de revente</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -260,6 +283,7 @@ export default function SaleEstimation({
             </div>
           </div>
 
+          {/* Section : Résultats de la revente */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold mb-4">Résultats de la revente</h3>
             <p className="text-sm text-gray-600 mb-4">{getAppreciationLabel()}</p>
@@ -326,6 +350,7 @@ export default function SaleEstimation({
           </div>
         </>
       ) : (
+        // Section : Revenu passif (sans revente)
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-lg font-semibold mb-4">Revenu passif généré</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -356,7 +381,7 @@ export default function SaleEstimation({
         </div>
       )}
 
-      {/* Solde total */}
+      {/* Section : Solde total de l'opération */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">Solde total de l'opération</h3>
         <div className="relative group">

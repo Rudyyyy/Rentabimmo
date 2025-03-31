@@ -1,3 +1,23 @@
+/**
+ * Composant GrossYieldChart
+ * 
+ * Ce composant affiche un graphique linéaire comparant l'évolution du rendement brut
+ * pour les différents régimes fiscaux (micro-foncier, réel foncier, micro-BIC, réel BIC)
+ * sur la durée totale de l'investissement.
+ * 
+ * Fonctionnalités principales :
+ * - Calcul automatique des rendements bruts pour chaque régime fiscal
+ * - Visualisation comparative des rendements sur une période donnée
+ * - Mise à jour dynamique lors des changements d'investissement
+ * - Légende interactive pour filtrer les régimes affichés
+ * 
+ * Le rendement brut est calculé en prenant en compte :
+ * - Les revenus locatifs (loyers)
+ * - Les charges locataires
+ * - Les aides fiscales (selon le régime)
+ * - Le coût total de l'investissement
+ */
+
 import React, { useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {

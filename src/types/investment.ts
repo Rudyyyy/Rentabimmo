@@ -135,6 +135,15 @@ export interface CapitalGainResults {
   longTermSocialCharges?: number;
 }
 
+export interface LMNPData {
+  buildingValue: number;
+  furnitureValue: number;
+  buildingAmortizationYears: number;
+  furnitureAmortizationYears: number;
+  deficitHistory: Record<number, number>;
+  excessAmortization: Record<number, number>;
+}
+
 export type DeferralType = 'none' | 'partial' | 'total';
 
 export interface Investment {
@@ -175,6 +184,14 @@ export interface Investment {
   annualRentIncrease: number;
   occupancyRate: number;
   rentalStartDate: string;
+  remainingBalance: number;
+  
+  // Tax properties
+  taxType: 'direct' | 'lmnp' | 'sci';
+  taxationMethod: 'real' | 'micro';
+  taxRate: number;
+  manualDeficit: number;
+  lmnpData?: LMNPData;
   
   selectedRegime: TaxRegime;
   taxParameters: TaxParameters;
@@ -264,6 +281,11 @@ export const defaultInvestment: Investment = {
   annualRentIncrease: 0,
   occupancyRate: 0,
   rentalStartDate: '',
+  remainingBalance: 0,
+  taxType: 'direct',
+  taxationMethod: 'real',
+  taxRate: 30,
+  manualDeficit: 0,
   selectedRegime: 'micro-foncier',
   taxParameters: defaultTaxParameters,
   taxResults: {

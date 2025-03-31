@@ -1,4 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * Composant InvestmentForm
+ * 
+ * Ce composant gère le formulaire principal d'un investissement immobilier, permettant de saisir
+ * et de calculer tous les paramètres nécessaires pour l'analyse d'un projet d'investissement.
+ * 
+ * Fonctionnalités principales :
+ * - Gestion des dates du projet (début et fin)
+ * - Calcul des coûts d'acquisition (prix, frais, travaux)
+ * - Configuration du financement (prêt, différé, assurance)
+ * - Calcul automatique des mensualités et coûts
+ * - Génération du tableau d'amortissement
+ * 
+ * Le composant utilise react-hook-form pour la gestion du formulaire et effectue
+ * des calculs en temps réel pour fournir un retour immédiat à l'utilisateur.
+ * Les modifications sont propagées au composant parent via la prop onSubmit.
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Investment } from '../types/investment';
 import AmortizationTable from './AmortizationTable';
@@ -11,7 +29,6 @@ interface Props {
 
 export default function InvestmentForm({ onSubmit, initialValues }: Props) {
   const [showAmortization, setShowAmortization] = useState(false);
-  const [showMonthlyChart, setShowMonthlyChart] = useState(false);
   const { register, watch, reset } = useForm<Investment>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
@@ -84,9 +101,10 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
           loanAmount,
           interestRate,
           loanDuration,
+          values.deferralType || 'none',
           Number(deferredPeriod),
           startDate
-        )
+        ).schedule
       : [];
 
     return {

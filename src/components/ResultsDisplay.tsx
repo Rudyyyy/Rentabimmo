@@ -1,4 +1,22 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Composant ResultsDisplay
+ * 
+ * Ce composant affiche l'analyse de rentabilité détaillée d'un investissement immobilier.
+ * Il permet de comparer les différents régimes fiscaux (micro-foncier, réel-foncier, micro-BIC, réel-BIC)
+ * et fournit une vue complète des performances financières.
+ * 
+ * Fonctionnalités principales :
+ * - Affichage des graphiques d'évolution de la rentabilité (brute et nette)
+ * - Tableau détaillé des résultats par année
+ * - Comparaison des différents régimes fiscaux
+ * - Calcul et affichage des métriques clés (rendement brut, net, charges, imposition)
+ * - Persistance de la sélection du régime fiscal dans le localStorage
+ * 
+ * Le composant utilise Chart.js pour les visualisations et fournit une interface
+ * interactive permettant de basculer entre les différents régimes fiscaux.
+ */
+
+import { useState, useEffect } from 'react';
 import { Investment } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
@@ -26,6 +44,22 @@ ChartJS.register(
 
 interface Props {
   investment: Investment;
+  metrics: any;
+  currentYearData: {
+    rent: number;
+    expenses: number;
+    totalInvestmentCost: number;
+  };
+  historicalData: {
+    years: number[];
+    cashFlow: number[];
+    revenue: number[];
+  };
+  projectionData: {
+    years: number[];
+    cashFlow: number[];
+    revenue: number[];
+  };
 }
 
 const REGIME_LABELS: Record<TaxRegime, string> = {
@@ -38,13 +72,13 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
 const STORAGE_KEY = 'selectedProfitabilityRegime';
 
 export default function ResultsDisplay({ investment }: Props) {
-  // Initialiser avec la valeur stockée ou la valeur par défaut
+  // État pour le régime fiscal sélectionné, initialisé depuis le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return (stored as TaxRegime) || 'micro-foncier';
   });
 
-  // Sauvegarder la sélection dans le localStorage
+  // Sauvegarde de la sélection dans le localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, selectedRegime);
   }, [selectedRegime]);

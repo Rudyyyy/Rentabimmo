@@ -1,13 +1,30 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Composant TaxDisplay
+ * 
+ * Ce composant gère l'affichage et le calcul des aspects fiscaux d'un investissement immobilier.
+ * Il permet de :
+ * - Choisir le type d'investissement (location nue, LMNP, SCI)
+ * - Gérer le régime d'imposition (réel ou micro)
+ * - Calculer les impôts selon le régime choisi
+ * - Gérer les déficits fonciers et leur report
+ * - Calculer les amortissements pour le LMNP
+ * - Projeter les résultats fiscaux sur plusieurs années
+ * 
+ * Le composant utilise des états locaux pour gérer les différents aspects fiscaux
+ * et met à jour l'investissement parent via la prop onUpdate.
+ */
+
+import { useState, useEffect } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { Investment, LMNPData } from '../types/investment';
-import { generateAmortizationSchedule } from '../utils/calculations';
 
+// Interface définissant les props du composant
 interface Props {
   investment: Investment;
   onUpdate: (updatedInvestment: Investment) => void;
 }
 
+// Interface pour l'historique fiscal
 interface TaxHistory {
   year: number;
   tax: number;
@@ -15,13 +32,14 @@ interface TaxHistory {
 }
 
 export default function TaxDisplay({ investment, onUpdate }: Props) {
+  // États pour gérer le type d'investissement et le régime d'imposition
   const [taxType, setTaxType] = useState<'direct' | 'lmnp' | 'sci'>(investment.taxType || 'direct');
   const [taxationMethod, setTaxationMethod] = useState<'real' | 'micro'>(investment.taxationMethod || 'real');
   const [taxHistory, setTaxHistory] = useState<TaxHistory[]>([]);
   const [taxRate, setTaxRate] = useState<number>(investment.taxRate || 30);
   const [manualDeficit, setManualDeficit] = useState<number>(investment.manualDeficit || 0);
   
-  // LMNP specific state
+  // États spécifiques au régime LMNP
   const [buildingValue, setBuildingValue] = useState<number>(investment.lmnpData?.buildingValue || 0);
   const [furnitureValue, setFurnitureValue] = useState<number>(investment.lmnpData?.furnitureValue || 0);
   const [buildingAmortizationYears, setBuildingAmortizationYears] = useState<number>(
@@ -37,14 +55,16 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     investment.lmnpData?.excessAmortization || {}
   );
 
+  // Calcul des années de référence
   const currentYear = new Date().getFullYear();
   const startYear = new Date(investment.projectStartDate).getFullYear();
   const endYear = new Date(investment.projectEndDate).getFullYear();
   
+  // Récupération des dépenses de l'année courante et précédente
   const currentYearExpenses = investment.expenses.find(e => e.year === currentYear);
   const previousYearExpenses = investment.expenses.find(e => e.year === currentYear - 1);
 
-  // Initialize tax history only once when component mounts or when dependencies change
+  // Initialisation de l'historique fiscal
   useEffect(() => {
     // Initialiser l'historique fiscal uniquement avec les années passées
     const initialTaxHistory = Array.from(
@@ -63,7 +83,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     setTaxHistory(initialTaxHistory);
   }, [investment.projectStartDate, currentYear, startYear, investment.expenses]);
 
-  // Update investment when taxType or taxationMethod changes
+  // Mise à jour de l'investissement lors des changements de type d'imposition
   useEffect(() => {
     onUpdate({
       ...investment,
@@ -72,19 +92,19 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     });
   }, [taxType, taxationMethod]);
 
-  // Update LMNP data when relevant parameters change
+  // Mise à jour des données LMNP
   useEffect(() => {
     if (taxType === 'lmnp' && taxationMethod === 'real') {
       const result = calculateLMNPTaxResult(currentYear);
       
-      // Update LMNP data for current year
+      // Mise à jour des données LMNP pour l'année courante
       const updatedDeficitHistory = { ...lmnpDeficitHistory, [currentYear]: result.deficit };
       const updatedExcessAmortization = { ...excessAmortization, [currentYear]: result.excessAmortization };
       
       setLmnpDeficitHistory(updatedDeficitHistory);
       setExcessAmortization(updatedExcessAmortization);
       
-      // Update investment with new LMNP data
+      // Mise à jour de l'investissement avec les nouvelles données LMNP
       onUpdate({
         ...investment,
         lmnpData: {
@@ -101,6 +121,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
   }, [currentYear, taxType, taxationMethod, buildingValue, furnitureValue, 
       buildingAmortizationYears, furnitureAmortizationYears]);
 
+  // Gestionnaire de modification de l'historique fiscal
   const handleTaxHistoryChange = (year: number, field: 'tax' | 'deficit', value: number) => {
     const updatedHistory = taxHistory.map(item => {
       if (item.year === year) {
@@ -128,6 +149,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
         otherDeductible: 0,
         otherNonDeductible: 0,
         rent: 0,
+        furnishedRent: 0,
         tenantCharges: 0,
         tax: field === 'tax' ? value : 0,
         deficit: field === 'deficit' ? value : 0,
@@ -149,6 +171,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     });
   };
 
+  // Gestionnaires de modification des paramètres fiscaux
   const handleTaxRateChange = (value: number) => {
     setTaxRate(value);
     onUpdate({
@@ -173,6 +196,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     setTaxationMethod(method);
   };
 
+  // Gestionnaire de modification des données LMNP
   const handleLMNPDataChange = (field: keyof LMNPData, value: any) => {
     // Mettre à jour l'état local
     switch (field) {
@@ -191,6 +215,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     }
   };
 
+  // Fonctions utilitaires pour les calculs fiscaux
   const getDeductibleExpenses = (yearExpenses: any) => {
     if (!yearExpenses) return 0;
     
@@ -321,9 +346,11 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     }
   };
 
+  // Fonction de formatage des montants
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
+  // Fonction pour obtenir la décomposition des charges déductibles
   const getDeductibleExpensesBreakdown = () => {
     if (!currentYearExpenses) return '';
 
@@ -339,6 +366,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
 - Intérêts d'emprunt : ${formatCurrency(currentYearExpenses.interest || 0)}`;
   };
 
+  // Fonctions de rendu des tableaux de projection
   const renderDirectProjectionTable = () => {
     const rows = [];
     let previousDeficit = manualDeficit || (previousYearExpenses?.deficit || 0);
@@ -485,9 +513,11 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
     return rows;
   };
 
+  // Calcul des résultats fiscaux courants
   const currentDirectTaxResult = calculateDirectTaxResult(currentYear, manualDeficit || (previousYearExpenses?.deficit || 0));
   const currentLMNPTaxResult = calculateLMNPTaxResult(currentYear);
 
+  // Rendu du composant
   return (
     <div className="space-y-6">
       {/* Type d'investissement */}
@@ -677,7 +707,7 @@ export default function TaxDisplay({ investment, onUpdate }: Props) {
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   % d'imposition
-                </label>""
+                </label>
                 <input
                   type="number"
                   value={taxRate}

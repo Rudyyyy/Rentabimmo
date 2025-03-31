@@ -1,3 +1,24 @@
+/**
+ * Composant PropertyForm
+ * 
+ * Ce composant gère le formulaire principal d'un bien immobilier, permettant de saisir et d'analyser
+ * tous les aspects d'un investissement immobilier. Il est composé de plusieurs sections :
+ * 
+ * Fonctionnalités principales :
+ * - Gestion des données d'acquisition (prix, frais, travaux)
+ * - Gestion des charges et revenus
+ * - Calculs fiscaux et d'imposition
+ * - Analyse de rentabilité et projections
+ * - Gestion du cash flow et du bilan
+ * - Calculs de TRI et d'IRR
+ * 
+ * Le composant utilise :
+ * - React Hook Form pour la gestion des formulaires
+ * - Supabase pour la persistance des données
+ * - Des calculs en temps réel pour les métriques financières
+ * - Une navigation par onglets pour les différentes sections
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
@@ -10,21 +31,16 @@ import ExpensesForm from './ExpensesForm';
 import RevenuesForm from './RevenuesForm';
 import ResultsDisplay from './ResultsDisplay';
 import CashFlowDisplay from './CashFlowDisplay';
-import SaleEstimation from './SaleEstimation';
 import TaxForm from './TaxForm';
 import { calculateFinancialMetrics } from '../utils/calculations';
 import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
 import IRRDisplay from './IRRDisplay';
 
-interface PropertyFormData {
-  name: string;
-  investment_data: Investment;
-}
-
 type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr';
 
 export default function PropertyForm() {
+  // États pour gérer le chargement, les métriques et les données d'investissement
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -34,6 +50,7 @@ export default function PropertyForm() {
   const [currentView, setCurrentView] = useState<View>('acquisition');
   const { register, handleSubmit, reset } = useForm<{ name: string }>();
 
+  // Chargement initial des données si un ID est fourni
   useEffect(() => {
     if (id) {
       loadProperty();
@@ -43,6 +60,7 @@ export default function PropertyForm() {
     }
   }, [id]);
 
+  // Fonction pour charger les données d'un bien existant depuis Supabase
   async function loadProperty() {
     try {
       setLoading(true);
@@ -72,6 +90,7 @@ export default function PropertyForm() {
     }
   }
 
+  // Gestionnaire pour les calculs d'investissement
   const handleCalculate = (data: Investment) => {
     const updatedInvestment = {
       ...defaultInvestment,
@@ -82,6 +101,7 @@ export default function PropertyForm() {
     setMetrics(results);
   };
 
+  // Gestionnaire pour les mises à jour d'investissement
   const handleInvestmentUpdate = (updatedInvestment: Investment) => {
     const newInvestment = {
       ...defaultInvestment,
@@ -92,6 +112,7 @@ export default function PropertyForm() {
     setMetrics(newMetrics);
   };
 
+  // Fonction pour sauvegarder les données dans Supabase
   const onSubmit = async (formData: { name: string }) => {
     try {
       setLoading(true);
@@ -123,6 +144,7 @@ export default function PropertyForm() {
     }
   };
 
+  // Fonction pour supprimer un bien
   async function handleDelete() {
     if (!id || !window.confirm('Êtes-vous sûr de vouloir supprimer ce bien ?')) {
       return;
@@ -144,6 +166,7 @@ export default function PropertyForm() {
     }
   }
 
+  // Fonction pour rendre le contenu approprié selon la vue courante
   const renderContent = () => {
     if (!metrics) return null;
 
@@ -200,7 +223,10 @@ export default function PropertyForm() {
         );
       case 'sale':
         return (
-          <SaleDisplay investment={investmentData} />
+          <SaleDisplay 
+            investment={investmentData} 
+            onUpdate={handleInvestmentUpdate}
+          />
         );
       case 'irr':
         return (
@@ -211,6 +237,7 @@ export default function PropertyForm() {
     }
   };
 
+  // Fonction pour obtenir les données de l'année courante
   const getCurrentYearData = () => {
     const currentYear = new Date().getFullYear();
     const currentYearExpense = investmentData.expenses.find(e => e.year === currentYear);
@@ -250,20 +277,21 @@ export default function PropertyForm() {
     };
   };
 
+  // Fonction pour obtenir les données historiques et de projection
   const getHistoricalAndProjectionData = () => {
     const startYear = new Date(investmentData.projectStartDate).getFullYear();
     const endYear = new Date(investmentData.projectEndDate).getFullYear();
     const currentYear = new Date().getFullYear();
 
     const historical = {
-      years: [],
-      cashFlow: [],
-      revenue: []
+      years: [] as number[],
+      cashFlow: [] as number[],
+      revenue: [] as number[]
     };
     const projection = {
-      years: [],
-      cashFlow: [],
-      revenue: []
+      years: [] as number[],
+      cashFlow: [] as number[],
+      revenue: [] as number[]
     };
 
     const allYears = Array.from(

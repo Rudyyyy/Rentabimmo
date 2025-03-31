@@ -102,7 +102,6 @@ function calculateFurnishedPropertySaleTax(
   // Prix d'achat initial ajusté
   const purchasePrice = Number(investment.purchasePrice) || 0;
   const acquisitionFees = (Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0);
-  const improvementWorks = Number(investment.improvementWorks) || 0;
   
   // Date d'achat et de vente
   const purchaseDate = new Date(investment.projectStartDate);

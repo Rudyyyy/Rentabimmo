@@ -1,4 +1,22 @@
-import React, { useState, useMemo, useEffect } from 'react';
+/**
+ * Composant RevenuesForm
+ * 
+ * Ce composant gère la saisie et la projection des revenus d'un investissement immobilier.
+ * Il permet de gérer les revenus historiques et futurs, avec une distinction entre location nue et meublée.
+ * 
+ * Fonctionnalités principales :
+ * - Gestion des revenus historiques (loyers nus, meublés, aides fiscales, charges locataires)
+ * - Projection des revenus futurs avec taux d'augmentation personnalisables
+ * - Calcul automatique des totaux (nu et meublé)
+ * - Base de projection configurable pour l'année 2025
+ * - Mise à jour en temps réel des projections lors des modifications
+ * 
+ * Le composant utilise des tableaux interactifs pour la saisie des données
+ * et calcule automatiquement les projections en fonction des taux d'augmentation
+ * définis par l'utilisateur.
+ */
+
+import { useMemo, useEffect } from 'react';
 import { Investment, YearlyExpenses } from '../types/investment';
 
 interface Props {

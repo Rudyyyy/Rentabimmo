@@ -1,5 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Investment, AmortizationRow, TaxRegime, CapitalGainResults } from '../types/investment';
+/**
+ * Composant SaleDisplay
+ * 
+ * Ce composant gère l'affichage et le calcul des résultats de revente d'un investissement immobilier.
+ * Il permet de simuler la revente d'un bien en tenant compte de différents paramètres et régimes fiscaux.
+ * 
+ * Fonctionnalités principales :
+ * - Simulation de revente avec paramètres personnalisables (augmentation annuelle, frais d'agence, etc.)
+ * - Calcul des plus-values selon différents régimes fiscaux (micro-foncier, reel-foncier, micro-bic, reel-bic)
+ * - Affichage détaillé des calculs fiscaux (abattements, impôts, réintégration des amortissements)
+ * - Visualisation graphique de l'évolution du solde selon le régime fiscal
+ * - Explications détaillées des calculs pour chaque régime
+ * 
+ * Le composant utilise Chart.js pour la visualisation des données et gère la persistance
+ * des paramètres de revente dans le localStorage.
+ */
+
+import { useState, useEffect } from 'react';
+import { Investment, TaxRegime, CapitalGainResults } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import { calculateAllCapitalGainRegimes } from '../utils/capitalGainCalculations';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
@@ -26,17 +43,20 @@ ChartJS.register(
   Legend
 );
 
+// Interface définissant les props du composant
 interface Props {
   investment: Investment;
   onUpdate: (updatedInvestment: Investment) => void;
 }
 
+// Interface pour les paramètres de revente
 interface SaleParameters {
   annualIncrease: number;
   agencyFees: number;
   earlyRepaymentFees: number;
 }
 
+// Labels des différents régimes fiscaux pour l'affichage
 const REGIME_LABELS = {
   'micro-foncier': 'Location nue - Micro-foncier',
   'reel-foncier': 'Location nue - Frais réels',
@@ -47,9 +67,12 @@ const REGIME_LABELS = {
 export default function SaleDisplay({ investment, onUpdate }: Props) {
   // Créer un identifiant unique basé sur le prix d'achat et la date de début
   const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
+  
+  // États pour gérer le régime fiscal sélectionné et les résultats de plus-value
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime);
   const [capitalGainResults, setCapitalGainResults] = useState<Record<TaxRegime, CapitalGainResults> | undefined>(investment.capitalGainResults);
 
+  // État pour les paramètres de revente avec persistance dans le localStorage
   const [saleParams, setSaleParams] = useState<SaleParameters>(() => {
     const stored = localStorage.getItem(`saleParameters_${investmentId}`);
     return stored ? JSON.parse(stored) : {
@@ -59,14 +82,14 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
     };
   });
 
-  // Calculer les résultats de plus-value
+  // Calculer les résultats de plus-value à chaque modification des paramètres pertinents
   useEffect(() => {
     console.log('Calcul des résultats de plus-value...');
     const results = calculateAllCapitalGainRegimes(investment);
     console.log('Résultats calculés:', results);
     setCapitalGainResults(results);
     
-    // Mettre à jour l'investment avec les nouveaux résultats immédiatement
+    // Mettre à jour l'investment avec les nouveaux résultats
     if (onUpdate) {
       console.log('Mise à jour de investment avec les résultats...');
       const updatedInvestment = {
@@ -81,17 +104,19 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
       investment.notaryFees, investment.agencyFees, investment.improvementWorks,
       investment.isLMP, investment.accumulatedDepreciation, investment.taxParameters]);
 
-  // Sauvegarder les paramètres dans le localStorage avec l'identifiant unique
+  // Sauvegarder les paramètres dans le localStorage
   useEffect(() => {
     localStorage.setItem(`saleParameters_${investmentId}`, JSON.stringify(saleParams));
   }, [saleParams, investmentId]);
 
+  // Fonctions utilitaires pour le formatage des valeurs
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
   const formatPercent = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value / 100);
 
+  // Gestionnaire de modification des paramètres de revente
   const handleParamChange = (field: keyof SaleParameters, value: number) => {
     setSaleParams(prev => ({
       ...prev,
@@ -99,6 +124,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
     }));
   };
 
+  // Calcul du tableau de revente avec les valeurs projetées
   const calculateSaleTable = () => {
     const startYear = new Date(investment.projectStartDate).getFullYear();
     const endYear = new Date(investment.projectEndDate).getFullYear();
@@ -330,10 +356,11 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
     return netSellingPrice - correctedPurchasePrice;
   };
 
-  // Définir les explications pour chaque régime fiscal
-  const getRegimeExplanation = (regime: TaxRegime, year: number) => {
-    const randomYear = saleTable.years[Math.min(Math.floor(Math.random() * saleTable.years.length), saleTable.years.length - 1)];
-    const holdingPeriodYears = randomYear - new Date(investment.projectStartDate).getFullYear();
+  // Génération des explications détaillées pour chaque régime fiscal
+  const getRegimeExplanation = (regime: TaxRegime) => {
+    // Utiliser la première année du tableau pour les exemples
+    const exampleYear = saleTable.years[0];
+    const holdingPeriodYears = exampleYear - new Date(investment.projectStartDate).getFullYear();
     const results = capitalGainResults?.[regime];
     
     if (!results) return "Aucune donnée disponible.";
@@ -360,7 +387,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
               <li>Calcul des impositions : 19% d'IR et 17,2% de prélèvements sociaux sur les montants imposables après abattements</li>
             </ol>
             
-            <h4 className="font-semibold mt-4">Exemple concret pour l'année {randomYear} (détention de {holdingPeriodYears} ans) :</h4>
+            <h4 className="font-semibold mt-4">Exemple concret pour l'année {exampleYear} (détention de {holdingPeriodYears} ans) :</h4>
             <div className="bg-blue-50 p-4 rounded-md">
               <p>Prix d'achat : {formatCurrency(Number(investment.purchasePrice) || 0)}</p>
               <p>Frais d'acquisition : {formatCurrency((Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0))}</p>
@@ -371,10 +398,10 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                 (Number(investment.agencyFees) || 0) + 
                 (Number(investment.improvementWorks) || 0)
               )}</p>
-              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)])}</p>
+              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[0])}</p>
               <p>Frais d'agence : {formatCurrency(saleParams.agencyFees)}</p>
-              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)] - saleParams.agencyFees)}</p>
-              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(saleTable.years.indexOf(randomYear)))}</p>
+              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[0] - saleParams.agencyFees)}</p>
+              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(0))}</p>
               <p>Abattement IR ({holdingPeriodYears > 5 ? Math.min(100, (holdingPeriodYears - 5) * 6) : 0}%) : {formatCurrency(results.grossCapitalGain - results.taxableCapitalGainIR)}</p>
               <p>Plus-value imposable IR : {formatCurrency(results.taxableCapitalGainIR)}</p>
               <p>Impôt sur le revenu (19%) : {formatCurrency(results.incomeTax)}</p>
@@ -404,7 +431,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
               <li>Calcul des impositions : 19% d'IR et 17,2% de prélèvements sociaux sur les montants imposables après abattements</li>
             </ol>
             
-            <h4 className="font-semibold mt-4">Exemple concret pour l'année {randomYear} (détention de {holdingPeriodYears} ans) :</h4>
+            <h4 className="font-semibold mt-4">Exemple concret pour l'année {exampleYear} (détention de {holdingPeriodYears} ans) :</h4>
             <div className="bg-blue-50 p-4 rounded-md">
               <p>Prix d'achat : {formatCurrency(Number(investment.purchasePrice) || 0)}</p>
               <p>Frais d'acquisition : {formatCurrency((Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0))}</p>
@@ -415,10 +442,10 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                 (Number(investment.agencyFees) || 0) + 
                 (Number(investment.improvementWorks) || 0)
               )}</p>
-              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)])}</p>
+              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[0])}</p>
               <p>Frais d'agence : {formatCurrency(saleParams.agencyFees)}</p>
-              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)] - saleParams.agencyFees)}</p>
-              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(saleTable.years.indexOf(randomYear)))}</p>
+              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[0] - saleParams.agencyFees)}</p>
+              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(0))}</p>
               <p>Abattement IR ({holdingPeriodYears > 5 ? Math.min(100, (holdingPeriodYears - 5) * 6) : 0}%) : {formatCurrency(results.grossCapitalGain - results.taxableCapitalGainIR)}</p>
               <p>Plus-value imposable IR : {formatCurrency(results.taxableCapitalGainIR)}</p>
               <p>Impôt sur le revenu (19%) : {formatCurrency(results.incomeTax)}</p>
@@ -448,7 +475,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
               <p>Ces amortissements, qui ont permis de réduire l'imposition pendant la période de détention, sont "récupérés" par l'administration fiscale lors de la vente.</p>
             </div>
             
-            <h4 className="font-semibold mt-4">Exemple concret pour l'année {randomYear} (détention de {holdingPeriodYears} ans) :</h4>
+            <h4 className="font-semibold mt-4">Exemple concret pour l'année {exampleYear} (détention de {holdingPeriodYears} ans) :</h4>
             <div className="bg-blue-50 p-4 rounded-md">
               <p>Imaginons un bien acquis pour 200 000 € (dont 160 000 € amortissables sur 25 ans et 10 000 € de mobilier sur 10 ans).</p>
               <p>Après 10 ans, les amortissements théoriques seraient de :</p>
@@ -491,7 +518,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
               <p className="mt-3 italic">Notez que dans cet exemple, la réintégration des amortissements (15 000 €) représente plus de la moitié de l'imposition totale. C'est pourquoi il est crucial de prendre en compte ce paramètre lors de la planification d'une revente.</p>
             </div>
             
-            <h4 className="font-semibold mt-2">Exemple pour l'année {randomYear} (détention de {holdingPeriodYears} ans) :</h4>
+            <h4 className="font-semibold mt-2">Exemple pour l'année {exampleYear} (détention de {holdingPeriodYears} ans) :</h4>
             <div className="bg-blue-50 p-4 rounded-md">
               <p>Prix d'achat : {formatCurrency(Number(investment.purchasePrice) || 0)}</p>
               <p>Frais d'acquisition : {formatCurrency((Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0))}</p>
@@ -502,10 +529,10 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                 (Number(investment.agencyFees) || 0) + 
                 (Number(investment.improvementWorks) || 0)
               )}</p>
-              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)])}</p>
+              <p>Prix de vente estimé : {formatCurrency(saleTable.revaluedValues[0])}</p>
               <p>Frais d'agence : {formatCurrency(saleParams.agencyFees)}</p>
-              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[saleTable.years.indexOf(randomYear)] - saleParams.agencyFees)}</p>
-              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(saleTable.years.indexOf(randomYear)))}</p>
+              <p>Prix de vente net : {formatCurrency(saleTable.revaluedValues[0] - saleParams.agencyFees)}</p>
+              <p>Plus-value brute : {formatCurrency(calculateRawPlusValue(0))}</p>
               
               {investment.isLMP ? (
                 // Cas LMP
@@ -529,7 +556,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                     <div className="mt-4 border-t-2 border-blue-100 pt-3">
                       <p className="font-semibold text-blue-800">Réintégration des amortissements :</p>
                       <p>Amortissements totaux théoriques : {formatCurrency(Number(investment.accumulatedDepreciation) || 0)}</p>
-                      <p className="font-bold text-blue-700">Amortissements effectivement utilisés : {formatCurrency(calculateUsedAmortizationTotal(randomYear))}</p>
+                      <p className="font-bold text-blue-700">Amortissements effectivement utilisés : {formatCurrency(calculateUsedAmortizationTotal(exampleYear))}</p>
                       
                       {/* Recalculer ces valeurs avec la même méthode que dans le tableau pour assurer la cohérence */}
                       {(() => {
@@ -541,13 +568,13 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                           (Number(investment.improvementWorks) || 0);
                         
                         // Prix de vente net après déduction des frais d'agence
-                        const netSellingPrice = saleTable.revaluedValues[saleTable.years.indexOf(randomYear)] - saleParams.agencyFees;
+                        const netSellingPrice = saleTable.revaluedValues[0] - saleParams.agencyFees;
                         
                         // Plus-value brute pour cette année
                         const plusValue = Math.max(0, netSellingPrice - correctedPurchasePrice);
                         
                         // Récupérer les amortissements utilisés
-                        const usedAmortizationTotal = calculateUsedAmortizationTotal(randomYear);
+                        const usedAmortizationTotal = calculateUsedAmortizationTotal(exampleYear);
                         
                         // Les amortissements sont imposés au taux marginal, dans la limite de la plus-value
                         const depreciationTaxable = Math.min(usedAmortizationTotal, plusValue);
@@ -912,7 +939,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                 ];
                 return {
                   label,
-                  data: saleTable.years.map((year, i) => {
+                  data: saleTable.years.map((i) => {
                     return calculateBalance(i, regime as TaxRegime);
                   }),
                   borderColor: colors[index],
@@ -964,7 +991,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">Calcul de la plus-value immobilière</h3>
         <div className="mt-4">
-          {getRegimeExplanation(selectedRegime, new Date().getFullYear())}
+          {getRegimeExplanation(selectedRegime)}
         </div>
       </div>
     </div>
