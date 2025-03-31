@@ -185,6 +185,7 @@ export interface Investment {
   occupancyRate: number;
   rentalStartDate: string;
   remainingBalance: number;
+  description?: string;
   
   // Tax properties
   taxType: 'direct' | 'lmnp' | 'sci';
@@ -282,6 +283,7 @@ export const defaultInvestment: Investment = {
   occupancyRate: 0,
   rentalStartDate: '',
   remainingBalance: 0,
+  description: '',
   taxType: 'direct',
   taxationMethod: 'real',
   taxRate: 30,

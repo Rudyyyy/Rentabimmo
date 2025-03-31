@@ -20,7 +20,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Investment, YearlyExpenses, ExpenseProjection, TaxRegime, TaxParameters, TaxResults } from '../types/investment';
+import { Investment, YearlyExpenses, ExpenseProjection, TaxRegime, TaxParameters, TaxResults, defaultInvestment } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';
 import { Bar } from 'react-chartjs-2';
@@ -53,106 +53,11 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
   const [showAmortization, setShowAmortization] = useState(false);
   const [loanAmountWarning, setLoanAmountWarning] = useState(false);
 
-  const handleInputChange = (field: keyof Investment, value: string | number | boolean) => {
+  const handleInputChange = (field: keyof Investment, value: any) => {
     let updatedInvestment = {
+      ...defaultInvestment,
       ...initialValues,
-      [field]: value,
-      projectStartDate: field === 'projectStartDate' ? (value as string) : (initialValues?.projectStartDate || ''),
-      projectEndDate: field === 'projectEndDate' ? (value as string) : (initialValues?.projectEndDate || ''),
-      purchasePrice: field === 'purchasePrice' ? (value as number) : (initialValues?.purchasePrice || 0),
-      agencyFees: field === 'agencyFees' ? (value as number) : (initialValues?.agencyFees || 0),
-      notaryFees: field === 'notaryFees' ? (value as number) : (initialValues?.notaryFees || 0),
-      bankFees: field === 'bankFees' ? (value as number) : (initialValues?.bankFees || 0),
-      bankGuaranteeFees: field === 'bankGuaranteeFees' ? (value as number) : (initialValues?.bankGuaranteeFees || 0),
-      mandatoryDiagnostics: field === 'mandatoryDiagnostics' ? (value as number) : (initialValues?.mandatoryDiagnostics || 0),
-      renovationCosts: field === 'renovationCosts' ? (value as number) : (initialValues?.renovationCosts || 0),
-      downPayment: field === 'downPayment' ? (value as number) : (initialValues?.downPayment || 0),
-      loanAmount: field === 'loanAmount' ? (value as number) : (initialValues?.loanAmount || 0),
-      loanDuration: field === 'loanDuration' ? (value as number) : (initialValues?.loanDuration || 0),
-      interestRate: field === 'interestRate' ? (value as number) : (initialValues?.interestRate || 0),
-      insuranceRate: field === 'insuranceRate' ? (value as number) : (initialValues?.insuranceRate || 0),
-      startDate: field === 'startDate' ? (value as string) : (initialValues?.startDate || ''),
-      hasDeferral: field === 'hasDeferral' ? (value as boolean) : (initialValues?.hasDeferral || false),
-      deferralType: field === 'deferralType' ? (value as 'none' | 'partial' | 'total') : (initialValues?.deferralType || 'none'),
-      deferredPeriod: field === 'deferredPeriod' ? (value as number) : (initialValues?.deferredPeriod || 0),
-      deferredInterest: field === 'deferredInterest' ? (value as number) : (initialValues?.deferredInterest || 0),
-      propertyTax: field === 'propertyTax' ? (value as number) : (initialValues?.propertyTax || 0),
-      condoFees: field === 'condoFees' ? (value as number) : (initialValues?.condoFees || 0),
-      propertyInsurance: field === 'propertyInsurance' ? (value as number) : (initialValues?.propertyInsurance || 0),
-      managementFees: field === 'managementFees' ? (value as number) : (initialValues?.managementFees || 0),
-      unpaidRentInsurance: field === 'unpaidRentInsurance' ? (value as number) : (initialValues?.unpaidRentInsurance || 0),
-      expenses: field === 'expenses' ? (value as unknown as YearlyExpenses[]) : (initialValues?.expenses || []),
-      expenseProjection: field === 'expenseProjection' ? (value as unknown as ExpenseProjection) : (initialValues?.expenseProjection || {
-        propertyTaxIncrease: 0,
-        condoFeesIncrease: 0,
-        propertyInsuranceIncrease: 0,
-        managementFeesIncrease: 0,
-        unpaidRentInsuranceIncrease: 0,
-        renovationCostsIncrease: 0,
-        otherExpensesIncrease: 0,
-        repairsIncrease: 0,
-        otherDeductibleIncrease: 0,
-        otherNonDeductibleIncrease: 0,
-        rentIncrease: 0,
-        tenantChargesIncrease: 0,
-        taxBenefitIncrease: 0,
-        furnishedRentIncrease: 0,
-        baseYear: {
-          propertyTax: 0,
-          condoFees: 0,
-          propertyInsurance: 0,
-          managementFees: 0,
-          unpaidRentInsurance: 0,
-          repairs: 0,
-          otherDeductible: 0,
-          otherNonDeductible: 0,
-          rent: 0,
-          furnishedRent: 0,
-          tenantCharges: 0,
-          taxBenefit: 0
-        },
-        type: 'fixed',
-        value: 0
-      }),
-      saleDate: field === 'saleDate' ? (value as string) : (initialValues?.saleDate || ''),
-      appreciationType: field === 'appreciationType' ? (value as 'global' | 'annual' | 'amount') : (initialValues?.appreciationType || 'global'),
-      appreciationValue: field === 'appreciationValue' ? (value as number) : (initialValues?.appreciationValue || 0),
-      saleAgencyFees: field === 'saleAgencyFees' ? (value as number) : (initialValues?.saleAgencyFees || 0),
-      improvementWorks: field === 'improvementWorks' ? (value as number) : (initialValues?.improvementWorks || 0),
-      isLMP: field === 'isLMP' ? (value as boolean) : (initialValues?.isLMP || false),
-      accumulatedDepreciation: field === 'accumulatedDepreciation' ? (value as number) : (initialValues?.accumulatedDepreciation || 0),
-      selectedRegime: field === 'selectedRegime' ? (value as TaxRegime) : (initialValues?.selectedRegime || 'micro-foncier'),
-      taxParameters: field === 'taxParameters' ? (value as unknown as TaxParameters) : (initialValues?.taxParameters || {
-        taxRate: 0.30,
-        socialChargesRate: 0.1728,
-        buildingValue: 0,
-        buildingAmortizationYears: 0,
-        furnitureValue: 0,
-        furnitureAmortizationYears: 0,
-        previousDeficit: 0,
-        deficitLimit: 0,
-        rent: 0,
-        furnishedRent: 0,
-        tenantCharges: 0,
-        taxBenefit: 0,
-        microFoncier: { rate: 0.30 },
-        microBIC: { rate: 0.50 },
-        real: { rate: 0.1728 },
-        nonProfessional: { rate: 0.1728 },
-        professional: { rate: 0.1728 }
-      }),
-      taxResults: field === 'taxResults' ? (value as unknown as Record<TaxRegime, TaxResults>) : (initialValues?.taxResults || {
-        'micro-foncier': { tax: 0, socialCharges: 0, regime: 'micro-foncier', taxableIncome: 0, totalTax: 0, netIncome: 0 },
-        'micro-bic': { tax: 0, socialCharges: 0, regime: 'micro-bic', taxableIncome: 0, totalTax: 0, netIncome: 0 },
-        'reel-foncier': { tax: 0, socialCharges: 0, regime: 'reel-foncier', taxableIncome: 0, totalTax: 0, netIncome: 0 },
-        'reel-bic': { tax: 0, socialCharges: 0, regime: 'reel-bic', taxableIncome: 0, totalTax: 0, netIncome: 0 },
-        'non-professional': { tax: 0, socialCharges: 0, regime: 'non-professional', taxableIncome: 0, totalTax: 0, netIncome: 0 },
-        'professional': { tax: 0, socialCharges: 0, regime: 'professional', taxableIncome: 0, totalTax: 0, netIncome: 0 }
-      }),
-      monthlyRent: field === 'monthlyRent' ? (value as number) : (initialValues?.monthlyRent || 0),
-      annualRentIncrease: field === 'annualRentIncrease' ? (value as number) : (initialValues?.annualRentIncrease || 0),
-      occupancyRate: field === 'occupancyRate' ? (value as number) : (initialValues?.occupancyRate || 0),
-      rentalStartDate: field === 'rentalStartDate' ? (value as string) : (initialValues?.rentalStartDate || ''),
+      [field]: value
     };
 
     // Reset deferral-related fields when hasDeferral is set to false
@@ -314,38 +219,9 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Project Dates */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Dates du projet</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Date de début
-            </label>
-            <input
-              type="date"
-              value={initialValues?.projectStartDate || ''}
-              onChange={(e) => handleInputChange('projectStartDate', e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Date de fin
-            </label>
-            <input
-              type="date"
-              value={initialValues?.projectEndDate || ''}
-              onChange={(e) => handleInputChange('projectEndDate', e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Purchase Details */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Détails d'acquisition</h3>
+        <h3 className="text-lg font-semibold mb-4">Détails de l'acquisition</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -353,7 +229,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             </label>
             <input
               type="number"
-              value={initialValues?.purchasePrice || ''}
+              value={initialValues?.purchasePrice || 0}
               onChange={(e) => handleInputChange('purchasePrice', Number(e.target.value))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />

@@ -388,16 +388,55 @@ export default function PropertyForm() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Nom du bien
-                </label>
-                <input
-                  type="text"
-                  {...register('name', { required: true })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="Ex: Appartement Centre-ville"
-                />
+              <h3 className="text-lg font-semibold mb-4">Informations générales</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Nom du bien
+                  </label>
+                  <input
+                    type="text"
+                    {...register('name', { required: true })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: Appartement Centre-ville"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Date de début
+                    </label>
+                    <input
+                      type="date"
+                      value={investmentData.projectStartDate}
+                      onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectStartDate: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Date de fin
+                    </label>
+                    <input
+                      type="date"
+                      value={investmentData.projectEndDate}
+                      onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectEndDate: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={investmentData.description || ''}
+                    onChange={(e) => handleInvestmentUpdate({ ...investmentData, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Description du projet d'investissement..."
+                  />
+                </div>
               </div>
             </div>
 

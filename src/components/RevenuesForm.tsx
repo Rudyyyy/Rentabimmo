@@ -282,6 +282,137 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     }
   }, [years.startYear, years.endYear]);
 
+  // Recalculer les projections quand la date de fin change
+  useEffect(() => {
+    const currentValues = {
+      ...getCurrentYearValues(),
+      propertyTax: investment.expenseProjection.baseYear.propertyTax,
+      condoFees: investment.expenseProjection.baseYear.condoFees,
+      propertyInsurance: investment.expenseProjection.baseYear.propertyInsurance,
+      managementFees: investment.expenseProjection.baseYear.managementFees,
+      unpaidRentInsurance: investment.expenseProjection.baseYear.unpaidRentInsurance,
+      repairs: investment.expenseProjection.baseYear.repairs,
+      otherDeductible: investment.expenseProjection.baseYear.otherDeductible,
+      otherNonDeductible: investment.expenseProjection.baseYear.otherNonDeductible
+    };
+    const updatedExpenses = [...investment.expenses];
+    let hasChanges = false;
+    
+    // Mettre à jour les projections pour toutes les années futures
+    for (let year = years.currentYear + 1; year <= years.endYear; year++) {
+      const yearsAhead = year - years.currentYear;
+      
+      // Calculer les projections pour tous les types de revenus et frais
+      const projectedValues = {
+        rent: calculateProjectedValue(
+          currentValues.rent,
+          investment.expenseProjection.rentIncrease,
+          yearsAhead
+        ),
+        furnishedRent: calculateProjectedValue(
+          currentValues.furnishedRent,
+          investment.expenseProjection.furnishedRentIncrease,
+          yearsAhead
+        ),
+        tenantCharges: calculateProjectedValue(
+          currentValues.tenantCharges,
+          investment.expenseProjection.tenantChargesIncrease,
+          yearsAhead
+        ),
+        propertyTax: calculateProjectedValue(
+          currentValues.propertyTax,
+          investment.expenseProjection.propertyTaxIncrease,
+          yearsAhead
+        ),
+        condoFees: calculateProjectedValue(
+          currentValues.condoFees,
+          investment.expenseProjection.condoFeesIncrease,
+          yearsAhead
+        ),
+        propertyInsurance: calculateProjectedValue(
+          currentValues.propertyInsurance,
+          investment.expenseProjection.propertyInsuranceIncrease,
+          yearsAhead
+        ),
+        managementFees: calculateProjectedValue(
+          currentValues.managementFees,
+          investment.expenseProjection.managementFeesIncrease,
+          yearsAhead
+        ),
+        unpaidRentInsurance: calculateProjectedValue(
+          currentValues.unpaidRentInsurance,
+          investment.expenseProjection.unpaidRentInsuranceIncrease,
+          yearsAhead
+        ),
+        repairs: calculateProjectedValue(
+          currentValues.repairs,
+          investment.expenseProjection.repairsIncrease,
+          yearsAhead
+        ),
+        otherDeductible: calculateProjectedValue(
+          currentValues.otherDeductible,
+          investment.expenseProjection.otherDeductibleIncrease,
+          yearsAhead
+        ),
+        otherNonDeductible: calculateProjectedValue(
+          currentValues.otherNonDeductible,
+          investment.expenseProjection.otherNonDeductibleIncrease,
+          yearsAhead
+        )
+      };
+
+      const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
+      if (expenseIndex === -1) {
+        hasChanges = true;
+        updatedExpenses.push({
+          year,
+          ...projectedValues,
+          tax: 0,
+          deficit: 0,
+          loanPayment: 0,
+          loanInsurance: 0,
+          taxBenefit: 0,
+          interest: 0
+        });
+      } else {
+        // Vérifier si les valeurs ont changé
+        const currentExpense = updatedExpenses[expenseIndex];
+        if (
+          currentExpense.rent !== projectedValues.rent ||
+          currentExpense.furnishedRent !== projectedValues.furnishedRent ||
+          currentExpense.tenantCharges !== projectedValues.tenantCharges ||
+          currentExpense.propertyTax !== projectedValues.propertyTax ||
+          currentExpense.condoFees !== projectedValues.condoFees ||
+          currentExpense.propertyInsurance !== projectedValues.propertyInsurance ||
+          currentExpense.managementFees !== projectedValues.managementFees ||
+          currentExpense.unpaidRentInsurance !== projectedValues.unpaidRentInsurance ||
+          currentExpense.repairs !== projectedValues.repairs ||
+          currentExpense.otherDeductible !== projectedValues.otherDeductible ||
+          currentExpense.otherNonDeductible !== projectedValues.otherNonDeductible
+        ) {
+          hasChanges = true;
+          updatedExpenses[expenseIndex] = {
+            ...currentExpense,
+            ...projectedValues
+          };
+        }
+      }
+    }
+
+    // Supprimer les années qui ne sont plus dans la plage
+    const expensesToKeep = updatedExpenses.filter(e => e.year <= years.endYear);
+    if (expensesToKeep.length !== updatedExpenses.length) {
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      onUpdate({
+        ...investment,
+        expenses: expensesToKeep.sort((a, b) => a.year - b.year)
+      });
+    }
+  }, [investment.projectEndDate, years.currentYear, years.endYear, investment.expenseProjection, investment.expenses, onUpdate]);
+
   const handleBaseYearChange = (field: keyof Investment['expenseProjection']['baseYear'], value: number) => {
     const updatedInvestment = {
       ...investment,
