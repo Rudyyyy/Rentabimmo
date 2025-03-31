@@ -147,6 +147,7 @@ export interface LMNPData {
 export type DeferralType = 'none' | 'partial' | 'total';
 
 export interface Investment {
+  name: string;
   projectStartDate: string;
   projectEndDate: string;
   purchasePrice: number;
@@ -245,6 +246,7 @@ export const defaultExpenseProjection: ExpenseProjection = {
 };
 
 export const defaultInvestment: Investment = {
+  name: '',
   projectStartDate: new Date().toISOString().split('T')[0],
   projectEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 20)).toISOString().split('T')[0],
   purchasePrice: 0,
