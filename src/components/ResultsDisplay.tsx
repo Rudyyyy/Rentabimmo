@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Investment } from '../types/investment';
+import { Investment, FinancialMetrics } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { Line } from 'react-chartjs-2';
@@ -43,19 +43,20 @@ ChartJS.register(
 );
 
 interface Props {
+  metrics: FinancialMetrics;
   investment: Investment;
-  metrics: any;
-  currentYearData: {
+  onUpdate: (updatedInvestment: Investment) => void;
+  currentYearData?: {
     rent: number;
     expenses: number;
     totalInvestmentCost: number;
   };
-  historicalData: {
+  historicalData?: {
     years: number[];
     cashFlow: number[];
     revenue: number[];
   };
-  projectionData: {
+  projectionData?: {
     years: number[];
     cashFlow: number[];
     revenue: number[];
@@ -71,7 +72,7 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
 
 const STORAGE_KEY = 'selectedProfitabilityRegime';
 
-export default function ResultsDisplay({ investment }: Props) {
+export default function ResultsDisplay({ metrics, investment, onUpdate }: Props) {
   // État pour le régime fiscal sélectionné, initialisé depuis le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);

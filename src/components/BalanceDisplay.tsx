@@ -365,8 +365,117 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
         </div>
       </div>
 
-      {/* Navigation des régimes fiscaux et tableau détaillé */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      {/* Graphiques d'évolution des revenus et de l'effort */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Graphique des revenus */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Évolution des revenus</h3>
+          <div className="h-80">
+            <Line 
+              data={{
+                labels: balanceData.years,
+                datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
+                  const colors = [
+                    'rgba(59, 130, 246, 1)', // blue
+                    'rgba(16, 185, 129, 1)', // green
+                    'rgba(139, 92, 246, 1)', // purple
+                    'rgba(245, 158, 11, 1)'  // yellow
+                  ];
+                  
+                  return {
+                    label,
+                    data: balanceData.years.map((year, yearIndex) => {
+                      const cashFlow = balanceData.data[regime as TaxRegime]?.[yearIndex]?.cumulativeCashFlow || 0;
+                      const saleBalance = balanceData.data[regime as TaxRegime]?.[yearIndex]?.saleBalance || 0;
+                      return cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
+                    }),
+                    borderColor: colors[index],
+                    backgroundColor: colors[index],
+                    tension: 0.4,
+                    fill: false
+                  };
+                })
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top' as const,
+                  },
+                  title: {
+                    display: false
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value: any) => formatCurrency(value)
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Graphique de l'effort */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Évolution de l'effort</h3>
+          <div className="h-80">
+            <Line 
+              data={{
+                labels: balanceData.years,
+                datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
+                  const colors = [
+                    'rgba(59, 130, 246, 1)', // blue
+                    'rgba(16, 185, 129, 1)', // green
+                    'rgba(139, 92, 246, 1)', // purple
+                    'rgba(245, 158, 11, 1)'  // yellow
+                  ];
+                  
+                  return {
+                    label,
+                    data: balanceData.years.map((year, yearIndex) => {
+                      const downPayment = Number(investment.downPayment) || 0;
+                      const cashFlow = balanceData.data[regime as TaxRegime]?.[yearIndex]?.cumulativeCashFlow || 0;
+                      return cashFlow > 0 ? downPayment : downPayment - cashFlow;
+                    }),
+                    borderColor: colors[index],
+                    backgroundColor: colors[index],
+                    tension: 0.4,
+                    fill: false
+                  };
+                })
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top' as const,
+                  },
+                  title: {
+                    display: false
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value: any) => formatCurrency(value)
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tableau de données */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
             {(Object.entries(REGIME_LABELS) as [TaxRegime, string][]).map(([regime, label]) => (
@@ -413,9 +522,6 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                   Solde revente
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Gain total
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Revenus
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -429,7 +535,6 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
             <tbody className="bg-white divide-y divide-gray-200">
               {balanceData.years.map((year, index) => {
                 const downPayment = Number(investment.downPayment) || 0;
-                const totalGain = balanceData.data[selectedRegime]?.[index]?.totalGain || 0;
                 const cashFlow = balanceData.data[selectedRegime]?.[index]?.cumulativeCashFlow || 0;
                 const annualCashFlow = balanceData.data[selectedRegime]?.[index]?.annualCashFlow || 0;
                 const saleBalance = balanceData.data[selectedRegime]?.[index]?.saleBalance || 0;
@@ -441,7 +546,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                 const startYear = new Date(investment.projectStartDate).getFullYear();
                 const numberOfYears = year - startYear + 1;
                 const annualReturn = effort !== 0 ? Math.pow(revenues / effort, 1 / numberOfYears) - 1 : 0;
-                
+
                 return (
                   <tr key={year} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -462,16 +567,13 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatCurrency(saleBalance)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(totalGain)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${revenues < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {formatCurrency(revenues)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${gainPercent < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {formatPercent(gainPercent)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${annualReturn < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {formatPercent(annualReturn)}
                     </td>
                   </tr>

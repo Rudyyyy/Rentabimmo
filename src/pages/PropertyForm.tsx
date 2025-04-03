@@ -3,17 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
-import { Investment, defaultInvestment } from '../types/investment';
+import { Investment, defaultInvestment, FinancialMetrics } from '../types/investment';
 import { useAuth } from '../contexts/AuthContext';
-import InvestmentForm from './InvestmentForm';
-import ResultsDisplay from './ResultsDisplay';
-import SaleEstimation from './SaleEstimation';
+import InvestmentForm from '../components/InvestmentForm';
+import ResultsDisplay from '../components/ResultsDisplay';
+import SaleEstimation from '../components/SaleEstimation';
 import { calculateFinancialMetrics } from '../utils/calculations';
-
-interface PropertyFormData {
-  name: string;
-  investment_data: Investment;
-}
 
 type View = 'form' | 'profitability' | 'sale' | 'tax';
 
@@ -22,7 +17,7 @@ export default function PropertyForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [metrics, setMetrics] = useState(null);
+  const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentView, setCurrentView] = useState<View>('form');
   const { register, handleSubmit, reset } = useForm<{ name: string }>();
