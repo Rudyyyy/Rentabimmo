@@ -75,14 +75,22 @@ const STORAGE_KEY = 'selectedProfitabilityRegime';
 export default function ResultsDisplay({ metrics, investment, onUpdate }: Props) {
   // État pour le régime fiscal sélectionné, initialisé depuis le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return (stored as TaxRegime) || 'micro-foncier';
+    const stored = localStorage.getItem(`selectedRegime_${investment.purchasePrice}_${investment.startDate}`);
+    return (stored as TaxRegime) || investment.selectedRegime || 'micro-foncier';
   });
 
-  // Sauvegarde de la sélection dans le localStorage
+  // Créer un identifiant unique basé sur le prix d'achat et la date de début
+  const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
+
+  // Sauvegarde du régime sélectionné dans le localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, selectedRegime);
-  }, [selectedRegime]);
+    localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
+  }, [selectedRegime, investmentId]);
+
+  // Mettre à jour le régime sélectionné si l'investissement change
+  useEffect(() => {
+    setSelectedRegime(investment.selectedRegime || 'micro-foncier');
+  }, [investment.selectedRegime]);
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
@@ -355,18 +363,18 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex" aria-label="Tabs">
             {(Object.keys(REGIME_LABELS) as TaxRegime[]).map((regime) => (
-              <button
+              <div
                 key={regime}
                 onClick={() => handleRegimeChange(regime)}
                 className={`
-                  flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm
+                  flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm cursor-pointer
                   ${selectedRegime === regime
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                 `}
               >
                 {REGIME_LABELS[regime]}
-              </button>
+              </div>
             ))}
           </nav>
         </div>

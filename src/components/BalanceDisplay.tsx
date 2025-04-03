@@ -72,21 +72,7 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
 };
 
 const BalanceDisplay: React.FC<Props> = ({ investment }) => {
-  // Identifiant unique pour le stockage local
-  const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
-  
-  // État du régime fiscal sélectionné, persistant dans le localStorage
-  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
-    const stored = localStorage.getItem(`selectedRegime_${investmentId}`);
-    return (stored as TaxRegime) || 'micro-foncier';
-  });
-
-  // Sauvegarde du régime sélectionné dans le localStorage
-  useEffect(() => {
-    localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
-  }, [selectedRegime, investmentId]);
-
-  // État pour stocker les données calculées pour chaque année et régime
+  // État pour stocker les données de balance calculées
   const [balanceData, setBalanceData] = useState<BalanceData>({
     years: [],
     data: {
@@ -96,6 +82,23 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
       'reel-bic': []
     }
   });
+
+  // Utiliser le régime fiscal sélectionné dans TaxForm
+  const selectedRegime = investment.selectedRegime || 'micro-foncier';
+
+  // Identifiant unique pour le stockage local
+  const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
+  
+  // État du régime fiscal sélectionné, persistant dans le localStorage
+  const [selectedRegimeLocal, setSelectedRegimeLocal] = useState<TaxRegime>(() => {
+    const stored = localStorage.getItem(`selectedRegime_${investmentId}`);
+    return (stored as TaxRegime) || 'micro-foncier';
+  });
+
+  // Sauvegarde du régime sélectionné dans le localStorage
+  useEffect(() => {
+    localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegimeLocal);
+  }, [selectedRegimeLocal, investmentId]);
 
   // Fonctions utilitaires pour le formatage des valeurs
   const formatCurrency = (amount: number) => 
@@ -483,11 +486,11 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                 key={regime}
                 onClick={(e) => {
                   e.preventDefault();
-                  setSelectedRegime(regime);
+                  setSelectedRegimeLocal(regime);
                 }}
                 className={`
                   whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                  ${selectedRegime === regime
+                  ${selectedRegimeLocal === regime
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                 `}
@@ -535,9 +538,9 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
             <tbody className="bg-white divide-y divide-gray-200">
               {balanceData.years.map((year, index) => {
                 const downPayment = Number(investment.downPayment) || 0;
-                const cashFlow = balanceData.data[selectedRegime]?.[index]?.cumulativeCashFlow || 0;
-                const annualCashFlow = balanceData.data[selectedRegime]?.[index]?.annualCashFlow || 0;
-                const saleBalance = balanceData.data[selectedRegime]?.[index]?.saleBalance || 0;
+                const cashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeCashFlow || 0;
+                const annualCashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.annualCashFlow || 0;
+                const saleBalance = balanceData.data[selectedRegimeLocal]?.[index]?.saleBalance || 0;
                 const revenues = cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
                 const effort = cashFlow > 0 ? downPayment : downPayment - cashFlow;
                 const gainPercent = effort !== 0 ? revenues / effort : 0;

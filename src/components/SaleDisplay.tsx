@@ -68,8 +68,8 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
   // Créer un identifiant unique basé sur le prix d'achat et la date de début
   const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
   
-  // États pour gérer le régime fiscal sélectionné et les résultats de plus-value
-  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime);
+  // État du régime fiscal sélectionné, persistant dans le localStorage
+  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
   const [capitalGainResults, setCapitalGainResults] = useState<Record<TaxRegime, CapitalGainResults> | undefined>(investment.capitalGainResults);
 
   // État pour les paramètres de revente avec persistance dans le localStorage
@@ -81,6 +81,11 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
       earlyRepaymentFees: 0
     };
   });
+
+  // Sauvegarde du régime sélectionné dans le localStorage
+  useEffect(() => {
+    localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
+  }, [selectedRegime, investmentId]);
 
   // Calculer les résultats de plus-value à chaque modification des paramètres pertinents
   useEffect(() => {

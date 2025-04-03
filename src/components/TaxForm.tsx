@@ -42,7 +42,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
   const [currentYear] = useState(new Date().getFullYear());
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime);
   const [currentView, setCurrentView] = useState<'parameters' | 'projection'>('parameters');
-  const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
+  const [projectionRegime, setProjectionRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
 
   // Mise à jour des résultats fiscaux à chaque changement de paramètres
   useEffect(() => {
@@ -51,9 +51,15 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     onUpdate({
       ...investment,
       selectedRegime: selectedRegime,
+      taxRegime: selectedRegime,
       taxResults: results
     });
   }, [investment.taxParameters, selectedRegime, currentYear, investment.expenses]);
+
+  // Synchronisation de projectionRegime avec selectedRegime
+  useEffect(() => {
+    setProjectionRegime(selectedRegime);
+  }, [selectedRegime]);
 
   // Synchronisation des revenus avec les paramètres fiscaux
   useEffect(() => {
@@ -403,6 +409,71 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         </div>
       </div>
 
+      {/* Sélection du régime fiscal */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Régime fiscal
+        </label>
+        <div className="space-y-2">
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="micro-foncier"
+              name="taxRegime"
+              value="micro-foncier"
+              checked={selectedRegime === 'micro-foncier'}
+              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+            />
+            <label htmlFor="micro-foncier" className="ml-3 block text-sm font-medium text-gray-700">
+              Location nue - Micro-foncier
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="reel-foncier"
+              name="taxRegime"
+              value="reel-foncier"
+              checked={selectedRegime === 'reel-foncier'}
+              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+            />
+            <label htmlFor="reel-foncier" className="ml-3 block text-sm font-medium text-gray-700">
+              Location nue - Frais réels
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="micro-bic"
+              name="taxRegime"
+              value="micro-bic"
+              checked={selectedRegime === 'micro-bic'}
+              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+            />
+            <label htmlFor="micro-bic" className="ml-3 block text-sm font-medium text-gray-700">
+              LMNP - Micro-BIC
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="reel-bic"
+              name="taxRegime"
+              value="reel-bic"
+              checked={selectedRegime === 'reel-bic'}
+              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+            />
+            <label htmlFor="reel-bic" className="ml-3 block text-sm font-medium text-gray-700">
+              LMNP - Frais réels
+            </label>
+          </div>
+        </div>
+      </div>
+
       {currentView === 'parameters' ? (
         <>
           {/* Paramètres fiscaux communs */}
@@ -623,10 +694,10 @@ export default function TaxForm({ investment, onUpdate }: Props) {
                   <button
                     key={regime}
                     type="button"
-                    onClick={() => setSelectedRegime(regime as TaxRegime)}
+                    onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
                     className={`
                       whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                      ${selectedRegime === regime
+                      ${projectionRegime === regime
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                     `}
@@ -639,7 +710,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
 
             <div className="space-y-6">
               {/* Contenu de l'onglet Micro-foncier */}
-              {selectedRegime === 'micro-foncier' && (
+              {projectionRegime === 'micro-foncier' && (
                 <div>
                   <div className="pl-4 border-l-2 border-blue-200 space-y-2">
                     <p>Le régime micro-foncier est le plus simple. Il s'applique automatiquement si vos revenus fonciers sont inférieurs à 15 000 € par an.</p>
@@ -658,7 +729,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
               )}
 
               {/* Contenu de l'onglet Réel Foncier */}
-              {selectedRegime === 'reel-foncier' && (
+              {projectionRegime === 'reel-foncier' && (
                 <div>
                   <div className="pl-4 border-l-2 border-green-200 space-y-2">
                     <p>Le régime réel permet de déduire les charges réelles et de créer un déficit foncier imputable sur vos revenus.</p>
@@ -717,7 +788,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
               )}
 
               {/* Contenu de l'onglet Micro-BIC */}
-              {selectedRegime === 'micro-bic' && (
+              {projectionRegime === 'micro-bic' && (
                 <div>
                   <div className="pl-4 border-l-2 border-purple-200 space-y-2">
                     <p>Le régime micro-BIC s'applique aux locations meublées avec des recettes annuelles inférieures à 72 600 €.</p>
@@ -899,10 +970,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
                   <button
                     key={regime}
                     type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleProjectionRegimeChange(regime as TaxRegime);
-                    }}
+                    onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
                     className={`
                       whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
                       ${projectionRegime === regime

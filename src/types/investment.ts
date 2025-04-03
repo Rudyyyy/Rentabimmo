@@ -199,6 +199,7 @@ export interface Investment {
   taxParameters: TaxParameters;
   taxResults: Record<TaxRegime, TaxResults>;
   capitalGainResults?: Record<TaxRegime, CapitalGainResults>;
+  taxRegime: TaxRegime;
 }
 
 export const defaultTaxParameters: TaxParameters = {
@@ -325,5 +326,6 @@ export const defaultInvestment: Investment = {
       totalTax: 0,
       netIncome: 0
     }
-  }
+  },
+  taxRegime: 'micro-foncier'
 };
