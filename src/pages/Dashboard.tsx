@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building } from 'lucide-react';
+import { Plus, Building, Pencil } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Database } from '../types/supabase';
 import { Investment } from '../types/investment';
+import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 
 ChartJS.register(
   CategoryScale,
@@ -42,9 +44,12 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
   const [showInDashboard, setShowInDashboard] = useState<Record<string, boolean>>(() => {
-    // Charger les préférences depuis le localStorage
     const savedPreferences = localStorage.getItem('dashboardPreferences');
     return savedPreferences ? JSON.parse(savedPreferences) : {};
+  });
+  const [propertyOrder, setPropertyOrder] = useState<string[]>(() => {
+    const savedOrder = localStorage.getItem('propertyOrder');
+    return savedOrder ? JSON.parse(savedOrder) : [];
   });
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -53,6 +58,11 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem('dashboardPreferences', JSON.stringify(showInDashboard));
   }, [showInDashboard]);
+
+  // Sauvegarder l'ordre des propriétés
+  useEffect(() => {
+    localStorage.setItem('propertyOrder', JSON.stringify(propertyOrder));
+  }, [propertyOrder]);
 
   useEffect(() => {
     loadProperties();
@@ -79,18 +89,34 @@ export default function Dashboard() {
 
       if (fetchError) throw fetchError;
       
-      setProperties(data || []);
+      const properties = data || [];
+      setProperties(properties);
       
-      // Initialiser les préférences pour les nouveaux biens
-      if (data) {
+      // Initialiser les préférences et l'ordre pour les nouveaux biens
+      if (properties.length > 0) {
+        // Mettre à jour les préférences
         setShowInDashboard(prev => {
           const newPreferences = { ...prev };
-          data.forEach(property => {
+          properties.forEach(property => {
             if (!(property.id in newPreferences)) {
-              newPreferences[property.id] = true; // Par défaut, inclure les nouveaux biens
+              newPreferences[property.id] = true;
             }
           });
           return newPreferences;
+        });
+
+        // Mettre à jour l'ordre des propriétés
+        setPropertyOrder(prev => {
+          // Garder l'ordre existant pour les propriétés qui existent toujours
+          const existingIds = new Set(properties.map(p => p.id));
+          const filteredPrev = prev.filter(id => existingIds.has(id));
+          
+          // Ajouter les nouvelles propriétés à la fin
+          const newIds = properties
+            .map(p => p.id)
+            .filter(id => !filteredPrev.includes(id));
+          
+          return [...filteredPrev, ...newIds];
         });
       }
     } catch (err) {
@@ -264,8 +290,18 @@ export default function Dashboard() {
     const expense = investment.expenses?.find(e => e.year === year);
     if (!expense) return 0;
 
-    const totalRevenue = Number(expense.rent || 0) + Number(expense.tenantCharges || 0);
-    const totalExpenses = (
+    // Calcul des revenus selon le régime
+    const rent = Number(expense.rent || 0);
+    const furnishedRent = Number(expense.furnishedRent || 0);
+    const tenantCharges = Number(expense.tenantCharges || 0);
+    const taxBenefit = Number(expense.taxBenefit || 0);
+    
+    const revenues = (investment.selectedRegime === 'micro-bic' || investment.selectedRegime === 'reel-bic')
+      ? furnishedRent + tenantCharges // Total meublé
+      : rent + taxBenefit + tenantCharges; // Total nu
+
+    // Total des dépenses
+    const expenses = 
       Number(expense.propertyTax || 0) +
       Number(expense.condoFees || 0) +
       Number(expense.propertyInsurance || 0) +
@@ -275,11 +311,17 @@ export default function Dashboard() {
       Number(expense.otherDeductible || 0) +
       Number(expense.otherNonDeductible || 0) +
       Number(expense.loanPayment || 0) +
-      Number(expense.loanInsurance || 0) +
-      Number(expense.tax || 0)
-    );
+      Number(expense.loanInsurance || 0);
 
-    return totalRevenue - totalExpenses;
+    // Calcul de l'imposition
+    const yearResults = calculateAllTaxRegimes(investment, year);
+    const tax = yearResults[investment.selectedRegime].totalTax;
+
+    // Cash flow
+    const cashFlow = revenues - expenses;
+    const cashFlowNet = cashFlow - tax;
+
+    return cashFlowNet;
   }
 
   // Fonction pour obtenir le label du régime fiscal
@@ -301,29 +343,129 @@ export default function Dashboard() {
     }).format(value);
   }
 
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+
+    const items = Array.from(propertyOrder);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setPropertyOrder(items);
+  };
+
+  // Trier les propriétés selon l'ordre sauvegardé
+  const sortedProperties = [...properties].sort((a, b) => {
+    const indexA = propertyOrder.indexOf(a.id);
+    const indexB = propertyOrder.indexOf(b.id);
+    return indexA - indexB;
+  });
+
   return (
-    <div className="min-h-screen relative">
-      {/* Image de fond avec overlay */}
-      <div 
-        className="fixed inset-0 z-0"
-        style={{ 
-          backgroundImage: 'url("/rentabimmo.jpg")',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'repeat',
-          opacity: 0.4
-        }}
-      />
-      
-      {/* Contenu principal avec fond semi-transparent */}
-      <div className="relative z-10 min-h-screen bg-white/80">
-        <header className="bg-white/80 backdrop-blur-sm shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Building className="h-8 w-8 text-blue-600" />
-                <span className="ml-2 text-xl font-bold text-gray-900">Rentab'immo</span>
-              </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex">
+        {/* Sidebar avec la liste des biens */}
+        <div className="w-80 min-h-screen bg-white border-r border-gray-200">
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-lg font-medium text-gray-900">Mes biens immobiliers</h2>
+            <button
+              onClick={() => navigate('/property/new')}
+              className="p-1 rounded-full hover:bg-gray-100"
+              title="Ajouter un bien"
+            >
+              <Plus className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="properties">
+              {(provided) => (
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  className="divide-y divide-gray-200"
+                >
+                  {sortedProperties.map((property, index) => {
+                    const investment = property.investment_data as unknown as Investment;
+                    if (!investment || typeof investment !== 'object') return null;
+                    
+                    const currentYearCashFlow = calculateAnnualCashFlow(property, currentYear);
+                    
+                    return (
+                      <Draggable key={property.id} draggableId={property.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={`p-4 group hover:bg-gray-50 relative ${
+                              snapshot.isDragging ? 'bg-blue-50 shadow-lg' : ''
+                            }`}
+                          >
+                            {/* Drag handle */}
+                            <div
+                              {...provided.dragHandleProps}
+                              className="absolute left-0 top-0 bottom-0 w-8 cursor-move flex items-center justify-center"
+                            >
+                              <div className="w-1 h-10 bg-gray-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            </div>
+
+                            {/* Bouton de modification */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/property/${property.id}`);
+                              }}
+                              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Modifier le bien"
+                            >
+                              <Pencil className="h-4 w-4 text-gray-500" />
+                            </button>
+
+                            {/* Contenu principal */}
+                            <div className="pl-8 pr-12">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="text-base font-medium text-gray-900">{property.name}</h3>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                                  }}
+                                  className={`text-xs px-2 py-0.5 rounded ${
+                                    showInDashboard[property.id] 
+                                      ? 'bg-green-50 text-green-700' 
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                                </button>
+                              </div>
+                              {investment.description && (
+                                <p className="text-sm text-gray-500 mb-2 line-clamp-2">
+                                  {investment.description}
+                                </p>
+                              )}
+                              <div className="text-sm text-gray-600">
+                                <p>Régime : {getRegimeLabel(investment.selectedRegime)}</p>
+                                <p className={`font-medium ${currentYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  Cash flow {currentYear} : {formatCurrency(currentYearCashFlow)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </div>
+
+        {/* Contenu principal */}
+        <div className="flex-1 min-h-screen">
+          <header className="bg-white shadow-sm">
+            <div className="flex justify-between items-center px-8 py-4">
+              <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-600">{user?.email}</span>
                 <button
@@ -334,145 +476,57 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          {/* Dashboard Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Dashboard</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <p className="text-sm text-gray-600">Cash-flow mois en cours</p>
-                <p className={`text-2xl font-semibold ${currentMonthCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {new Intl.NumberFormat('fr-FR', { 
-                    style: 'currency', 
-                    currency: 'EUR' 
-                  }).format(currentMonthCashFlow)}
-                </p>
+          <main className="p-8">
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
-              
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <p className="text-sm text-gray-600">Cash-flow mois prochain</p>
-                <p className={`text-2xl font-semibold ${nextMonthCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {new Intl.NumberFormat('fr-FR', { 
-                    style: 'currency', 
-                    currency: 'EUR' 
-                  }).format(nextMonthCashFlow)}
-                </p>
+            ) : error ? (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <p className="text-red-700">{error}</p>
               </div>
-              
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <p className="text-sm text-gray-600">Cash-flow année en cours</p>
-                <p className={`text-2xl font-semibold ${currentYearCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {new Intl.NumberFormat('fr-FR', { 
-                    style: 'currency', 
-                    currency: 'EUR' 
-                  }).format(currentYearCashFlow)}
-                </p>
-              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Cash flow cards */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="text-sm text-gray-500">Cash-flow mois en cours</h3>
+                    <p className={`text-xl font-semibold ${currentMonthCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(currentMonthCashFlow)}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="text-sm text-gray-500">Cash-flow mois prochain</h3>
+                    <p className={`text-xl font-semibold ${nextMonthCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(nextMonthCashFlow)}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="text-sm text-gray-500">Cash-flow année en cours</h3>
+                    <p className={`text-xl font-semibold ${currentYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(currentYearCashFlow)}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="text-sm text-gray-500">Cash-flow année prochaine</h3>
+                    <p className={`text-xl font-semibold ${nextYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(nextYearCashFlow)}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <p className="text-sm text-gray-600">Cash-flow année prochaine</p>
-                <p className={`text-2xl font-semibold ${nextYearCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {new Intl.NumberFormat('fr-FR', { 
-                    style: 'currency', 
-                    currency: 'EUR' 
-                  }).format(nextYearCashFlow)}
-                </p>
+                {/* Chart */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="h-[500px]">
+                    <Line data={chartData} options={chartOptions} />
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="h-96">
-                <Line data={chartData} options={chartOptions} />
-              </div>
-            </div>
-          </div>
-
-          {/* Properties Section */}
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Mes biens immobiliers</h2>
-            <button
-              onClick={() => navigate('/property/new')}
-              className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Nouveau bien
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-          ) : properties.length === 0 ? (
-            <div className="text-center py-12">
-              <Building className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun bien</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Commencez par ajouter votre premier bien immobilier.
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={() => navigate('/property/new')}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Nouveau bien
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {properties.map((property) => {
-                  const investment = property.investment_data as unknown as Investment;
-                  if (!investment || typeof investment !== 'object') return null;
-                  
-                  const currentYearCashFlow = calculateAnnualCashFlow(property, currentYear);
-                  
-                  return (
-                    <div 
-                      key={property.id} 
-                      className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                      onClick={() => navigate(`/property/${property.id}`)}
-                    >
-                      <div className="flex flex-col">
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{property.name}</h3>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
-                            }}
-                            className={`text-xs px-2 py-1 rounded-full ${
-                              showInDashboard[property.id] 
-                                ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                            }`}
-                          >
-                            {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
-                          </button>
-                        </div>
-                        {investment.description && (
-                          <p className="text-sm text-gray-500 mb-2 line-clamp-2">
-                            {investment.description}
-                          </p>
-                        )}
-                        <div className="text-xs text-gray-600 space-y-1">
-                          <p>Régime : {getRegimeLabel(investment.selectedRegime)}</p>
-                          <p>Cash flow {currentYear} : {formatCurrency(currentYearCashFlow)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </main>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );
