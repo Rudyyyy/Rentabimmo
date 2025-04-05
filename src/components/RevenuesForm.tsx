@@ -145,27 +145,36 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
   };
 
   const handleProjectionChange = (field: keyof Investment['expenseProjection'], value: number) => {
-    const currentValues = getCurrentYearValues();
     const updatedExpenses = [...investment.expenses];
-
+    const baseValues = investment.expenseProjection.baseYear;
+    
     // Mettre à jour les projections pour toutes les années futures
     for (let year = years.currentYear + 1; year <= years.endYear; year++) {
       const yearsAhead = year - years.currentYear;
-      const projectedRent = calculateProjectedValue(
-        currentValues.rent,
-        field === 'rentIncrease' ? value : investment.expenseProjection.rentIncrease,
-        yearsAhead
-      );
-      const projectedFurnishedRent = calculateProjectedValue(
-        currentValues.furnishedRent,
-        field === 'furnishedRentIncrease' ? value : investment.expenseProjection.furnishedRentIncrease,
-        yearsAhead
-      );
-      const projectedCharges = calculateProjectedValue(
-        currentValues.tenantCharges,
-        field === 'tenantChargesIncrease' ? value : investment.expenseProjection.tenantChargesIncrease,
-        yearsAhead
-      );
+      
+      // Calculer les projections pour tous les types de revenus
+      const projectedValues = {
+        rent: calculateProjectedValue(
+          baseValues.rent || 0,
+          field === 'rentIncrease' ? value : investment.expenseProjection.rentIncrease,
+          yearsAhead
+        ),
+        furnishedRent: calculateProjectedValue(
+          baseValues.furnishedRent || 0,
+          field === 'furnishedRentIncrease' ? value : investment.expenseProjection.furnishedRentIncrease,
+          yearsAhead
+        ),
+        tenantCharges: calculateProjectedValue(
+          baseValues.tenantCharges || 0,
+          field === 'tenantChargesIncrease' ? value : investment.expenseProjection.tenantChargesIncrease,
+          yearsAhead
+        ),
+        taxBenefit: calculateProjectedValue(
+          baseValues.taxBenefit || 0,
+          field === 'taxBenefitIncrease' ? value : investment.expenseProjection.taxBenefitIncrease,
+          yearsAhead
+        )
+      };
 
       const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
       if (expenseIndex === -1) {
@@ -179,22 +188,17 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           repairs: 0,
           otherDeductible: 0,
           otherNonDeductible: 0,
-          rent: projectedRent,
-          furnishedRent: projectedFurnishedRent,
-          tenantCharges: projectedCharges,
+          ...projectedValues,
           tax: 0,
           deficit: 0,
           loanPayment: 0,
           loanInsurance: 0,
-          taxBenefit: 0,
           interest: 0
         });
       } else {
         updatedExpenses[expenseIndex] = {
           ...updatedExpenses[expenseIndex],
-          rent: projectedRent,
-          furnishedRent: projectedFurnishedRent,
-          tenantCharges: projectedCharges
+          ...projectedValues
         };
       }
     }
@@ -284,17 +288,21 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
 
   // Recalculer les projections quand la date de fin change
   useEffect(() => {
-    const currentValues = {
-      ...getCurrentYearValues(),
-      propertyTax: investment.expenseProjection.baseYear.propertyTax,
-      condoFees: investment.expenseProjection.baseYear.condoFees,
-      propertyInsurance: investment.expenseProjection.baseYear.propertyInsurance,
-      managementFees: investment.expenseProjection.baseYear.managementFees,
-      unpaidRentInsurance: investment.expenseProjection.baseYear.unpaidRentInsurance,
-      repairs: investment.expenseProjection.baseYear.repairs,
-      otherDeductible: investment.expenseProjection.baseYear.otherDeductible,
-      otherNonDeductible: investment.expenseProjection.baseYear.otherNonDeductible
+    const baseValues = {
+      rent: investment.expenseProjection.baseYear.rent || 0,
+      furnishedRent: investment.expenseProjection.baseYear.furnishedRent || 0,
+      tenantCharges: investment.expenseProjection.baseYear.tenantCharges || 0,
+      taxBenefit: investment.expenseProjection.baseYear.taxBenefit || 0,
+      propertyTax: investment.expenseProjection.baseYear.propertyTax || 0,
+      condoFees: investment.expenseProjection.baseYear.condoFees || 0,
+      propertyInsurance: investment.expenseProjection.baseYear.propertyInsurance || 0,
+      managementFees: investment.expenseProjection.baseYear.managementFees || 0,
+      unpaidRentInsurance: investment.expenseProjection.baseYear.unpaidRentInsurance || 0,
+      repairs: investment.expenseProjection.baseYear.repairs || 0,
+      otherDeductible: investment.expenseProjection.baseYear.otherDeductible || 0,
+      otherNonDeductible: investment.expenseProjection.baseYear.otherNonDeductible || 0
     };
+
     const updatedExpenses = [...investment.expenses];
     let hasChanges = false;
     
@@ -305,57 +313,62 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
       // Calculer les projections pour tous les types de revenus et frais
       const projectedValues = {
         rent: calculateProjectedValue(
-          currentValues.rent,
+          baseValues.rent,
           investment.expenseProjection.rentIncrease,
           yearsAhead
         ),
         furnishedRent: calculateProjectedValue(
-          currentValues.furnishedRent,
+          baseValues.furnishedRent,
           investment.expenseProjection.furnishedRentIncrease,
           yearsAhead
         ),
         tenantCharges: calculateProjectedValue(
-          currentValues.tenantCharges,
+          baseValues.tenantCharges,
           investment.expenseProjection.tenantChargesIncrease,
           yearsAhead
         ),
+        taxBenefit: calculateProjectedValue(
+          baseValues.taxBenefit,
+          investment.expenseProjection.taxBenefitIncrease,
+          yearsAhead
+        ),
         propertyTax: calculateProjectedValue(
-          currentValues.propertyTax,
+          baseValues.propertyTax,
           investment.expenseProjection.propertyTaxIncrease,
           yearsAhead
         ),
         condoFees: calculateProjectedValue(
-          currentValues.condoFees,
+          baseValues.condoFees,
           investment.expenseProjection.condoFeesIncrease,
           yearsAhead
         ),
         propertyInsurance: calculateProjectedValue(
-          currentValues.propertyInsurance,
+          baseValues.propertyInsurance,
           investment.expenseProjection.propertyInsuranceIncrease,
           yearsAhead
         ),
         managementFees: calculateProjectedValue(
-          currentValues.managementFees,
+          baseValues.managementFees,
           investment.expenseProjection.managementFeesIncrease,
           yearsAhead
         ),
         unpaidRentInsurance: calculateProjectedValue(
-          currentValues.unpaidRentInsurance,
+          baseValues.unpaidRentInsurance,
           investment.expenseProjection.unpaidRentInsuranceIncrease,
           yearsAhead
         ),
         repairs: calculateProjectedValue(
-          currentValues.repairs,
+          baseValues.repairs,
           investment.expenseProjection.repairsIncrease,
           yearsAhead
         ),
         otherDeductible: calculateProjectedValue(
-          currentValues.otherDeductible,
+          baseValues.otherDeductible,
           investment.expenseProjection.otherDeductibleIncrease,
           yearsAhead
         ),
         otherNonDeductible: calculateProjectedValue(
-          currentValues.otherNonDeductible,
+          baseValues.otherNonDeductible,
           investment.expenseProjection.otherNonDeductibleIncrease,
           yearsAhead
         )
@@ -371,7 +384,6 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           deficit: 0,
           loanPayment: 0,
           loanInsurance: 0,
-          taxBenefit: 0,
           interest: 0
         });
       } else {
@@ -381,6 +393,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           currentExpense.rent !== projectedValues.rent ||
           currentExpense.furnishedRent !== projectedValues.furnishedRent ||
           currentExpense.tenantCharges !== projectedValues.tenantCharges ||
+          currentExpense.taxBenefit !== projectedValues.taxBenefit ||
           currentExpense.propertyTax !== projectedValues.propertyTax ||
           currentExpense.condoFees !== projectedValues.condoFees ||
           currentExpense.propertyInsurance !== projectedValues.propertyInsurance ||
@@ -414,14 +427,17 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
   }, [investment.projectEndDate, years.currentYear, years.endYear, investment.expenseProjection, investment.expenses, onUpdate]);
 
   const handleBaseYearChange = (field: keyof Investment['expenseProjection']['baseYear'], value: number) => {
+    // Mettre à jour les valeurs de base
+    const updatedBaseYear = {
+      ...investment.expenseProjection.baseYear,
+      [field]: value
+    };
+
     const updatedInvestment = {
       ...investment,
       expenseProjection: {
         ...investment.expenseProjection,
-        baseYear: {
-          ...investment.expenseProjection.baseYear,
-          [field]: value
-        }
+        baseYear: updatedBaseYear
       }
     };
 
@@ -429,27 +445,31 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     
     // Mettre à jour les projections pour toutes les années futures
     for (let year = years.currentYear + 1; year <= years.endYear; year++) {
-      const yearsAhead = year - 2025; // Utiliser 2025 comme année de référence
-      const projectedRent = calculateProjectedValue(
-        field === 'rent' ? value : investment.expenseProjection.baseYear.rent,
-        investment.expenseProjection.rentIncrease,
-        yearsAhead
-      );
-      const projectedFurnishedRent = calculateProjectedValue(
-        field === 'furnishedRent' ? value : investment.expenseProjection.baseYear.furnishedRent,
-        investment.expenseProjection.furnishedRentIncrease,
-        yearsAhead
-      );
-      const projectedCharges = calculateProjectedValue(
-        field === 'tenantCharges' ? value : investment.expenseProjection.baseYear.tenantCharges,
-        investment.expenseProjection.tenantChargesIncrease,
-        yearsAhead
-      );
-      const projectedTaxBenefit = calculateProjectedValue(
-        field === 'taxBenefit' ? value : investment.expenseProjection.baseYear.taxBenefit,
-        investment.expenseProjection.taxBenefitIncrease,
-        yearsAhead
-      );
+      const yearsAhead = year - years.currentYear;
+      
+      // Calculer toutes les projections avec les nouvelles valeurs de base
+      const projectedValues = {
+        rent: calculateProjectedValue(
+          updatedBaseYear.rent || 0,
+          investment.expenseProjection.rentIncrease,
+          yearsAhead
+        ),
+        furnishedRent: calculateProjectedValue(
+          updatedBaseYear.furnishedRent || 0,
+          investment.expenseProjection.furnishedRentIncrease,
+          yearsAhead
+        ),
+        tenantCharges: calculateProjectedValue(
+          updatedBaseYear.tenantCharges || 0,
+          investment.expenseProjection.tenantChargesIncrease,
+          yearsAhead
+        ),
+        taxBenefit: calculateProjectedValue(
+          updatedBaseYear.taxBenefit || 0,
+          investment.expenseProjection.taxBenefitIncrease,
+          yearsAhead
+        )
+      };
 
       const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
       if (expenseIndex === -1) {
@@ -463,23 +483,20 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           repairs: 0,
           otherDeductible: 0,
           otherNonDeductible: 0,
-          rent: projectedRent,
-          furnishedRent: projectedFurnishedRent,
-          tenantCharges: projectedCharges,
+          rent: projectedValues.rent,
+          furnishedRent: projectedValues.furnishedRent,
+          tenantCharges: projectedValues.tenantCharges,
           tax: 0,
           deficit: 0,
           loanPayment: 0,
           loanInsurance: 0,
-          taxBenefit: projectedTaxBenefit,
+          taxBenefit: projectedValues.taxBenefit,
           interest: 0
         });
       } else {
         updatedExpenses[expenseIndex] = {
           ...updatedExpenses[expenseIndex],
-          rent: projectedRent,
-          furnishedRent: projectedFurnishedRent,
-          tenantCharges: projectedCharges,
-          taxBenefit: projectedTaxBenefit
+          ...projectedValues
         };
       }
     }
@@ -650,7 +667,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
       {/* Base de projection */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Base de projection (2025)
+          Base de projection ({years.currentYear})
         </h3>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
