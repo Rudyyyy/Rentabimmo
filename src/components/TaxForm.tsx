@@ -22,7 +22,7 @@
 
 import { useState, useEffect } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import { Investment, TaxRegime, YearlyExpenses } from '../types/investment';
+import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 
 interface Props {
@@ -168,8 +168,12 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     const endYear = new Date(investment.projectEndDate).getFullYear();
     const rows = [];
 
+    // On va stocker les résultats de l'année précédente pour les utiliser dans le calcul de l'année suivante
+    let previousYearResults: Record<TaxRegime, TaxResults> | undefined;
+
     for (let year = startYear; year <= endYear; year++) {
-      const yearResults = calculateAllTaxRegimes(investment, year);
+      // On passe les résultats de l'année précédente à calculateAllTaxRegimes
+      const yearResults = calculateAllTaxRegimes(investment, year, previousYearResults);
       const yearExpense = investment.expenses.find(e => e.year === year);
       
       if (!yearExpense) continue;
@@ -199,41 +203,116 @@ export default function TaxForm({ investment, onUpdate }: Props) {
               {formatCurrency(yearExpense.taxBenefit || 0)}
             </td>
           )}
+          {projectionRegime === 'reel-foncier' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-foncier'].deductibleExpenses || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-foncier' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-foncier'].usedDeficit || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-foncier' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-foncier'].deficit || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-bic' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-bic'].deductibleExpenses || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-bic' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-bic'].amortization?.total || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-bic' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-bic'].amortization?.used || 0)}
+            </td>
+          )}
+          {projectionRegime === 'reel-bic' && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearResults['reel-bic'].amortization?.carriedForward || 0)}
+            </td>
+          )}
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             {formatCurrency(yearResults[projectionRegime].taxableIncome)}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].tax)}
+            {yearResults[projectionRegime].totalTax > 0 ? (
+              <div>
+                <div className="text-sm font-medium">{formatCurrency(yearResults[projectionRegime].totalTax)}</div>
+                <div className="text-xs text-gray-400">
+                  IR: {formatCurrency(yearResults[projectionRegime].tax)} + PS: {formatCurrency(yearResults[projectionRegime].socialCharges)}
+                </div>
+              </div>
+            ) : (
+              formatCurrency(0)
+            )}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].socialCharges)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearResults[projectionRegime].totalTax)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
             {formatCurrency(yearResults[projectionRegime].netIncome)}
           </td>
-          {projectionRegime === 'reel-foncier' && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].deficit || 0)}
-            </td>
-          )}
-          {projectionRegime === 'reel-bic' && yearResults[projectionRegime].amortization && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].amortization.total)}
-            </td>
-          )}
-          {projectionRegime === 'reel-bic' && yearResults[projectionRegime].amortization && (
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearResults[projectionRegime].amortization.used || 0)}
-            </td>
-          )}
         </tr>
       );
+
+      // On stocke les résultats de cette année pour les utiliser l'année suivante
+      previousYearResults = yearResults;
     }
 
-    return rows;
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Année</th>
+              {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loyer nu</th>
+              )}
+              {(projectionRegime === 'micro-bic' || projectionRegime === 'reel-bic') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loyer meublé</th>
+              )}
+              {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges locataires</th>
+              )}
+              {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aide fiscale</th>
+              )}
+              {projectionRegime === 'reel-foncier' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges déductibles</th>
+              )}
+              {projectionRegime === 'reel-foncier' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Déficit utilisé</th>
+              )}
+              {projectionRegime === 'reel-foncier' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Déficit reporté</th>
+              )}
+              {projectionRegime === 'reel-bic' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges déductibles</th>
+              )}
+              {projectionRegime === 'reel-bic' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement disponible</th>
+              )}
+              {projectionRegime === 'reel-bic' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement utilisé</th>
+              )}
+              {projectionRegime === 'reel-bic' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement reporté</th>
+              )}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenu imposable</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imposition</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenu net</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {rows}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   // Calculer les totaux cumulés pour chaque régime
@@ -247,12 +326,29 @@ export default function TaxForm({ investment, onUpdate }: Props) {
       'reel-bic': { netIncome: 0, tax: 0, socialCharges: 0 }
     };
 
+    // On garde les résultats de l'année précédente pour chaque régime
+    const previousResults: Record<TaxRegime, TaxResults> = {
+      'micro-foncier': {} as TaxResults,
+      'reel-foncier': {} as TaxResults,
+      'micro-bic': {} as TaxResults,
+      'reel-bic': {} as TaxResults
+    };
+
     for (let year = startYear; year <= endYear; year++) {
-      const yearResults = calculateAllTaxRegimes(investment, year);
+      // On calcule les résultats de l'année en utilisant les résultats de l'année précédente
+      const yearResults = calculateAllTaxRegimes(investment, year, previousResults);
+      
+      // On met à jour les totaux
       Object.keys(totals).forEach(regime => {
-        totals[regime as TaxRegime].netIncome += yearResults[regime as TaxRegime].netIncome;
-        totals[regime as TaxRegime].tax += yearResults[regime as TaxRegime].tax;
-        totals[regime as TaxRegime].socialCharges += yearResults[regime as TaxRegime].socialCharges;
+        const regimeType = regime as TaxRegime;
+        totals[regimeType].netIncome += yearResults[regimeType].netIncome;
+        totals[regimeType].tax += yearResults[regimeType].tax;
+        totals[regimeType].socialCharges += yearResults[regimeType].socialCharges;
+      });
+
+      // On sauvegarde les résultats pour l'année suivante
+      Object.keys(previousResults).forEach(regime => {
+        previousResults[regime as TaxRegime] = yearResults[regime as TaxRegime];
       });
     }
 
@@ -260,22 +356,23 @@ export default function TaxForm({ investment, onUpdate }: Props) {
   };
 
   // Données pour le graphique de comparaison des totaux cumulés
+  const cumulativeTotals = calculateCumulativeTotals();
   const cumulativeChartData = {
     labels: Object.values(REGIME_LABELS),
     datasets: [
       {
         label: 'Revenu net total',
-        data: Object.values(calculateCumulativeTotals()).map(result => result.netIncome),
+        data: Object.values(cumulativeTotals).map(result => result.netIncome),
         backgroundColor: 'rgba(16, 185, 129, 0.5)', // emerald
       },
       {
         label: 'Impôt sur le revenu total',
-        data: Object.values(calculateCumulativeTotals()).map(result => result.tax),
+        data: Object.values(cumulativeTotals).map(result => result.tax),
         backgroundColor: 'rgba(239, 68, 68, 0.5)', // red
       },
       {
         label: 'Prélèvements sociaux totaux',
-        data: Object.values(calculateCumulativeTotals()).map(result => result.socialCharges),
+        data: Object.values(cumulativeTotals).map(result => result.socialCharges),
         backgroundColor: 'rgba(245, 158, 11, 0.5)', // yellow
       }
     ]
@@ -329,17 +426,42 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         'rgba(139, 92, 246, 0.5)', // purple
         'rgba(245, 158, 11, 0.5)'  // yellow
       ];
+      
+      // On recalcule les revenus nets pour chaque année pour s'assurer d'utiliser les bonnes valeurs
+      const startYear = new Date(investment.projectStartDate).getFullYear();
+      const endYear = new Date(investment.projectEndDate).getFullYear();
+      
+      // On garde les résultats de l'année précédente pour chaque régime
+      let previousYearResults: Record<TaxRegime, TaxResults> | undefined;
+      
+      const netIncomeData = [];
+      for (let year = startYear; year <= endYear; year++) {
+        // On calcule avec les résultats de l'année précédente
+        const yearResults = calculateAllTaxRegimes(investment, year, previousYearResults);
+        const taxResults = yearResults[regime as TaxRegime];
+        netIncomeData.push(taxResults.netIncome);
+        
+        // Debug pour le régime reel-foncier
+        if (regime === 'reel-foncier') {
+          console.log(`Données graphique pour régime ${regime} année ${year}:`, {
+            netIncome: taxResults.netIncome,
+            annualRevenue: taxResults.taxableIncomeBeforeDeficit !== undefined ?
+              taxResults.taxableIncomeBeforeDeficit + (taxResults.deductibleExpenses || 0) : 
+              'Non disponible',
+            taxableIncome: taxResults.taxableIncome,
+            tax: taxResults.tax,
+            socialCharges: taxResults.socialCharges,
+            totalTax: taxResults.totalTax
+          });
+        }
+        
+        // On sauvegarde les résultats pour l'année suivante
+        previousYearResults = yearResults;
+      }
+      
       return {
         label,
-        data: (() => {
-          const startYear = new Date(investment.projectStartDate).getFullYear();
-          const endYear = new Date(investment.projectEndDate).getFullYear();
-          return Array.from({ length: endYear - startYear + 1 }, (_, i) => {
-            const year = startYear + i;
-            const yearResults = calculateAllTaxRegimes(investment, year);
-            return yearResults[regime as TaxRegime].netIncome;
-          });
-        })(),
+        data: netIncomeData,
         borderColor: colors[index],
         backgroundColor: colors[index],
         fill: false,
@@ -347,6 +469,14 @@ export default function TaxForm({ investment, onUpdate }: Props) {
       };
     })
   };
+  
+  // Debug des données du graphique par régime
+  console.log('Données graphique par régime:', {
+    'micro-foncier': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['micro-foncier'])?.data,
+    'reel-foncier': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['reel-foncier'])?.data,
+    'micro-bic': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['micro-bic'])?.data,
+    'reel-bic': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['reel-bic'])?.data
+  });
 
   const netIncomeEvolutionOptions = {
     responsive: true,
@@ -552,6 +682,53 @@ export default function TaxForm({ investment, onUpdate }: Props) {
                   type="number"
                   value={investment.taxParameters.furnitureAmortizationYears}
                   onChange={(e) => handleTaxParameterChange('furnitureAmortizationYears', Number(e.target.value))}
+                  placeholder="5 ans par défaut"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Valeur des travaux
+                </label>
+                <input
+                  type="number"
+                  value={investment.taxParameters.worksValue}
+                  onChange={(e) => handleTaxParameterChange('worksValue', Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Durée d'amortissement des travaux (années)
+                </label>
+                <input
+                  type="number"
+                  value={investment.taxParameters.worksAmortizationYears}
+                  onChange={(e) => handleTaxParameterChange('worksAmortizationYears', Number(e.target.value))}
+                  placeholder="10 ans par défaut"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Valeur des autres éléments
+                </label>
+                <input
+                  type="number"
+                  value={investment.taxParameters.otherValue}
+                  onChange={(e) => handleTaxParameterChange('otherValue', Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Durée d'amortissement des autres éléments (années)
+                </label>
+                <input
+                  type="number"
+                  value={investment.taxParameters.otherAmortizationYears}
+                  onChange={(e) => handleTaxParameterChange('otherAmortizationYears', Number(e.target.value))}
+                  placeholder="5 ans par défaut"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
@@ -587,99 +764,10 @@ export default function TaxForm({ investment, onUpdate }: Props) {
             </div>
           </div>
 
-          {/* Section des revenus */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Revenus</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Loyer nu
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">€</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="rent"
-                    value={investment.taxParameters.rent || ''}
-                    onChange={(e) => handleTaxParameterChange('rent', Number(e.target.value))}
-                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Loyer meublé
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">€</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="furnishedRent"
-                    value={investment.taxParameters.furnishedRent || ''}
-                    onChange={(e) => handleTaxParameterChange('furnishedRent', Number(e.target.value))}
-                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Charges imputées au locataire
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">€</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="tenantCharges"
-                    value={investment.taxParameters.tenantCharges || ''}
-                    onChange={(e) => handleTaxParameterChange('tenantCharges', Number(e.target.value))}
-                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Aide fiscale aux loyers
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">€</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="taxBenefit"
-                    value={investment.taxParameters.taxBenefit || ''}
-                    onChange={(e) => handleTaxParameterChange('taxBenefit', Number(e.target.value))}
-                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Graphique de comparaison */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="h-96">
               <Bar data={chartData} options={chartOptions} />
-            </div>
-          </div>
-
-          {/* Graphique d'évolution des revenus nets */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="h-96">
-              <Line data={netIncomeEvolutionData} options={netIncomeEvolutionOptions} />
             </div>
           </div>
 
@@ -807,7 +895,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
               )}
 
               {/* Contenu de l'onglet Réel BIC */}
-              {selectedRegime === 'reel-bic' && (
+              {projectionRegime === 'reel-bic' && (
                 <div>
                   <div className="pl-4 border-l-2 border-orange-200 space-y-2">
                     <p>Le régime réel BIC permet de déduire toutes les charges et d'amortir les biens.</p>
@@ -858,7 +946,14 @@ export default function TaxForm({ investment, onUpdate }: Props) {
                         <ul className="list-disc pl-5 space-y-1 text-sm ml-4">
                           <li>Immeuble ({investment.taxParameters.buildingAmortizationYears} ans) : {formatCurrency(investment.taxParameters.buildingValue / investment.taxParameters.buildingAmortizationYears)}</li>
                           <li>Meubles ({investment.taxParameters.furnitureAmortizationYears} ans) : {formatCurrency(investment.taxParameters.furnitureValue / investment.taxParameters.furnitureAmortizationYears)}</li>
-                          <li className="font-bold text-blue-700">Amortissement total disponible : {formatCurrency((investment.taxParameters.buildingValue / investment.taxParameters.buildingAmortizationYears) + (investment.taxParameters.furnitureValue / investment.taxParameters.furnitureAmortizationYears))}</li>
+                          <li>Travaux ({investment.taxParameters.worksAmortizationYears} ans) : {formatCurrency(investment.taxParameters.worksValue / investment.taxParameters.worksAmortizationYears)}</li>
+                          <li>Autres ({investment.taxParameters.otherAmortizationYears} ans) : {formatCurrency(investment.taxParameters.otherValue / investment.taxParameters.otherAmortizationYears)}</li>
+                          <li className="font-bold text-blue-700">Amortissement total disponible : {formatCurrency(
+                            (investment.taxParameters.buildingValue / investment.taxParameters.buildingAmortizationYears) +
+                            (investment.taxParameters.furnitureValue / investment.taxParameters.furnitureAmortizationYears) +
+                            (investment.taxParameters.worksValue / investment.taxParameters.worksAmortizationYears) +
+                            (investment.taxParameters.otherValue / investment.taxParameters.otherAmortizationYears)
+                          )}</li>
                         </ul>
                         <li>Résultat avant amortissement = Revenu brut - Charges déductibles</li>
                         <li className="font-bold text-blue-700">Amortissement utilisé = Min(Amortissement total, Résultat avant amortissement)</li>
@@ -948,17 +1043,17 @@ export default function TaxForm({ investment, onUpdate }: Props) {
             </div>
           </div>
 
-          {/* Graphique de comparaison des totaux cumulés */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="h-96">
-              <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
-            </div>
-          </div>
-
           {/* Graphique d'évolution des revenus nets */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="h-96">
               <Line data={netIncomeEvolutionData} options={netIncomeEvolutionOptions} />
+            </div>
+          </div>
+
+          {/* Graphique de comparaison des totaux cumulés */}
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="h-96">
+              <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
             </div>
           </div>
 
@@ -986,70 +1081,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
 
             {/* Table de projection */}
             <div className="mt-6">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Année
-                      </th>
-                      {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Loyer nu
-                        </th>
-                      )}
-                      {(projectionRegime === 'micro-bic' || projectionRegime === 'reel-bic') && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Loyer meublé
-                        </th>
-                      )}
-                      {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Charges locataire
-                        </th>
-                      )}
-                      {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Aide fiscale
-                        </th>
-                      )}
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Revenu imposable
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt sur le revenu
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Prélèvements sociaux
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total impôts
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Revenu net
-                      </th>
-                      {projectionRegime === 'reel-foncier' && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Déficit
-                        </th>
-                      )}
-                      {projectionRegime === 'reel-bic' && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amortissement
-                        </th>
-                      )}
-                      {projectionRegime === 'reel-bic' && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amortissement utilisé
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {renderHistoricalAndProjectionTable()}
-                  </tbody>
-                </table>
-              </div>
+              {renderHistoricalAndProjectionTable()}
             </div>
           </div>
         </>

@@ -85,31 +85,74 @@ function calculateReelFoncier(
   const deductibleExpenses = calculateDeductibleExpenses(investment, year);
   const previousDeficit = investment.taxParameters.previousDeficit;
 
-  let taxableIncome = annualRevenue - deductibleExpenses - previousDeficit;
-  let deficit = 0;
+  // Log des données d'entrée
+  console.log(`CALCUL Réel Foncier - Année ${year} - ENTRÉES:`, {
+    id: investment.name || 'inconnu',
+    annualRevenue,
+    deductibleExpenses,
+    previousDeficit,
+    rent: yearExpenses.rent,
+    tenantCharges: yearExpenses.tenantCharges,
+    taxBenefit: yearExpenses.taxBenefit
+  });
 
-  if (taxableIncome < 0) {
-    deficit = Math.min(Math.abs(taxableIncome), investment.taxParameters.deficitLimit);
-    taxableIncome = 0;
-  }
+  // Calcul du revenu imposable avant prise en compte des déficits
+  const taxableIncomeBeforeDeficit = Math.max(0, annualRevenue - deductibleExpenses);
+  
+  // Le déficit utilisé est limité par le revenu imposable avant déficit
+  const usableDeficit = Math.min(previousDeficit, taxableIncomeBeforeDeficit);
+  
+  // Le déficit reporté est uniquement le déficit de l'année précédente non utilisé
+  const carriedForwardDeficit = previousDeficit - usableDeficit;
 
-  const tax = taxableIncome * (investment.taxParameters.taxRate / 100);
-  const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
+  // Calcul du revenu imposable final
+  const taxableIncome = taxableIncomeBeforeDeficit - usableDeficit;
+
+  // Calcul de l'impôt et des charges sociales
+  const tax = Math.max(0, taxableIncome * (investment.taxParameters.taxRate / 100));
+  const socialCharges = Math.max(0, taxableIncome * (investment.taxParameters.socialChargesRate / 100));
+  const totalTax = tax + socialCharges;
 
   // Calcul du revenu net
+  // Formule : Loyer nu + charges locataires + aide fiscale - impôts totaux
   const netIncome = annualRevenue + 
                    Number(yearExpenses.tenantCharges || 0) + 
                    Number(yearExpenses.taxBenefit || 0) - 
-                   (tax + socialCharges);
+                   totalTax;
+                   
+  // Log des résultats du calcul
+  console.log(`CALCUL Réel Foncier - Année ${year} - RÉSULTATS:`, {
+    id: investment.name || 'inconnu',
+    taxableIncomeBeforeDeficit,
+    usableDeficit,
+    carriedForwardDeficit,
+    taxableIncome,
+    tax,
+    socialCharges,
+    totalTax,
+    netIncome
+  });
+
+  // Vérification des valeurs d'imposition
+  if (tax === 0 && socialCharges === 0 && totalTax === 0 && taxableIncome > 0) {
+    console.error(`ANOMALIE: Imposition à zéro avec revenu imposable positif - Année ${year}`, {
+      taxableIncome,
+      taxRate: investment.taxParameters.taxRate,
+      socialChargesRate: investment.taxParameters.socialChargesRate
+    });
+  }
 
   return {
     regime: 'reel-foncier',
     taxableIncome,
+    taxableIncomeBeforeDeficit,
+    deductibleExpenses,
     tax,
     socialCharges,
-    totalTax: tax + socialCharges,
+    totalTax,
     netIncome,
-    deficit,
+    deficit: carriedForwardDeficit,
+    usedDeficit: usableDeficit,
     amortization: undefined
   };
 }
@@ -141,97 +184,217 @@ function calculateMicroBIC(
   };
 }
 
-function calculateReelBIC(
-  investment: Investment,
-  year: number,
-  yearExpenses: YearlyExpenses
-): TaxResults {
-  const annualRevenue = calculateAnnualRevenue(investment, year, 'reel-bic');
-  const deductibleExpenses = calculateDeductibleExpenses(investment, year);
+function calculateReelBIC(investment: Investment, year: number): TaxResults {
+  const yearExpenses = investment.expenses.find(e => e.year === year);
+  if (!yearExpenses) {
+    throw new Error(`No expenses found for year ${year}`);
+  }
 
-  // Calcul des amortissements
-  const buildingAmortization = investment.taxParameters.buildingValue / 
-    investment.taxParameters.buildingAmortizationYears;
-  
-  const furnitureAmortization = investment.taxParameters.furnitureValue /
-    investment.taxParameters.furnitureAmortizationYears;
+  // Calcul des revenus bruts
+  const grossIncome = yearExpenses.furnishedRent || 0;
+  const tenantCharges = yearExpenses.tenantCharges || 0;
 
-  const totalAmortization = buildingAmortization + furnitureAmortization;
-  
-  // Revenus moins charges
-  const revenueMinusExpenses = annualRevenue - deductibleExpenses;
-  
-  // L'amortissement utilisé est limité par le montant du résultat avant amortissement
-  // On ne peut pas créer de déficit fiscal avec les amortissements
-  const usedAmortization = Math.min(totalAmortization, Math.max(0, revenueMinusExpenses));
-  
-  const taxableIncome = Math.max(0, revenueMinusExpenses - usedAmortization);
-  const tax = taxableIncome * (investment.taxParameters.taxRate / 100);
-  const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
+  // Calcul des charges déductibles
+  const deductibleExpenses = (
+    (yearExpenses.propertyTax || 0) +
+    (yearExpenses.condoFees || 0) +
+    (yearExpenses.propertyInsurance || 0) +
+    (yearExpenses.managementFees || 0) +
+    (yearExpenses.unpaidRentInsurance || 0) +
+    (yearExpenses.repairs || 0) +
+    (yearExpenses.otherDeductible || 0) +
+    (yearExpenses.loanInsurance || 0) +
+    (yearExpenses.interest || 0) -
+    tenantCharges
+  );
 
-  // Calcul du revenu net
-  const netIncome = annualRevenue + 
-                   Number(yearExpenses.tenantCharges || 0) - 
-                   (tax + socialCharges);
+  // Calcul des années d'amortissement
+  const startDate = new Date(investment.startDate);
+  const currentYear = year;
+  
+  // Récupération des valeurs d'amortissement avec valeurs par défaut
+  const {
+    buildingValue = 0,
+    buildingAmortizationYears = 25,
+    furnitureValue = 0,
+    furnitureAmortizationYears = 5,
+    worksValue = 0,
+    worksAmortizationYears = 10,
+    otherValue = 0,
+    otherAmortizationYears = 5
+  } = investment.taxParameters;
+  
+  // Calcul des amortissements en fonction des durées
+  const buildingAmortization = currentYear >= startDate.getFullYear() && 
+    currentYear < startDate.getFullYear() + buildingAmortizationYears
+    ? buildingValue / buildingAmortizationYears
+    : 0;
+
+  const furnitureAmortization = currentYear >= startDate.getFullYear() && 
+    currentYear < startDate.getFullYear() + furnitureAmortizationYears
+    ? furnitureValue / furnitureAmortizationYears
+    : 0;
+
+  const worksAmortization = currentYear >= startDate.getFullYear() && 
+    currentYear < startDate.getFullYear() + worksAmortizationYears
+    ? worksValue / worksAmortizationYears
+    : 0;
+
+  const otherAmortization = currentYear >= startDate.getFullYear() && 
+    currentYear < startDate.getFullYear() + otherAmortizationYears
+    ? otherValue / otherAmortizationYears
+    : 0;
+
+  
+
+  const totalAmortization = buildingAmortization + furnitureAmortization + worksAmortization + otherAmortization;
+
+  // Résultat avant amortissement
+  const resultBeforeAmortization = grossIncome - deductibleExpenses;
+
+  // L'amortissement utilisé ne peut pas créer de déficit
+  const usedAmortization = Math.min(totalAmortization, Math.max(0, resultBeforeAmortization));
+
+  // L'amortissement reporté est la différence entre l'amortissement total et l'amortissement utilisé
+  const carriedForwardAmortization = totalAmortization - usedAmortization;
+
+  // Calcul du revenu imposable
+  const taxableIncome = resultBeforeAmortization - usedAmortization;
+
+  // Calcul des impôts et charges sociales
+  const tax = Math.max(0, taxableIncome * (investment.taxParameters.taxRate / 100));
+  const socialCharges = Math.max(0, taxableIncome * (investment.taxParameters.socialChargesRate / 100));
+  const totalTax = tax + socialCharges;
+
+  // Calcul du revenu net selon la formule : loyer meublé + charges locataires - total impôt
+  const netIncome = grossIncome + tenantCharges - totalTax;
 
   return {
     regime: 'reel-bic',
     taxableIncome,
+    deductibleExpenses,
     tax,
     socialCharges,
-    totalTax: tax + socialCharges,
+    totalTax,
     netIncome,
-    deficit: undefined,
     amortization: {
       building: buildingAmortization,
       furniture: furnitureAmortization,
+      works: worksAmortization,
+      other: otherAmortization,
       total: totalAmortization,
-      used: usedAmortization
+      used: usedAmortization,
+      carriedForward: carriedForwardAmortization
     }
   };
 }
 
 export function calculateAllTaxRegimes(
   investment: Investment,
-  year: number
+  year: number,
+  previousYearResults?: Record<TaxRegime, TaxResults>
 ): Record<TaxRegime, TaxResults> {
   const yearExpenses = investment.expenses.find(e => e.year === year);
-  if (!yearExpenses) {
-    const defaultExpenses: YearlyExpenses = {
-      year,
-      propertyTax: 0,
-      condoFees: 0,
-      propertyInsurance: 0,
-      managementFees: 0,
-      unpaidRentInsurance: 0,
-      repairs: 0,
-      otherDeductible: 0,
-      otherNonDeductible: 0,
-      rent: 0,
-      furnishedRent: 0,
-      tenantCharges: 0,
-      tax: 0,
-      deficit: 0,
-      loanPayment: 0,
-      loanInsurance: 0,
-      taxBenefit: 0,
-      interest: 0
-    };
+  const defaultExpenses: YearlyExpenses = {
+    year,
+    propertyTax: 0,
+    condoFees: 0,
+    propertyInsurance: 0,
+    managementFees: 0,
+    unpaidRentInsurance: 0,
+    repairs: 0,
+    otherDeductible: 0,
+    otherNonDeductible: 0,
+    rent: 0,
+    furnishedRent: 0,
+    tenantCharges: 0,
+    tax: 0,
+    deficit: 0,
+    loanPayment: 0,
+    loanInsurance: 0,
+    taxBenefit: 0,
+    interest: 0
+  };
 
-    return {
-      'micro-foncier': calculateMicroFoncier(investment, year, defaultExpenses),
-      'reel-foncier': calculateReelFoncier(investment, year, defaultExpenses),
-      'micro-bic': calculateMicroBIC(investment, year, defaultExpenses),
-      'reel-bic': calculateReelBIC(investment, year, defaultExpenses)
+  // Pour la première année, on utilise le déficit initial de l'investissement
+  // Pour les années suivantes, on utilise le déficit reporté calculé l'année précédente
+  const previousDeficit = previousYearResults 
+    ? previousYearResults['reel-foncier'].deficit || 0
+    : investment.taxParameters.previousDeficit;
+
+  // On crée une copie de l'investissement avec le déficit mis à jour
+  const investmentWithUpdatedDeficit = {
+    ...investment,
+    taxParameters: {
+      ...investment.taxParameters,
+      previousDeficit: previousDeficit
+    }
+  };
+
+  let results: Record<TaxRegime, TaxResults>;
+
+  if (!yearExpenses) {
+    results = {
+      'micro-foncier': calculateMicroFoncier(investmentWithUpdatedDeficit, year, defaultExpenses),
+      'reel-foncier': calculateReelFoncier(investmentWithUpdatedDeficit, year, defaultExpenses),
+      'micro-bic': calculateMicroBIC(investmentWithUpdatedDeficit, year, defaultExpenses),
+      'reel-bic': calculateReelBIC(investmentWithUpdatedDeficit, year)
+    };
+  } else {
+    results = {
+      'micro-foncier': calculateMicroFoncier(investmentWithUpdatedDeficit, year, yearExpenses),
+      'reel-foncier': calculateReelFoncier(investmentWithUpdatedDeficit, year, yearExpenses),
+      'micro-bic': calculateMicroBIC(investmentWithUpdatedDeficit, year, yearExpenses),
+      'reel-bic': calculateReelBIC(investmentWithUpdatedDeficit, year)
     };
   }
 
-  return {
-    'micro-foncier': calculateMicroFoncier(investment, year, yearExpenses),
-    'reel-foncier': calculateReelFoncier(investment, year, yearExpenses),
-    'micro-bic': calculateMicroBIC(investment, year, yearExpenses),
-    'reel-bic': calculateReelBIC(investment, year, yearExpenses)
-  };
+  // Vérifier les valeurs extrêmes, particulièrement pour reel-foncier
+  detectExtremeValues(results, year, investment.name);
+
+  return results;
+}
+
+// Fonction pour détecter et signaler des valeurs anormales
+function detectExtremeValues(results: Record<TaxRegime, TaxResults>, year: number, investmentName: string = 'inconnu') {
+  // Vérifier spécifiquement le régime reel-foncier
+  const reelFoncier = results['reel-foncier'];
+  
+  if (reelFoncier) {
+    // Vérifier si les valeurs d'imposition sont incorrectes
+    if (isNaN(reelFoncier.tax) || isNaN(reelFoncier.socialCharges) || isNaN(reelFoncier.totalTax)) {
+      console.error(`ANOMALIE: Valeurs NaN pour ${investmentName} en ${year}, régime reel-foncier`, {
+        tax: reelFoncier.tax,
+        socialCharges: reelFoncier.socialCharges,
+        totalTax: reelFoncier.totalTax
+      });
+    }
+    
+    // Vérifier si la somme tax + socialCharges = totalTax
+    const calculatedTotal = (reelFoncier.tax || 0) + (reelFoncier.socialCharges || 0);
+    if (Math.abs(calculatedTotal - (reelFoncier.totalTax || 0)) > 0.01) {
+      console.error(`ANOMALIE: Incohérence totalTax pour ${investmentName} en ${year}, régime reel-foncier`, {
+        tax: reelFoncier.tax,
+        socialCharges: reelFoncier.socialCharges,
+        calculatedTotal,
+        totalTax: reelFoncier.totalTax,
+        difference: calculatedTotal - (reelFoncier.totalTax || 0)
+      });
+      
+      // Correction automatique de l'incohérence
+      reelFoncier.totalTax = calculatedTotal;
+    }
+    
+    // Vérifier si revenu imposable > 0 mais impôt = 0
+    if (reelFoncier.taxableIncome > 0 && reelFoncier.totalTax === 0) {
+      console.warn(`AVERTISSEMENT: Taxe nulle avec revenu imposable positif pour ${investmentName} en ${year}`, {
+        taxableIncome: reelFoncier.taxableIncome,
+        tax: reelFoncier.tax,
+        socialCharges: reelFoncier.socialCharges,
+        totalTax: reelFoncier.totalTax
+      });
+    }
+  }
 }
 
 export function isEligibleForMicroFoncier(investment: Investment, year: number): boolean {
@@ -304,13 +467,6 @@ export function calculateGrossYield(
 
   // Calculer le rendement brut en pourcentage
   const grossYield = (totalRevenue / totalInvestment) * 100;
-
-  console.log(`Gross yield calculation for ${regime} in ${year}:`, {
-    annualRevenue,
-    totalRevenue,
-    totalInvestment,
-    grossYield
-  });
 
   return grossYield;
 }

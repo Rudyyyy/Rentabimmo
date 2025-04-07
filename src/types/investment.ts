@@ -88,7 +88,11 @@ export interface TaxParameters {
   buildingValue: number; // Valeur du bien immobilier (hors terrain)
   buildingAmortizationYears: number; // Durée d'amortissement du bien
   furnitureValue: number; // Valeur du mobilier
-  furnitureAmortizationYears: number; // Durée d'amortissement du mobilier
+  furnitureAmortizationYears: number; // Durée d'amortissement du mobilier (5 ans par défaut)
+  worksValue: number; // Valeur des travaux
+  worksAmortizationYears: number; // Durée d'amortissement des travaux (10 ans par défaut)
+  otherValue: number; // Valeur des autres éléments amortissables
+  otherAmortizationYears: number; // Durée d'amortissement des autres éléments (5 ans par défaut)
   
   // Paramètres spécifiques location nue
   previousDeficit: number; // Déficit foncier reporté des années précédentes
@@ -104,16 +108,22 @@ export interface TaxParameters {
 export interface TaxResults {
   regime: TaxRegime;
   taxableIncome: number;
+  taxableIncomeBeforeDeficit?: number;
+  deductibleExpenses?: number;
   tax: number;
   socialCharges: number;
   totalTax: number;
   netIncome: number;
   deficit?: number;
+  usedDeficit?: number;
   amortization?: {
     building: number;
     furniture: number;
+    works: number;
+    other: number;
     total: number;
-    used?: number;
+    used: number;
+    carriedForward: number;
   };
 }
 
@@ -209,6 +219,10 @@ export const defaultTaxParameters: TaxParameters = {
   buildingAmortizationYears: 25,
   furnitureValue: 0,
   furnitureAmortizationYears: 10,
+  worksValue: 0,
+  worksAmortizationYears: 10,
+  otherValue: 0,
+  otherAmortizationYears: 5,
   previousDeficit: 0,
   deficitLimit: 10700,
   rent: 0,
