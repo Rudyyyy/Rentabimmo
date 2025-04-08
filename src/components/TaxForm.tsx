@@ -440,21 +440,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         const yearResults = calculateAllTaxRegimes(investment, year, previousYearResults);
         const taxResults = yearResults[regime as TaxRegime];
         netIncomeData.push(taxResults.netIncome);
-        
-        // Debug pour le régime reel-foncier
-        if (regime === 'reel-foncier') {
-          console.log(`Données graphique pour régime ${regime} année ${year}:`, {
-            netIncome: taxResults.netIncome,
-            annualRevenue: taxResults.taxableIncomeBeforeDeficit !== undefined ?
-              taxResults.taxableIncomeBeforeDeficit + (taxResults.deductibleExpenses || 0) : 
-              'Non disponible',
-            taxableIncome: taxResults.taxableIncome,
-            tax: taxResults.tax,
-            socialCharges: taxResults.socialCharges,
-            totalTax: taxResults.totalTax
-          });
-        }
-        
+                        
         // On sauvegarde les résultats pour l'année suivante
         previousYearResults = yearResults;
       }
@@ -470,15 +456,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
     })
   };
   
-  // Debug des données du graphique par régime
-  console.log('Données graphique par régime:', {
-    'micro-foncier': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['micro-foncier'])?.data,
-    'reel-foncier': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['reel-foncier'])?.data,
-    'micro-bic': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['micro-bic'])?.data,
-    'reel-bic': netIncomeEvolutionData.datasets.find(d => d.label === REGIME_LABELS['reel-bic'])?.data
-  });
-
-  const netIncomeEvolutionOptions = {
+    const netIncomeEvolutionOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {

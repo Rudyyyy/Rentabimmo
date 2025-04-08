@@ -105,9 +105,7 @@ export default function PropertyForm() {
         user_id: user.id
       };
 
-
       if (id) {
-        
         // S'assurer que le nom est présent pour la mise à jour
         const updateData = {
           name: formData.name.trim(),
@@ -121,45 +119,24 @@ export default function PropertyForm() {
           .eq('id', id)
           .select(); // Ajouter .select() pour récupérer les données mises à jour
         
-        
         if (error) throw error;
       } else {
-        
-        // Essai avec une structure minimale pour vérifier l'insertion
-        const testData = {
-          name: formData.name.trim(),
-          investment_data: {
-            name: formData.name.trim(),
-            description: formData.description?.trim() || '',
-            purchasePrice: 0,
-            startDate: new Date().toISOString()
-          },
-          user_id: user.id
-        };
-        
-        // Essayer avec des données minimales d'abord
-        const { data: minimalData, error: minimalError } = await supabase
-          .from('properties')
-          .insert([testData])
-          .select();
-          
-        if (minimalError) {
-          console.error('Erreur même avec données minimales:', minimalError);
-          throw new Error(`Erreur d'insertion avec données minimales: ${minimalError.message}`);
-        } else {
-          // Si l'insertion minimale fonctionne, on est face à un problème de structure de données
-          alert("Insertion d'un bien minimal réussie. Mais les données complètes posent problème.");
-        }
-        
-        // Maintenant on essaie avec les données complètes
-        const { error } = await supabase
+        // Insertion du bien avec les données complètes
+        const { data, error } = await supabase
           .from('properties')
           .insert([propertyData])
           .select();
                 
         if (error) throw error;
+        
+        if (!data || data.length === 0) {
+          throw new Error("Le bien a été créé mais les données n'ont pas été retournées");
+        }
+        
+        console.log("Bien créé avec succès:", data[0]);
       }
       
+      // Redirection vers le dashboard seulement après confirmation de succès
       navigate('/dashboard');
     } catch (error) {
       console.error('Error saving property:', error);

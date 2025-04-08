@@ -39,9 +39,9 @@ export const AnnualSummaryTable: React.FC<AnnualSummaryTableProps> = ({ investme
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>('micro-foncier');
 
   // Logging pour le débogage
-  useEffect(() => {
-    console.log('AnnualSummaryTable mounted with investment:', investment);
-  }, [investment]);
+  //useEffect(() => {
+  //  console.log('AnnualSummaryTable mounted with investment:', investment);
+  //}, [investment]);
 
   // Génération de la liste des années à afficher
   const startYear = new Date(investment.startDate).getFullYear();

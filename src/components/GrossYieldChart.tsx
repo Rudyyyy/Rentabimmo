@@ -61,14 +61,12 @@ export const GrossYieldChart: React.FC<GrossYieldChartProps> = ({ investment }) 
     (_, i) => startYear + i
   );
 
-  console.log('Years:', years);
 
   // Calculer les rendements bruts pour chaque année et chaque régime
   const regimes: TaxRegime[] = ['micro-foncier', 'reel-foncier', 'micro-bic', 'reel-bic'];
   const datasets = regimes.map((regime) => {
     const yields = years.map(year => {
       const yieldsForYear = calculateAllGrossYields(investment, year);
-      console.log(`Yields for ${regime} in ${year}:`, yieldsForYear[regime]);
       return yieldsForYear[regime];
     });
 
@@ -86,8 +84,6 @@ export const GrossYieldChart: React.FC<GrossYieldChartProps> = ({ investment }) 
     labels: years,
     datasets
   };
-
-  console.log('Chart data:', data);
 
   const options: ChartOptions<'line'> = {
     responsive: true,

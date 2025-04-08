@@ -25,8 +25,3 @@ export const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
   supabaseOptions
 );
-
-// Log l'état de la connexion
-supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Supabase auth state changed:', { event, userId: session?.user?.id });
-});

@@ -133,13 +133,7 @@ export default function PropertyForm() {
 
   // Fonction pour sauvegarder les données dans Supabase
   const onSubmit = async (formData: { name: string }) => {
-    try {
-      console.log('Début de la soumission du formulaire', {
-        formData,
-        formDataName: formData.name,
-        investmentDataName: investmentData.name,
-        watchName: watch('name')
-      });
+    try {   
       setLoading(true);
       
       // S'assurer que le nom n'est pas vide
@@ -157,33 +151,27 @@ export default function PropertyForm() {
         user_id: user!.id
       };
       
-      console.log('Données à enregistrer:', JSON.stringify(propertyData));
       
       if (id) {
-        console.log('Mise à jour de la propriété avec ID:', id);
         const { data, error } = await supabase
           .from('properties')
           .update(propertyData)
           .eq('id', id)
           .select();
           
-        console.log('Résultat de la mise à jour:', { data, error });
         if (error) throw error;
       } else {
-        console.log('Création d\'une nouvelle propriété');
         const { data, error } = await supabase
           .from('properties')
           .insert([propertyData])
           .select();
           
-        console.log('Résultat de l\'insertion:', { data, error });
         if (error) throw error;
       }
       
       // Redirection après succès
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error saving property:', error);
       alert(`Erreur lors de la sauvegarde : ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
       setLoading(false);

@@ -89,20 +89,16 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
 
   // Calculer les résultats de plus-value à chaque modification des paramètres pertinents
   useEffect(() => {
-    console.log('Calcul des résultats de plus-value...');
     const results = calculateAllCapitalGainRegimes(investment);
-    console.log('Résultats calculés:', results);
     setCapitalGainResults(results);
     
     // Mettre à jour l'investment avec les nouveaux résultats
     if (onUpdate) {
-      console.log('Mise à jour de investment avec les résultats...');
       const updatedInvestment = {
         ...investment,
         capitalGainResults: results
       };
       onUpdate(updatedInvestment);
-      console.log('Investment mis à jour avec les résultats.');
     }
   }, [investment.purchasePrice, investment.projectStartDate, investment.projectEndDate, 
       investment.appreciationType, investment.appreciationValue, investment.saleAgencyFees,

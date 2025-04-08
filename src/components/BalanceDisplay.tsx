@@ -21,7 +21,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Investment, TaxRegime } from '../types/investment';
+import { Investment, TaxRegime, TaxResults } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import { Line } from 'react-chartjs-2';
@@ -128,11 +128,36 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
       'reel-bic': []
     };
 
+    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
+    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
+
+    // Calcul des résultats fiscaux de manière séquentielle
+    years.forEach(year => {
+      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
+      if (year === startYear) {
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
+      } else {
+        // Pour les années suivantes, on passe les résultats de l'année précédente
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
+      }
+      
+      // Log pour vérifier les résultats fiscaux année par année
+      if (year === startYear || year === endYear) {
+        console.log(`[BALANCE DISPLAY] Calcul séquentiel - Année ${year}:`, {
+          context: 'sequential_calculation',
+          reelFoncierResult: yearlyResults[year]['reel-foncier'],
+          previousYearDeficit: year > startYear ? 
+            yearlyResults[year - 1]['reel-foncier'].deficit : 
+            investment.taxParameters.previousDeficit
+        });
+      }
+    });
+
     // Calculer pour chaque régime
     (Object.keys(REGIME_LABELS) as TaxRegime[]).forEach((regime) => {
       let cumulativeCashFlow = 0;
       
-      years.forEach((year) => {
+      years.forEach((year, yearIndex) => {
         // Récupérer les dépenses de l'année
         const yearExpense = investment.expenses.find(e => e.year === year);
         
@@ -154,9 +179,8 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
             Number(yearExpense.loanPayment || 0) +
             Number(yearExpense.loanInsurance || 0);
 
-          // Calculer l'imposition pour ce régime et cette année
-          const yearResults = calculateAllTaxRegimes(investment, year);
-          const taxation = yearResults[regime].totalTax;
+          // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
+          const taxation = yearlyResults[year][regime].totalTax;
           
           annualCashFlow = revenues - expenses - taxation;
         }

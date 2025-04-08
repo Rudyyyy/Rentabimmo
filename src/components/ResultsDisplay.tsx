@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Investment, FinancialMetrics } from '../types/investment';
+import { Investment, FinancialMetrics, TaxResults } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { Line } from 'react-chartjs-2';
@@ -128,6 +128,20 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
       (_, i) => startYear + i
     );
 
+    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
+    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
+
+    // Calcul des résultats fiscaux de manière séquentielle
+    years.forEach(year => {
+      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
+      if (year === startYear) {
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
+      } else {
+        // Pour les années suivantes, on passe les résultats de l'année précédente
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
+      }
+    });
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -159,8 +173,9 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
           <tbody className="bg-white divide-y divide-gray-200">
             {years.map(year => {
               const yearExpense = investment.expenses.find(e => e.year === year);
-              // Calcule les résultats fiscaux pour l'année en cours
-              const yearResults = calculateAllTaxRegimes(investment, year);
+              
+              // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
+              const yearResults = yearlyResults[year];
               const rent = Number(yearExpense?.rent || 0);
               const furnishedRent = Number(yearExpense?.furnishedRent || 0);
               const taxBenefit = Number(yearExpense?.taxBenefit || 0);
@@ -171,24 +186,9 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
 
               // Récupérer les composants fiscaux spécifiques au régime
               const regimeResults = yearResults[regime];
-              const taxableIncome = regimeResults?.taxableIncome || 0;
               const tax = regimeResults?.tax || 0;
               const socialCharges = regimeResults?.socialCharges || 0;
-              const totalTax = tax + socialCharges; // Recalcul direct pour éviter les erreurs
-
-              // Log de débogage détaillé
-              if (regime === 'reel-foncier') {
-                console.log(`Année ${year}, régime ${regime} - FISCALITÉ:`, {
-                  taxableIncome,
-                  tax,
-                  socialCharges,
-                  totalTax,
-                  calculs: {
-                    tax: `${taxableIncome} * ${investment.taxParameters.taxRate / 100} = ${tax}`,
-                    socialCharges: `${taxableIncome} * ${investment.taxParameters.socialChargesRate / 100} = ${socialCharges}`
-                  }
-                });
-              }
+              const totalTax = regimeResults?.totalTax || 0;
               
               const grossYield = (grossRevenue / totalCost) * 100;
               const netYield = ((grossRevenue - totalCharges - totalTax) / totalCost) * 100;
@@ -235,7 +235,6 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
   };
 
   const handleRegimeChange = (regime: TaxRegime) => {
-    console.log('Changing regime to:', regime);
     setSelectedRegime(regime);
   };
 
@@ -255,11 +254,37 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
                      Number(investment.mandatoryDiagnostics || 0) +
                      Number(investment.renovationCosts || 0);
 
+    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
+    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
+
+    // Calcul des résultats fiscaux de manière séquentielle
+    years.forEach(year => {
+      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
+      if (year === startYear) {
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
+      } else {
+        // Pour les années suivantes, on passe les résultats de l'année précédente
+        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
+      }
+      
+      // Log pour vérifier les résultats fiscaux année par année
+      if (year === startYear || year === endYear) {
+        console.log(`[RENTABILITE GLOBALE] Calcul séquentiel - Année ${year}:`, {
+          context: 'sequential_calculation',
+          reelFoncierResult: yearlyResults[year]['reel-foncier'],
+          previousYearDeficit: year > startYear ? 
+            yearlyResults[year - 1]['reel-foncier'].deficit : 
+            investment.taxParameters.previousDeficit
+        });
+      }
+    });
+
     const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
       const data = years.map(year => {
         const yearExpense = investment.expenses.find(e => e.year === year);
-        // Calcule les résultats fiscaux pour l'année en cours
-        const yearResults = calculateAllTaxRegimes(investment, year);
+        
+        // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
+        const yearResults = yearlyResults[year];
         const rent = Number(yearExpense?.rent || 0);
         const furnishedRent = Number(yearExpense?.furnishedRent || 0);
         const taxBenefit = Number(yearExpense?.taxBenefit || 0);
@@ -270,34 +295,10 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
 
         // Récupérer les composants fiscaux spécifiques au régime
         const regimeResults = yearResults[regime];
-        const taxableIncome = regimeResults?.taxableIncome || 0;
         const tax = regimeResults?.tax || 0;
         const socialCharges = regimeResults?.socialCharges || 0;
-        const totalTax = tax + socialCharges; // Recalcul direct pour éviter les erreurs
+        const totalTax = regimeResults?.totalTax || 0;
 
-        // Log de débogage détaillé
-        if (regime === 'reel-foncier') {
-          console.log(`Graphique - Année ${year}, régime ${regime}:`, {
-            rent,
-            taxBenefit,
-            grossRevenue,
-            totalCharges,
-            totalTax: totalTax,
-            taxDetails: {
-              tax: tax,
-              socialCharges: socialCharges,
-              taxableIncome: taxableIncome,
-              deductibleExpenses: regimeResults?.deductibleExpenses,
-              deficit: regimeResults?.deficit,
-              usedDeficit: regimeResults?.usedDeficit
-            },
-            yields: {
-              grossYield: (grossRevenue / totalCost) * 100,
-              netYield: ((grossRevenue - totalCharges - totalTax) / totalCost) * 100
-            }
-          });
-        }
-        
         return {
           grossYield: (grossRevenue / totalCost) * 100,
           netYield: ((grossRevenue - totalCharges - totalTax) / totalCost) * 100

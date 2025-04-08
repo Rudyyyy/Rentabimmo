@@ -48,7 +48,6 @@ function calculateIRR(
   tolerance: number = 1e-7,
   maxIterations: number = 100
 ): number {
-  console.log("Calculating IRR for cash flows:", cashFlows);
   if (!cashFlows || cashFlows.length < 2) {
     console.error("IRR calculation needs at least 2 cash flows");
     return 0;
@@ -66,26 +65,21 @@ function calculateIRR(
   
   for (let i = 0; i < maxIterations; i++) {
     const npv = calculateNPV(cashFlows, rate);
-    console.log(`Iteration ${i}: rate = ${rate}, NPV = ${npv}`);
     
     if (Math.abs(npv) < tolerance) {
-      console.log(`Convergence reached at iteration ${i}: final rate = ${rate}`);
       return rate; // Convergence reached
     }
     
     const derivative = calculateNPVDerivative(cashFlows, rate);
     if (derivative === 0) {
-      console.error(`Derivative is zero at iteration ${i}, stopping calculation`);
       break; // Avoid division by zero
     }
     
     // Newton-Raphson method: r_n+1 = r_n - f(r_n) / f'(r_n)
     const newRate = rate - npv / derivative;
-    console.log(`New rate: ${newRate}, change: ${Math.abs(newRate - rate)}`);
     
     // Check convergence
     if (Math.abs(newRate - rate) < tolerance) {
-      console.log(`Rate convergence reached at iteration ${i}: final rate = ${newRate}`);
       return newRate;
     }
     
@@ -93,7 +87,6 @@ function calculateIRR(
     
     // If rate becomes too extreme, break
     if (rate > 1000 || rate < -0.99) {
-      console.error(`Rate became extreme: ${rate}, stopping calculation`);
       return 0;
     }
   }
@@ -127,21 +120,6 @@ export default function IRRDisplay({ investment }: Props) {
   // Calculate IRR for each regime and year
   useEffect(() => {
     const calculateIRRData = () => {
-      console.log("Investment data in IRRDisplay:", {
-        startDate: investment.projectStartDate,
-        endDate: investment.projectEndDate,
-        purchasePrice: investment.purchasePrice,
-        notaryFees: investment.notaryFees,
-        renovationCosts: investment.renovationCosts,
-        loanAmount: investment.loanAmount,
-        loanDuration: investment.loanDuration,
-        appreciationType: investment.appreciationType,
-        appreciationValue: investment.appreciationValue,
-        taxParameters: investment.taxParameters,
-        accumulatedDepreciation: investment.accumulatedDepreciation,
-        saleAgencyFees: investment.saleAgencyFees
-      });
-      console.log("Project duration:", projectDuration, "years:", years);
       
       const result: { [regime: string]: number[] } = {};
       
@@ -182,8 +160,7 @@ export default function IRRDisplay({ investment }: Props) {
       ensureNumber(investment.notaryFees) + 
       ensureNumber(investment.renovationCosts)
     );
-    console.log(`Initial investment: ${initialInvestment}, purchasePrice: ${investment.purchasePrice}, notaryFees: ${investment.notaryFees}, renovationCosts: ${investment.renovationCosts}`);
-    cashFlows.push(initialInvestment);
+   cashFlows.push(initialInvestment);
     
     // Add yearly cash flows
     for (let year = startDate.getFullYear(); year <= endYear; year++) {
@@ -193,27 +170,13 @@ export default function IRRDisplay({ investment }: Props) {
       yearlyExpenses.forEach(expense => {
         // Calculate revenue
         const revenue = ensureNumber(expense.rent);
-        console.log(`Detailed expense breakdown for Year ${year}, Regime ${regime}:`, {
-          revenue: ensureNumber(expense.rent),
-          propertyTax: ensureNumber(expense.propertyTax),
-          condoFees: ensureNumber(expense.condoFees),
-          propertyInsurance: ensureNumber(expense.propertyInsurance),
-          managementFees: ensureNumber(expense.managementFees),
-          unpaidRentInsurance: ensureNumber(expense.unpaidRentInsurance),
-          repairs: ensureNumber(expense.repairs),
-          otherDeductible: ensureNumber(expense.otherDeductible),
-          otherNonDeductible: ensureNumber(expense.otherNonDeductible),
-          loanPayment: ensureNumber(expense.loanPayment),
-          loanInsurance: ensureNumber(expense.loanInsurance)
-        });
-        
+         
         // Calculate expenses based on regime
         let totalExpenses = 0;
         if (regime === 'LMNP Micro-BIC') {
           // Micro-BIC: 50% tax deduction on revenue
           const taxableIncome = revenue * 0.5;
           const tax = taxableIncome * (ensureNumber(investment.taxParameters.taxRate) / 100);
-          console.log(`Year ${year}, Micro-BIC: revenue: ${revenue}, taxableIncome: ${taxableIncome}, tax: ${tax}, taxRate: ${investment.taxParameters.taxRate}`);
           totalExpenses = 
             ensureNumber(expense.propertyTax) +
             ensureNumber(expense.condoFees) +
@@ -230,8 +193,7 @@ export default function IRRDisplay({ investment }: Props) {
           // Note: amortization not directly available in YearlyExpenses, it's a calculated value
           // For simplicity, we'll use accumulated depreciation divided by project duration
           const amortizationEstimate = ensureNumber(investment.accumulatedDepreciation) / projectDuration;
-          console.log(`Year ${year}, LMNP Réel/LMP: accumulatedDepreciation: ${investment.accumulatedDepreciation}, projectDuration: ${projectDuration}, amortizationEstimate: ${amortizationEstimate}`);
-          
+         
           const taxableIncome = revenue - 
             ensureNumber(expense.propertyTax) -
             ensureNumber(expense.condoFees) -
@@ -244,7 +206,6 @@ export default function IRRDisplay({ investment }: Props) {
             amortizationEstimate;
           
           const tax = Math.max(0, taxableIncome * (ensureNumber(investment.taxParameters.taxRate) / 100));
-          console.log(`Year ${year}, LMNP Réel/LMP: revenue: ${revenue}, taxableIncome: ${taxableIncome}, tax: ${tax}`);
           
           totalExpenses = 
             ensureNumber(expense.propertyTax) +
@@ -267,17 +228,14 @@ export default function IRRDisplay({ investment }: Props) {
             ensureNumber(expense.otherNonDeductible) +
             ensureNumber(expense.loanPayment) +
             ensureNumber(expense.loanInsurance);
-          console.log(`Year ${year}, Nu-propriété: revenue: ${revenue}, totalExpenses: ${totalExpenses}`);
         }
         
         yearlyCashFlow += revenue - totalExpenses;
       });
       
-      console.log(`Year ${year}, Regime ${regime}: yearlyCashFlow: ${yearlyCashFlow}`);
       cashFlows.push(yearlyCashFlow);
     }
     
-    console.log(`Cash flows for ${regime} until ${endYear}:`, cashFlows);
     return cashFlows;
   };
   
@@ -293,14 +251,13 @@ export default function IRRDisplay({ investment }: Props) {
     } else if (investment.appreciationType === 'amount') {
       salePrice = ensureNumber(investment.appreciationValue);
     }
-    console.log(`Sale price calculation: type: ${investment.appreciationType}, purchasePrice: ${investment.purchasePrice}, appreciationValue: ${investment.appreciationValue}, salePrice: ${salePrice}`);
     
     // Subtract agency fees
     const agencyFeesPercent = ensureNumber(investment.saleAgencyFees);
     const agencyFeesAmount = salePrice * (agencyFeesPercent / 100);
     const netSalePrice = salePrice - agencyFeesAmount;
-    console.log(`Net sale price: salePrice: ${salePrice}, agencyFees: ${agencyFeesPercent}%, amount: ${agencyFeesAmount}, netSalePrice: ${netSalePrice}`);
-    
+    (`Net sale price: salePrice: ${salePrice}, agencyFees: ${agencyFeesPercent}%, amount: ${agencyFeesAmount}, netSalePrice: ${netSalePrice}`);
+   
     // Calculate remaining mortgage
     // This would normally use principalRepayment but it's not in YearlyExpenses
     // We'll estimate it as a fraction of loan paid off
@@ -312,20 +269,17 @@ export default function IRRDisplay({ investment }: Props) {
     const remainingMortgage = yearsPassed < loanDuration
       ? ensureNumber(investment.loanAmount) * (1 - yearsPassed / loanDuration)
       : 0;
-    console.log(`Remaining mortgage: loanAmount: ${investment.loanAmount}, loanDuration: ${loanDuration}, yearsPassed: ${yearsPassed}, remainingMortgage: ${remainingMortgage}`);
     
     // Early repayment fees (not directly in Investment)
     // Using a reasonable default value for early repayment fee percentage
     const earlyRepaymentFeePercent = 3; // Assuming 3% as a default
     const earlyRepaymentFee = remainingMortgage * (earlyRepaymentFeePercent / 100);
     const totalDebt = remainingMortgage + earlyRepaymentFee;
-    console.log(`Total debt: remainingMortgage: ${remainingMortgage}, earlyRepaymentFee: ${earlyRepaymentFee}, totalDebt: ${totalDebt}`);
     
     // Calculate capital gain and tax (simplified)
     const correctedPurchasePrice = ensureNumber(investment.purchasePrice) + ensureNumber(investment.notaryFees);
     const capitalGain = netSalePrice - correctedPurchasePrice;
-    console.log(`Capital gain: netSalePrice: ${netSalePrice}, correctedPurchasePrice: ${correctedPurchasePrice}, capitalGain: ${capitalGain}`);
-    
+      
     // Adjust tax based on regime
     let capitalGainTax = 0;
     let amortizationReintegration = 0;
@@ -342,17 +296,14 @@ export default function IRRDisplay({ investment }: Props) {
         // Standard capital gain tax (19% + 17.2% social charges)
         const taxableCapitalGain = Math.max(0, capitalGain - totalAmortization);
         capitalGainTax = taxableCapitalGain * 0.362; // 19% + 17.2%
-        console.log(`LMNP Réel/LMP taxes: totalAmortization: ${totalAmortization}, amortizationReintegration: ${amortizationReintegration}, taxableCapitalGain: ${taxableCapitalGain}, capitalGainTax: ${capitalGainTax}`);
       } else {
         // Standard capital gain tax for other regimes
         capitalGainTax = capitalGain * 0.362; // 19% + 17.2%
-        console.log(`Standard capital gain tax: capitalGain: ${capitalGain}, capitalGainTax: ${capitalGainTax}`);
-      }
+     }
     }
     
     // Final balance
     const finalBalance = netSalePrice - totalDebt - capitalGainTax - amortizationReintegration;
-    console.log(`Final balance after sale (${regime}): ${finalBalance}`);
     return finalBalance;
   };
   
