@@ -748,10 +748,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                         Abattement PS
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt IR
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt CSG/CRDS
+                        Imposition
                       </th>
                     </>
                   ) : null}
@@ -767,10 +764,7 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                         Abattement PS
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt IR
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt CSG/CRDS
+                        Imposition
                       </th>
                     </>
                   ) : null}
@@ -790,21 +784,10 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                         </>
                       )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt IR
+                        Imposition
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Impôt CSG/CRDS
-                      </th>
-                      {!investment.isLMP && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Réintégration des amortissements
-                        </th>
-                      )}
                     </>
                   ) : null}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Impôt sur la plus-value
-                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Solde
                   </th>
@@ -849,10 +832,16 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                             {formatPercent(abattementPS)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(incomeTax)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(socialCharges)}
+                            {totalTax > 0 ? (
+                              <div>
+                                <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
+                                <div className="text-xs text-gray-400">
+                                  IR: {formatCurrency(incomeTax)} + PS: {formatCurrency(socialCharges)}
+                                </div>
+                              </div>
+                            ) : (
+                              formatCurrency(0)
+                            )}
                           </td>
                         </>
                       ) : null}
@@ -870,10 +859,16 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                             {formatPercent(abattementPS)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(incomeTax)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(socialCharges)}
+                            {totalTax > 0 ? (
+                              <div>
+                                <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
+                                <div className="text-xs text-gray-400">
+                                  IR: {formatCurrency(incomeTax)} + PS: {formatCurrency(socialCharges)}
+                                </div>
+                              </div>
+                            ) : (
+                              formatCurrency(0)
+                            )}
                           </td>
                         </>
                       ) : null}
@@ -895,21 +890,20 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                             </>
                           )}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(incomeTax - (depreciationTax || 0))}
+                            {totalTax > 0 ? (
+                              <div>
+                                <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
+                                <div className="text-xs text-gray-400">
+                                  IR: {formatCurrency(incomeTax - (depreciationTax || 0))} + PS: {formatCurrency(socialCharges)}
+                                  {depreciationTax ? ` + Réint.: ${formatCurrency(depreciationTax)}` : ''}
+                                </div>
+                              </div>
+                            ) : (
+                              formatCurrency(0)
+                            )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                            {formatCurrency(socialCharges)}
-                          </td>
-                          {!investment.isLMP && (
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                              {formatCurrency(depreciationTax || 0)}
-                            </td>
-                          )}
                         </>
                       ) : null}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                        {formatCurrency(totalTax)}
-                      </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
                         balance >= 0 ? 'text-emerald-600' : 'text-red-600'
                       }`}>
@@ -940,8 +934,8 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
                 ];
                 return {
                   label,
-                  data: saleTable.years.map((i) => {
-                    return calculateBalance(i, regime as TaxRegime);
+                  data: saleTable.years.map((year, yearIndex) => {
+                    return calculateBalance(yearIndex, regime as TaxRegime);
                   }),
                   borderColor: colors[index],
                   backgroundColor: colors[index].replace('0.7', '0.1'),
