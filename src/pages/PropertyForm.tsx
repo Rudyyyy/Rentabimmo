@@ -20,7 +20,7 @@ export default function PropertyForm() {
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentView, setCurrentView] = useState<View>('form');
-  const { register, handleSubmit, reset } = useForm<{ name: string }>();
+  const { register, handleSubmit, reset, formState } = useForm<{ name: string, description?: string }>();
 
   useEffect(() => {
     if (id) {
@@ -44,7 +44,10 @@ export default function PropertyForm() {
           ...data.investment_data as Investment
         };
         setInvestmentData(loadedInvestmentData);
-        reset({ name: data.name });
+        reset({ 
+          name: data.name,
+          description: loadedInvestmentData.description || ''
+        });
         
         // Calculate initial metrics
         const initialMetrics = calculateFinancialMetrics(loadedInvestmentData);
@@ -67,33 +70,144 @@ export default function PropertyForm() {
     setMetrics(results);
   };
 
-  const onSubmit = async (formData: { name: string }) => {
-    if (!investmentData) return;
+  const onSubmit = async (formData: { name: string, description?: string }) => {
+    console.log('onSubmit');
+    if (!investmentData) {
+      console.error("Données d'investissement manquantes");
+      alert("Erreur: Données d'investissement manquantes");
+      return;
+    }
+
+    if (!user) {
+      console.error("Utilisateur non connecté");
+      alert("Erreur: Vous devez être connecté pour enregistrer un bien");
+      return;
+    }
 
     try {
+      console.log('1');
       setLoading(true);
-      const propertyData = {
-        name: formData.name,
-        investment_data: investmentData,
-        user_id: user!.id
+      console.log('2');
+
+      // Vérifier les données minimales requises
+      if (!formData.name.trim()) {
+        throw new Error("Le nom du bien est requis");
+      }
+
+      console.log('3');
+      // Mettre à jour l'investissement avec le nom et la description du formulaire
+      const updatedInvestment = {
+        ...investmentData,
+        name: formData.name.trim(),
+        description: formData.description?.trim() || ''
       };
 
+      console.log('4');
+      // Préparation de l'objet à enregistrer
+      const propertyData = {
+        name: formData.name.trim(), // Le nom doit être non vide à ce stade grâce à la validation
+        investment_data: updatedInvestment,
+        user_id: user.id
+      };
+
+      console.log('5');
+      console.log('Tentative de sauvegarde avec les données:', {
+        name: formData.name,
+        userId: user.id,
+        investmentDataSize: JSON.stringify(updatedInvestment).length,
+        taxResults: Boolean(updatedInvestment.taxResults)
+      });
+
+      // Loguer les données principales pour comprendre le problème
+      console.log('Données principales de l\'investissement:', {
+        nom: updatedInvestment.name,
+        prixAchat: updatedInvestment.purchasePrice,
+        dateDebut: updatedInvestment.startDate,
+        nombreDepenses: updatedInvestment.expenses?.length
+      });
+
       if (id) {
-        const { error } = await supabase
+        console.log('Mise à jour de la propriété existante avec ID:', id);
+        
+        // S'assurer que le nom est présent pour la mise à jour
+        const updateData = {
+          name: formData.name.trim(),
+          investment_data: updatedInvestment,
+          user_id: user.id
+        };
+        
+        const { data, error } = await supabase
           .from('properties')
-          .update(propertyData)
-          .eq('id', id);
+          .update(updateData)
+          .eq('id', id)
+          .select(); // Ajouter .select() pour récupérer les données mises à jour
+        
+        console.log('Résultat de la mise à jour:', { data, error });
+        
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        console.log('Création d\'une nouvelle propriété pour utilisateur:', user.id);
+        
+        // Essai avec une structure minimale pour vérifier l'insertion
+        const testData = {
+          name: formData.name.trim(),
+          investment_data: {
+            name: formData.name.trim(),
+            description: formData.description?.trim() || '',
+            purchasePrice: 0,
+            startDate: new Date().toISOString()
+          },
+          user_id: user.id
+        };
+        
+        console.log('Tentative avec données minimales d\'abord:', testData);
+        
+        // Essayer avec des données minimales d'abord
+        const { data: minimalData, error: minimalError } = await supabase
           .from('properties')
-          .insert([propertyData]);
+          .insert([testData])
+          .select();
+          
+        if (minimalError) {
+          console.error('Erreur même avec données minimales:', minimalError);
+          throw new Error(`Erreur d'insertion avec données minimales: ${minimalError.message}`);
+        } else {
+          console.log('Insertion minimale réussie:', minimalData);
+          // Si l'insertion minimale fonctionne, on est face à un problème de structure de données
+          alert("Insertion d'un bien minimal réussie. Mais les données complètes posent problème.");
+        }
+        
+        // Maintenant on essaie avec les données complètes
+        const { data, error } = await supabase
+          .from('properties')
+          .insert([propertyData])
+          .select();
+        
+        console.log('Résultat de l\'insertion avec données complètes:', { data, error });
+        
         if (error) throw error;
       }
       
       navigate('/dashboard');
     } catch (error) {
+      console.log('onSubmit');
       console.error('Error saving property:', error);
+      // Affichage d'une alerte utilisateur avec les détails de l'erreur
+      let errorMessage = 'Erreur lors de la sauvegarde du bien';
+      
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`;
+        console.log('Détails de l\'erreur:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        });
+      } else {
+        console.log('Erreur non standard:', error);
+      }
+      
+      // Afficher l'erreur à l'utilisateur
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -237,13 +351,39 @@ export default function PropertyForm() {
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700">
-                    Nom du bien
+                    Nom du bien <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    {...register('name', { required: true })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    {...register('name', { 
+                      required: "Le nom du bien est obligatoire",
+                      minLength: { value: 2, message: "Le nom doit comporter au moins 2 caractères" }
+                    })}
+                    className={`mt-1 block w-full rounded-md ${
+                      !formState.errors.name 
+                        ? "border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
+                        : "border-red-300 focus:border-red-500 focus:ring-red-500"
+                    } shadow-sm`}
                     placeholder="Ex: Appartement Centre-ville"
+                  />
+                  {formState.errors.name && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {formState.errors.name.message?.toString() || "Le nom du bien est obligatoire"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow-md mt-4">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    {...register('description')}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Description du projet d'investissement..."
+                    rows={3}
                   />
                 </div>
               </div>
@@ -322,7 +462,7 @@ export default function PropertyForm() {
                   
                   <button
                     type="submit"
-                    disabled={loading || !investmentData}
+                    disabled={loading || !investmentData || !formState.isValid || formState.isSubmitting}
                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {id ? 'Enregistrer les modifications' : 'Créer le bien'}

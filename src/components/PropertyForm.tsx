@@ -48,7 +48,15 @@ export default function PropertyForm() {
   const [metrics, setMetrics] = useState<any>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentView, setCurrentView] = useState<View>('acquisition');
-  const { register, handleSubmit, reset } = useForm<{ name: string }>();
+  const [nameError, setNameError] = useState<string | null>(null);
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string }>();
+  
+  // Surveiller les changements de nom dans l'état investmentData et synchroniser avec le formulaire
+  useEffect(() => {
+    if (investmentData.name) {
+      setValue('name', investmentData.name);
+    }
+  }, [investmentData.name, setValue]);
 
   // Chargement initial des données si un ID est fourni
   useEffect(() => {
@@ -112,33 +120,71 @@ export default function PropertyForm() {
     setMetrics(newMetrics);
   };
 
+  // Gestionnaire de mise à jour de nom avec validation
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.trim();
+    if (!value) {
+      setNameError("Le nom du bien est obligatoire");
+    } else {
+      setNameError(null);
+    }
+    handleInvestmentUpdate({ ...investmentData, name: e.target.value });
+  };
+
   // Fonction pour sauvegarder les données dans Supabase
   const onSubmit = async (formData: { name: string }) => {
     try {
+      console.log('Début de la soumission du formulaire', {
+        formData,
+        formDataName: formData.name,
+        investmentDataName: investmentData.name,
+        watchName: watch('name')
+      });
       setLoading(true);
+      
+      // S'assurer que le nom n'est pas vide
+      if (!formData.name || formData.name.trim() === '') {
+        throw new Error("Le nom du bien est obligatoire");
+      }
+      
+      // Utiliser la valeur de formData.name qui vient de React Hook Form
       const propertyData = {
-        name: formData.name,
-        investment_data: investmentData,
+        name: formData.name.trim(), 
+        investment_data: {
+          ...investmentData,
+          name: formData.name.trim() // Utiliser la même valeur pour synchroniser
+        },
         user_id: user!.id
       };
-
+      
+      console.log('Données à enregistrer:', JSON.stringify(propertyData));
+      
       if (id) {
-        const { error } = await supabase
+        console.log('Mise à jour de la propriété avec ID:', id);
+        const { data, error } = await supabase
           .from('properties')
           .update(propertyData)
-          .eq('id', id);
+          .eq('id', id)
+          .select();
+          
+        console.log('Résultat de la mise à jour:', { data, error });
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        console.log('Création d\'une nouvelle propriété');
+        const { data, error } = await supabase
           .from('properties')
-          .insert([propertyData]);
+          .insert([propertyData])
+          .select();
+          
+        console.log('Résultat de l\'insertion:', { data, error });
         if (error) throw error;
       }
       
-      // Suppression de la redirection automatique
-      // navigate('/dashboard');
+      // Redirection après succès
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error saving property:', error);
+      alert(`Erreur lors de la sauvegarde : ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
       setLoading(false);
     }
@@ -207,6 +253,7 @@ export default function PropertyForm() {
             currentYearData={getCurrentYearData()}
             historicalData={getHistoricalAndProjectionData().historicalData}
             projectionData={getHistoricalAndProjectionData().projectionData}
+            onUpdate={handleInvestmentUpdate}
           />
         );
       case 'cashflow':
@@ -354,6 +401,9 @@ export default function PropertyForm() {
     };
   };
 
+  // Pour input normal caché qui récupérera la valeur du nom
+  const nameRef = register('name', { required: "Le nom du bien est obligatoire" });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -393,15 +443,23 @@ export default function PropertyForm() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Nom du bien
+                      Nom du bien <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      {...nameRef}
                       value={investmentData.name || ''}
-                      onChange={(e) => handleInvestmentUpdate({ ...investmentData, name: e.target.value })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      onChange={(e) => {
+                        // Mettre à jour à la fois le formulaire et l'état local
+                        nameRef.onChange(e); // Pour React Hook Form
+                        handleNameChange(e); // Pour l'état local et la validation
+                      }}
+                      className={`mt-1 block w-full rounded-md ${
+                        nameError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                      } shadow-sm`}
                       placeholder="Ex: Appartement Centre-ville"
                     />
+                    {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -570,7 +628,7 @@ export default function PropertyForm() {
                 
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !investmentData.name?.trim()}
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {id ? 'Enregistrer les modifications' : 'Créer le bien'}

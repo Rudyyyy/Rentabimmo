@@ -52,10 +52,7 @@ interface GrossYieldChartProps {
 }
 
 export const GrossYieldChart: React.FC<GrossYieldChartProps> = ({ investment }) => {
-  useEffect(() => {
-    console.log('Investment data:', investment);
-  }, [investment]);
-
+  
   // Générer les labels pour les années
   const startYear = new Date(investment.projectStartDate).getFullYear();
   const endYear = new Date(investment.projectEndDate).getFullYear();

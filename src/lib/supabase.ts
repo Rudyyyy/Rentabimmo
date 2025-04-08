@@ -8,7 +8,25 @@ if (!import.meta.env.VITE_SUPABASE_ANON_KEY) {
   throw new Error('Missing environment variable: VITE_SUPABASE_ANON_KEY');
 }
 
+// Configuration améliorée pour Supabase avec de meilleurs timeouts
+const supabaseOptions = {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+  },
+  // Log des requêtes pour débogage
+  debug: {
+    logRequests: true
+  }
+};
+
 export const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  supabaseOptions
 );
+
+// Log l'état de la connexion
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Supabase auth state changed:', { event, userId: session?.user?.id });
+});

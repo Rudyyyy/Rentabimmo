@@ -118,11 +118,13 @@ export default function CashFlowDisplay({ investment }: Props) {
 
         // Calcul de l'imposition
         const yearResults = calculateAllTaxRegimes(investment, year);
-        const tax = yearResults[regime].totalTax;
+        const tax = yearResults[regime].tax || 0;
+        const socialCharges = yearResults[regime].socialCharges || 0;
+        const totalTax = yearResults[regime].totalTax || 0;
 
         // Cash flow
         const cashFlow = revenues - expenses;
-        const cashFlowNet = cashFlow - tax;
+        const cashFlowNet = cashFlow - totalTax;
 
         return cashFlowNet;
       });
@@ -262,11 +264,13 @@ export default function CashFlowDisplay({ investment }: Props) {
 
               // Calcul de l'imposition
               const yearResults = calculateAllTaxRegimes(investment, year);
-              const tax = yearResults[regime].totalTax;
+              const tax = yearResults[regime].tax || 0;
+              const socialCharges = yearResults[regime].socialCharges || 0;
+              const totalTax = yearResults[regime].totalTax || 0;
 
               // Cash flow
               const cashFlow = revenues - expenses;
-              const cashFlowNet = cashFlow - tax;
+              const cashFlowNet = cashFlow - totalTax;
               const monthlyCashFlow = cashFlowNet / 12;
 
               return (
@@ -281,7 +285,16 @@ export default function CashFlowDisplay({ investment }: Props) {
                     {formatCurrency(expenses)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatCurrency(tax)}
+                    {totalTax > 0 ? (
+                      <div>
+                        <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
+                        <div className="text-xs text-gray-400">
+                          IR: {formatCurrency(tax)} + PS: {formatCurrency(socialCharges)}
+                        </div>
+                      </div>
+                    ) : (
+                      formatCurrency(0)
+                    )}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
                     cashFlowNet >= 0 ? 'text-emerald-600' : 'text-red-600'

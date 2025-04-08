@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Database } from '../types/supabase';
 import { Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
+import { useLocation } from 'react-router-dom';
 
 ChartJS.register(
   CategoryScale,
@@ -53,6 +54,7 @@ export default function Dashboard() {
   });
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const location = useLocation();
 
   // Sauvegarder les préférences dans le localStorage quand elles changent
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadProperties();
-  }, []);
+  }, [location.pathname, user]);
 
   useEffect(() => {
     calculateCashFlowData();
