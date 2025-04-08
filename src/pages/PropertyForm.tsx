@@ -71,7 +71,6 @@ export default function PropertyForm() {
   };
 
   const onSubmit = async (formData: { name: string, description?: string }) => {
-    console.log('onSubmit');
     if (!investmentData) {
       console.error("Données d'investissement manquantes");
       alert("Erreur: Données d'investissement manquantes");
@@ -85,16 +84,13 @@ export default function PropertyForm() {
     }
 
     try {
-      console.log('1');
       setLoading(true);
-      console.log('2');
 
       // Vérifier les données minimales requises
       if (!formData.name.trim()) {
         throw new Error("Le nom du bien est requis");
       }
 
-      console.log('3');
       // Mettre à jour l'investissement avec le nom et la description du formulaire
       const updatedInvestment = {
         ...investmentData,
@@ -102,7 +98,6 @@ export default function PropertyForm() {
         description: formData.description?.trim() || ''
       };
 
-      console.log('4');
       // Préparation de l'objet à enregistrer
       const propertyData = {
         name: formData.name.trim(), // Le nom doit être non vide à ce stade grâce à la validation
@@ -110,24 +105,8 @@ export default function PropertyForm() {
         user_id: user.id
       };
 
-      console.log('5');
-      console.log('Tentative de sauvegarde avec les données:', {
-        name: formData.name,
-        userId: user.id,
-        investmentDataSize: JSON.stringify(updatedInvestment).length,
-        taxResults: Boolean(updatedInvestment.taxResults)
-      });
-
-      // Loguer les données principales pour comprendre le problème
-      console.log('Données principales de l\'investissement:', {
-        nom: updatedInvestment.name,
-        prixAchat: updatedInvestment.purchasePrice,
-        dateDebut: updatedInvestment.startDate,
-        nombreDepenses: updatedInvestment.expenses?.length
-      });
 
       if (id) {
-        console.log('Mise à jour de la propriété existante avec ID:', id);
         
         // S'assurer que le nom est présent pour la mise à jour
         const updateData = {
@@ -142,11 +121,9 @@ export default function PropertyForm() {
           .eq('id', id)
           .select(); // Ajouter .select() pour récupérer les données mises à jour
         
-        console.log('Résultat de la mise à jour:', { data, error });
         
         if (error) throw error;
       } else {
-        console.log('Création d\'une nouvelle propriété pour utilisateur:', user.id);
         
         // Essai avec une structure minimale pour vérifier l'insertion
         const testData = {
@@ -160,8 +137,6 @@ export default function PropertyForm() {
           user_id: user.id
         };
         
-        console.log('Tentative avec données minimales d\'abord:', testData);
-        
         // Essayer avec des données minimales d'abord
         const { data: minimalData, error: minimalError } = await supabase
           .from('properties')
@@ -172,25 +147,21 @@ export default function PropertyForm() {
           console.error('Erreur même avec données minimales:', minimalError);
           throw new Error(`Erreur d'insertion avec données minimales: ${minimalError.message}`);
         } else {
-          console.log('Insertion minimale réussie:', minimalData);
           // Si l'insertion minimale fonctionne, on est face à un problème de structure de données
           alert("Insertion d'un bien minimal réussie. Mais les données complètes posent problème.");
         }
         
         // Maintenant on essaie avec les données complètes
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('properties')
           .insert([propertyData])
           .select();
-        
-        console.log('Résultat de l\'insertion avec données complètes:', { data, error });
-        
+                
         if (error) throw error;
       }
       
       navigate('/dashboard');
     } catch (error) {
-      console.log('onSubmit');
       console.error('Error saving property:', error);
       // Affichage d'une alerte utilisateur avec les détails de l'erreur
       let errorMessage = 'Erreur lors de la sauvegarde du bien';
