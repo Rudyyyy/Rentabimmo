@@ -20,6 +20,7 @@ export interface AmortizationRow {
   month: number;
   date: string;
   remainingBalance: number;
+  remainingPrincipal: number;
   monthlyPayment: number;
   principal: number;
   interest: number;
@@ -157,6 +158,7 @@ export interface LMNPData {
 export type DeferralType = 'none' | 'partial' | 'total';
 
 export interface Investment {
+  id: string;
   name: string;
   projectStartDate: string;
   projectEndDate: string;
@@ -197,6 +199,7 @@ export interface Investment {
   rentalStartDate: string;
   remainingBalance: number;
   description?: string;
+  amortizationSchedule?: AmortizationRow[];
   
   // Tax properties
   taxType: 'direct' | 'lmnp' | 'sci';
@@ -261,6 +264,7 @@ export const defaultExpenseProjection: ExpenseProjection = {
 };
 
 export const defaultInvestment: Investment = {
+  id: '',
   name: '',
   projectStartDate: new Date().toISOString().split('T')[0],
   projectEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 20)).toISOString().split('T')[0],
@@ -301,6 +305,7 @@ export const defaultInvestment: Investment = {
   rentalStartDate: '',
   remainingBalance: 0,
   description: '',
+  amortizationSchedule: [],
   taxType: 'direct',
   taxationMethod: 'real',
   taxRate: 30,
@@ -342,4 +347,8 @@ export const defaultInvestment: Investment = {
     }
   },
   taxRegime: 'micro-foncier'
+};
+
+const handleResetAmortization = () => {
+  // Logique pour réinitialiser le tableau d'amortissement
 };

@@ -77,11 +77,12 @@ export default function CashFlowDisplay({ investment }: Props) {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
   /**
-   * Préparation des données pour le graphique
+   * Prépare les données pour le graphique de cash flow
    * Calcule le cash flow net pour chaque année et régime fiscal
-   * avec report des déficits entre années
+   * Maintient les résultats fiscaux de chaque année pour chaque régime
    */
   const prepareChartData = () => {
+    // Générer les années du projet
     const startYear = new Date(investment.projectStartDate).getFullYear();
     const endYear = new Date(investment.projectEndDate).getFullYear();
     const years = Array.from(
@@ -102,16 +103,6 @@ export default function CashFlowDisplay({ investment }: Props) {
         yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
       }
       
-      // Log pour vérifier les résultats fiscaux année par année
-      if (year === startYear || year === endYear) {
-        console.log(`[CASH FLOW GRAPHIQUE] Calcul séquentiel - Année ${year}:`, {
-          context: 'sequential_calculation',
-          reelFoncierResult: yearlyResults[year]['reel-foncier'],
-          previousYearDeficit: year > startYear ? 
-            yearlyResults[year - 1]['reel-foncier'].deficit : 
-            investment.taxParameters.previousDeficit
-        });
-      }
     });
 
     const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
@@ -147,26 +138,6 @@ export default function CashFlowDisplay({ investment }: Props) {
         const tax = yearResults[regime]?.tax || 0;
         const socialCharges = yearResults[regime]?.socialCharges || 0;
         const totalTax = yearResults[regime]?.totalTax || 0;
-
-        // Vérification détaillée pour le premier et dernier point du graphique
-        if (year === startYear || year === endYear) {
-          console.log(`[CASH FLOW GRAPHIQUE] Données fiscales pour ${investment.name || 'bien'} - Année ${year} - Régime ${regime}:`, {
-            context: 'graph_data_preparation',
-            investment: {
-              id: `${investment.purchasePrice}_${investment.startDate}`,
-              selectedRegime: investment.selectedRegime,
-              currentRegime: regime
-            },
-            regimeData: yearResults[regime] || 'INDÉFINI',
-            valeursFiscales: { tax, socialCharges, totalTax },
-            donneesFinancieres: {
-              revenues,
-              expenses,
-              cashFlowAvantImpot: revenues - expenses,
-              cashFlowApresImpot: revenues - expenses - totalTax
-            }
-          });
-        }
         
         // Si l'imposition est à 0 mais que les revenus sont positifs, ajouter un log spécifique
         if (totalTax === 0 && revenues > expenses && regime === investment.selectedRegime) {

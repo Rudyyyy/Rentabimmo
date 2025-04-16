@@ -55,12 +55,15 @@ interface Props {
 // Interface pour stocker les données de balance calculées
 interface BalanceData {
   years: number[];
-  data: Record<TaxRegime, Array<{
-    annualCashFlow: number;
-    cumulativeCashFlow: number;
-    saleBalance: number;
-    totalGain: number;
-  }>>;
+  data: Record<TaxRegime, Array<BalanceYearResult>>;
+}
+
+// Interface pour les résultats annuels de balance
+interface BalanceYearResult {
+  annualCashFlow: number;
+  cumulativeCashFlow: number;
+  saleBalance: number;
+  totalGain: number;
 }
 
 // Labels pour les différents régimes fiscaux
@@ -116,12 +119,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     const endYear = new Date(investment.projectEndDate).getFullYear();
     const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
     
-    const data: Record<TaxRegime, Array<{
-      saleBalance: number;
-      cumulativeCashFlow: number;
-      annualCashFlow: number;
-      totalGain: number;
-    }>> = {
+    const data: Record<TaxRegime, BalanceYearResult[]> = {
       'micro-foncier': [],
       'reel-foncier': [],
       'micro-bic': [],
@@ -139,17 +137,6 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
       } else {
         // Pour les années suivantes, on passe les résultats de l'année précédente
         yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
-      }
-      
-      // Log pour vérifier les résultats fiscaux année par année
-      if (year === startYear || year === endYear) {
-        console.log(`[BALANCE DISPLAY] Calcul séquentiel - Année ${year}:`, {
-          context: 'sequential_calculation',
-          reelFoncierResult: yearlyResults[year]['reel-foncier'],
-          previousYearDeficit: year > startYear ? 
-            yearlyResults[year - 1]['reel-foncier'].deficit : 
-            investment.taxParameters.previousDeficit
-        });
       }
     });
 
@@ -242,6 +229,29 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     calculateBalanceData();
   }, [calculateBalanceData]);
 
+  // Calcul du rendement pour le tableau
+  const getYieldValueForTable = (regimeData: BalanceYearResult[], year: number) => {
+    // ... existing code ...
+  };
+
+  // Fonction utilitaire pour calculer le rendement annuel comme il apparaît dans le tableau
+  const calculateAnnualReturn = (revenues: number, effort: number, numberOfYears: number) => {
+    // Si le bilan est négatif
+    if (revenues < 0) {
+      return -1; // Retourner -100% en cas de perte
+    }
+    
+    // Si l'effort ou le nombre d'années est nul ou invalide
+    if (effort <= 0 || numberOfYears <= 0) {
+      return 0;
+    }
+    
+    // Pour tous les cas, utiliser la méthode simplifiée (Gain annuel moyen / Effort)
+    // Cette méthode semble correspondre aux valeurs que vous avez dans votre tableau
+    const annualGain = (revenues - effort) / numberOfYears;
+    return annualGain / effort;
+  };
+
   /**
    * Configuration des données pour le graphique
    * Affiche l'évolution du rendement annuel pour chaque régime
@@ -268,11 +278,26 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
           const saleBalance = balanceData.data[regime as TaxRegime]?.[index]?.saleBalance || 0;
           const downPayment = Number(investment.downPayment) || 0;
           
-          const revenues = cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
-          const effort = cashFlow > 0 ? downPayment : downPayment - cashFlow;
+          const revenues = saleBalance + cashFlow;
           
-          // Calculer le rendement annuel
-          return effort !== 0 ? (Math.pow(revenues / effort, 1 / numberOfYears) - 1) * 100 : 0;
+          // Calcul de l'effort basé sur le minimum de cash flow cumulé jusqu'à l'année en cours
+          let minCumulativeCashFlow = 0;
+          for (let i = 0; i <= index; i++) {
+            const yearCashFlow = balanceData.data[regime as TaxRegime]?.[i]?.cumulativeCashFlow || 0;
+            if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
+              minCumulativeCashFlow = yearCashFlow;
+            }
+          }
+          
+          // Si le minimum de cash flow est négatif, ajuster l'effort
+          const effort = minCumulativeCashFlow < 0 
+            ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
+            : downPayment;
+          
+          // Utiliser notre fonction personnalisée pour le calcul du rendement annuel
+          const annualReturn = calculateAnnualReturn(revenues, effort, numberOfYears);
+                    
+          return annualReturn * 100;
         }),
         borderColor: colors[index],
         backgroundColor: colors[index],
@@ -327,6 +352,25 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     }
   };
 
+  // Calcul de l'effort pour le tableau
+  const getEffortValueForTable = (regimeData: BalanceYearResult[], year: number) => {
+    const downPayment = Number(investment.downPayment) || 0;
+    
+    // Minimum du cash flow cumulé jusqu'à l'année spécifiée
+    let minCumulativeCashFlow = 0;
+    for (let i = 0; i <= year; i++) {
+      const yearCashFlow = regimeData[i]?.cumulativeCashFlow || 0;
+      if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
+        minCumulativeCashFlow = yearCashFlow;
+      }
+    }
+    
+    // Si le minimum de cash flow est négatif, ajuster l'effort
+    return minCumulativeCashFlow < 0 
+      ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
+      : downPayment;
+  };
+
   return (
     <div className="space-y-6">
       {/* Section de synthèse avec le meilleur scénario */}
@@ -352,10 +396,12 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                 const cashFlow = yearData.cumulativeCashFlow;
                 const saleBalance = yearData.saleBalance;
                 const downPayment = Number(investment.downPayment) || 0;
-                const revenues = cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
-                const effort = cashFlow > 0 ? downPayment : downPayment - cashFlow;
-                const annualReturn = effort !== 0 ? Math.pow(revenues / effort, 1 / numberOfYears) - 1 : 0;
-
+                const revenues = saleBalance + cashFlow;
+                const effort = cashFlow < 0 ? downPayment - cashFlow : downPayment;
+                
+                // Utiliser notre fonction personnalisée pour le calcul du rendement annuel
+                const annualReturn = calculateAnnualReturn(revenues, effort, numberOfYears);
+                
                 if (annualReturn > bestReturn) {
                   bestReturn = annualReturn;
                   bestYear = year;
@@ -414,7 +460,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                     data: balanceData.years.map((year, yearIndex) => {
                       const cashFlow = balanceData.data[regime as TaxRegime]?.[yearIndex]?.cumulativeCashFlow || 0;
                       const saleBalance = balanceData.data[regime as TaxRegime]?.[yearIndex]?.saleBalance || 0;
-                      return cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
+                      return saleBalance + cashFlow;
                     }),
                     borderColor: colors[index],
                     backgroundColor: colors[index],
@@ -466,8 +512,20 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                     label,
                     data: balanceData.years.map((year, yearIndex) => {
                       const downPayment = Number(investment.downPayment) || 0;
-                      const cashFlow = balanceData.data[regime as TaxRegime]?.[yearIndex]?.cumulativeCashFlow || 0;
-                      return cashFlow > 0 ? downPayment : downPayment - cashFlow;
+                      
+                      // Calcul de l'effort basé sur le minimum de cash flow cumulé jusqu'à l'année en cours
+                      let minCumulativeCashFlow = 0;
+                      for (let i = 0; i <= yearIndex; i++) {
+                        const yearCashFlow = balanceData.data[regime as TaxRegime]?.[i]?.cumulativeCashFlow || 0;
+                        if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
+                          minCumulativeCashFlow = yearCashFlow;
+                        }
+                      }
+                      
+                      // Si le minimum de cash flow est négatif, ajuster l'effort
+                      return minCumulativeCashFlow < 0 
+                        ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
+                        : downPayment;
                     }),
                     borderColor: colors[index],
                     backgroundColor: colors[index],
@@ -543,13 +601,10 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                   Cash Flow annuel
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cash Flow cumulé
+                  Bilan annuel
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Solde revente
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Revenus
+                  Bilan
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   % de gain
@@ -565,15 +620,43 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                 const cashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeCashFlow || 0;
                 const annualCashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.annualCashFlow || 0;
                 const saleBalance = balanceData.data[selectedRegimeLocal]?.[index]?.saleBalance || 0;
-                const revenues = cashFlow >= 0 ? saleBalance + cashFlow : saleBalance;
-                const effort = cashFlow > 0 ? downPayment : downPayment - cashFlow;
+                // Toujours ajouter le cashFlow au saleBalance, peu importe son signe
+                const revenues = saleBalance + cashFlow;
+                
+                // Calcul de l'effort basé sur le minimum de cash flow cumulé jusqu'à l'année en cours
+                let minCumulativeCashFlow = 0;
+                for (let i = 0; i <= index; i++) {
+                  const yearCashFlow = balanceData.data[selectedRegimeLocal]?.[i]?.cumulativeCashFlow || 0;
+                  if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
+                    minCumulativeCashFlow = yearCashFlow;
+                  }
+                }
+                
+                // Si le minimum de cash flow est négatif, ajuster l'effort
+                const effort = minCumulativeCashFlow < 0 
+                  ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
+                  : downPayment;
+                
                 const gainPercent = effort !== 0 ? revenues / effort : 0;
+                
+                // Calcul du bilan annuel (différence entre le bilan de l'année courante et le bilan de l'année précédente)
+                let annualBilan = null;
+                if (index > 0) {
+                  // Utiliser la même logique pour le bilan précédent: toujours ajouter le cash flow
+                  const previousCashFlow = balanceData.data[selectedRegimeLocal]?.[index-1]?.cumulativeCashFlow || 0;
+                  const previousSaleBalance = balanceData.data[selectedRegimeLocal]?.[index-1]?.saleBalance || 0;
+                  const previousRevenues = previousSaleBalance + previousCashFlow;
+                  
+                  annualBilan = revenues - previousRevenues;
+                }
                 
                 // Calcul du taux de rendement annuel composé
                 const startYear = new Date(investment.projectStartDate).getFullYear();
                 const numberOfYears = year - startYear + 1;
-                const annualReturn = effort !== 0 ? Math.pow(revenues / effort, 1 / numberOfYears) - 1 : 0;
-
+                
+                // Calculer le rendement annuel avec la formule correcte en utilisant notre utilitaire
+                const annualReturn = calculateAnnualReturn(revenues, effort, numberOfYears);
+                
                 return (
                   <tr key={year} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -588,14 +671,14 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatCurrency(annualCashFlow)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(cashFlow)}
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${annualBilan === null ? 'text-gray-500' : (annualBilan < 0 ? 'text-red-600' : 'text-emerald-600')}`}>
+                      {annualBilan === null ? "-" : formatCurrency(annualBilan)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(saleBalance)}
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${revenues < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {formatCurrency(revenues)}
+                    <td className={`px-6 py-4 text-sm font-medium ${revenues < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <div className="font-medium">{formatCurrency(revenues)}</div>
+                      <div className="text-xs text-gray-400 whitespace-nowrap">
+                        CF: {formatCurrency(cashFlow)} + Revente: {formatCurrency(saleBalance)}
+                      </div>
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${gainPercent < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {formatPercent(gainPercent)}

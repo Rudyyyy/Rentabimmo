@@ -85,28 +85,6 @@ function calculateReelFoncier(
   const deductibleExpenses = calculateDeductibleExpenses(investment, year);
   const previousDeficit = investment.taxParameters.previousDeficit;
 
-  // Log des données d'entrée détaillées
-  console.log(`CALCUL Réel Foncier - Année ${year} - ENTRÉES DÉTAILLÉES:`, {
-    id: investment.name || 'inconnu',
-    annualRevenue,
-    deductibleExpenses,
-    previousDeficit,
-    rent: yearExpenses.rent,
-    tenantCharges: yearExpenses.tenantCharges,
-    taxBenefit: yearExpenses.taxBenefit,
-    propertyTax: yearExpenses.propertyTax,
-    condoFees: yearExpenses.condoFees,
-    propertyInsurance: yearExpenses.propertyInsurance,
-    managementFees: yearExpenses.managementFees,
-    unpaidRentInsurance: yearExpenses.unpaidRentInsurance,
-    repairs: yearExpenses.repairs,
-    otherDeductible: yearExpenses.otherDeductible,
-    loanInsurance: yearExpenses.loanInsurance,
-    interest: yearExpenses.interest,
-    taxRate: investment.taxParameters.taxRate,
-    socialChargesRate: investment.taxParameters.socialChargesRate
-  });
-
   // Calcul du revenu imposable avant prise en compte des déficits
   const taxableIncomeBeforeDeficit = Math.max(0, annualRevenue - deductibleExpenses);
   
@@ -131,28 +109,7 @@ function calculateReelFoncier(
                    Number(yearExpenses.taxBenefit || 0) - 
                    totalTax;
                    
-  // Log des résultats du calcul avec informations détaillées
-  console.log(`CALCUL Réel Foncier - Année ${year} - RÉSULTATS DÉTAILLÉS:`, {
-    id: investment.name || 'inconnu',
-    taxableIncomeBeforeDeficit,
-    calcul: `${annualRevenue} - ${deductibleExpenses} = ${taxableIncomeBeforeDeficit}`,
-    usableDeficit,
-    calcul_deficit: `min(${previousDeficit}, ${taxableIncomeBeforeDeficit}) = ${usableDeficit}`,
-    carriedForwardDeficit,
-    calcul_report: `${previousDeficit} - ${usableDeficit} = ${carriedForwardDeficit}`,
-    taxableIncome,
-    calcul_taxable: `${taxableIncomeBeforeDeficit} - ${usableDeficit} = ${taxableIncome}`,
-    tax,
-    calcul_tax: `${taxableIncome} * ${investment.taxParameters.taxRate}% = ${tax}`,
-    socialCharges,
-    calcul_charges: `${taxableIncome} * ${investment.taxParameters.socialChargesRate}% = ${socialCharges}`,
-    totalTax,
-    calcul_total: `${tax} + ${socialCharges} = ${totalTax}`,
-    netIncome,
-    calcul_net: `${annualRevenue} + ${yearExpenses.tenantCharges || 0} + ${yearExpenses.taxBenefit || 0} - ${totalTax} = ${netIncome}`
-  });
-
-  // Vérification des valeurs d'imposition
+    // Vérification des valeurs d'imposition
   if (tax === 0 && socialCharges === 0 && totalTax === 0 && taxableIncome > 0) {
     console.error(`ANOMALIE: Imposition à zéro avec revenu imposable positif - Année ${year}`, {
       taxableIncome,

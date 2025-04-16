@@ -16,11 +16,13 @@
  * Les modifications sont propagées au composant parent via la prop onSubmit.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { Investment } from '../types/investment';
+import { Investment, AmortizationRow } from '../types/investment';
 import AmortizationTable from './AmortizationTable';
 import { generateAmortizationSchedule } from '../utils/calculations';
+import PDFAmortizationImporter from './PDFAmortizationImporter';
+import { saveAmortizationSchedule } from '../lib/api';
 
 interface Props {
   onSubmit: (data: Investment) => void;
@@ -29,11 +31,34 @@ interface Props {
 
 export default function InvestmentForm({ onSubmit, initialValues }: Props) {
   const [showAmortization, setShowAmortization] = useState(false);
+  const [manualAmortizationSchedule, setManualAmortizationSchedule] = useState<AmortizationRow[] | null>(null);
   const { register, watch, reset } = useForm<Investment>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
   // Initialize form with initial values or defaults
   useEffect(() => {
+    console.log('============ INITIALISATION DES DONNÉES ============');
+    console.log('Initial Values:', initialValues);
+    
+    // Vérifier l'ID
+    if (initialValues?.id) {
+      console.log('ID de l\'investissement:', initialValues.id);
+    } else {
+      console.warn('Aucun ID d\'investissement trouvé dans initialValues');
+    }
+    
+    // Examiner en détail le tableau d'amortissement
+    if (initialValues?.amortizationSchedule) {
+      console.log('Tableau d\'amortissement dans initialValues:', {
+        exists: !!initialValues.amortizationSchedule,
+        length: initialValues.amortizationSchedule.length || 0,
+        firstRow: initialValues.amortizationSchedule[0] || 'Aucune ligne'
+      });
+    } else {
+      console.warn('Aucun tableau d\'amortissement trouvé dans initialValues');
+    }
+    
+    // Réinitialiser le formulaire avec les valeurs de départ
     reset({
       ...initialValues,
       startDate: initialValues?.startDate || new Date().toISOString().split('T')[0],
@@ -42,6 +67,22 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
       appreciationType: initialValues?.appreciationType || 'global',
       appreciationValue: initialValues?.appreciationValue || 0
     });
+    
+    // Si l'investissement a un tableau d'amortissement personnalisé, l'utiliser
+    if (initialValues?.amortizationSchedule && initialValues.amortizationSchedule.length > 0) {
+      console.log('Tableau d\'amortissement trouvé:', initialValues.amortizationSchedule.length, 'lignes');
+      
+      // Créer une copie profonde pour éviter les références partagées
+      const scheduleCopy = JSON.parse(JSON.stringify(initialValues.amortizationSchedule));
+      setManualAmortizationSchedule(scheduleCopy);
+      
+      console.log('Tableau d\'amortissement chargé avec succès');
+    } else {
+      console.log('Aucun tableau d\'amortissement personnalisé trouvé');
+      setManualAmortizationSchedule(null);
+    }
+    
+    console.log('============ FIN INITIALISATION DES DONNÉES ============');
   }, [initialValues, reset]);
 
   // Watch all form values
@@ -96,16 +137,19 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
 
     const monthlyCosts = annualCosts / 12;
 
-    const amortizationSchedule = loanAmount && interestRate && loanDuration
-      ? generateAmortizationSchedule(
-          loanAmount,
-          interestRate,
-          loanDuration,
-          values.deferralType || 'none',
-          Number(deferredPeriod),
-          startDate
-        ).schedule
-      : [];
+    // Utiliser le tableau d'amortissement personnalisé s'il existe, sinon calculer
+    const amortizationSchedule = manualAmortizationSchedule || (
+      loanAmount && interestRate && loanDuration
+        ? generateAmortizationSchedule(
+            loanAmount,
+            interestRate,
+            loanDuration,
+            values.deferralType || 'none',
+            Number(deferredPeriod),
+            startDate
+          ).schedule
+        : []
+    );
 
     return {
       totalInvestmentCost,
@@ -115,7 +159,7 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
       monthlyCosts,
       amortizationSchedule
     };
-  }, [values]);
+  }, [values, manualAmortizationSchedule]);
 
   const {
     totalInvestmentCost,
@@ -150,6 +194,200 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+
+  // Fonction pour sauvegarder le tableau d'amortissement
+  const handleSaveAmortization = async (updatedSchedule: AmortizationRow[]): Promise<boolean> => {
+    console.log('=============== DÉBUT SAVE AMORTIZATION (FORM) ===============');
+    console.log('FORM - Nombre de lignes à sauvegarder:', updatedSchedule.length);
+    
+    if (!updatedSchedule || updatedSchedule.length === 0) {
+      console.error('❌ FORM - Le tableau d\'amortissement est vide');
+      return false;
+    }
+    
+    // Créer une copie profonde pour éviter les problèmes de référence
+    const newSchedule = JSON.parse(JSON.stringify(updatedSchedule));
+    
+    // Si nous n'avons pas d'ID d'investissement dans les valeurs initiales,
+    // essayer de trouver l'ID dans les valeurs actuelles
+    if (!initialValues?.id) {
+      console.warn('⚠️ FORM - Pas d\'ID dans initialValues, tentative de trouver un ID alternatif');
+      
+      const investmentId = values?.id;
+      if (investmentId) {
+        try {
+          console.log(`FORM - Tentative de sauvegarde avec ID alternatif: ${investmentId}`);
+          console.log(`FORM - Nombre de lignes à sauvegarder: ${newSchedule.length}`);
+          
+          // Vérifier que chaque ligne a un montant
+          let hasInvalidRow = false;
+          newSchedule.forEach((row: AmortizationRow, index: number) => {
+            if (row.monthlyPayment === undefined || row.monthlyPayment === null) {
+              console.error(`❌ FORM - Ligne ${index} invalide:`, row);
+              hasInvalidRow = true;
+            }
+          });
+          
+          if (hasInvalidRow) {
+            console.error('❌ FORM - Des lignes sont invalides, annulation de la sauvegarde');
+            return false;
+          }
+          
+          // Afficher quelques lignes d'exemple pour le débogage
+          console.log('Exemple des 2 premières lignes à sauvegarder:', 
+            newSchedule.slice(0, 2).map((row: AmortizationRow) => ({
+              date: row.date,
+              monthlyPayment: row.monthlyPayment,
+              principal: row.principal,
+              interest: row.interest
+            }))
+          );
+          
+          // Appel à l'API avec l'ID alternatif
+          const saveResult = await saveAmortizationSchedule(investmentId, newSchedule);
+          console.log('Résultat de la sauvegarde:', saveResult);
+          
+          if (saveResult) {
+            console.log('✅ FORM - Sauvegarde réussie avec ID alternatif');
+            
+            // Mettre à jour l'état local
+            setManualAmortizationSchedule(newSchedule);
+            
+            // Mettre à jour l'investissement complet
+            const updatedInvestment = {
+              ...values,
+              amortizationSchedule: newSchedule
+            };
+            onSubmit(updatedInvestment);
+            
+            console.log('✅ FORM - État local et état global mis à jour');
+            console.log('FORM - Récapitulatif:');
+            console.log('- Nombre de lignes sauvegardées:', newSchedule.length);
+            console.log('- ID de l\'investissement:', investmentId);
+            console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+            
+            // Afficher un message de confirmation à l'utilisateur
+            alert(`Tableau d'amortissement sauvegardé avec succès ! (${newSchedule.length} lignes)`);
+            
+            return true;
+          } else {
+            console.error('❌ FORM - Échec de la sauvegarde avec ID alternatif');
+            console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+            
+            // Informer l'utilisateur de l'échec
+            alert("Erreur lors de la sauvegarde du tableau d'amortissement. Veuillez réessayer.");
+            
+            return false;
+          }
+        } catch (error) {
+          console.error('❌ FORM - EXCEPTION lors de la sauvegarde avec ID alternatif:', error);
+          console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+          
+          // Informer l'utilisateur de l'erreur
+          alert("Erreur lors de la sauvegarde : " + (error instanceof Error ? error.message : String(error)));
+          
+          return false;
+        }
+      } else {
+        console.error('❌ FORM - Aucun ID alternatif trouvé, impossible de sauvegarder');
+        console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+        
+        // Informer l'utilisateur de l'erreur
+        alert("Impossible de sauvegarder le tableau : aucun identifiant d'investissement trouvé.");
+        
+        return false;
+      }
+    }
+    
+    console.log(`FORM - Tentative de sauvegarde avec ID standard: ${initialValues?.id}`);
+    console.log(`FORM - Nombre de lignes à sauvegarder: ${newSchedule.length}`);
+    
+    // Afficher quelques lignes d'exemple pour le débogage
+    console.log('Exemple des 2 premières lignes à sauvegarder:', 
+      newSchedule.slice(0, 2).map((row: AmortizationRow) => ({
+        date: row.date,
+        monthlyPayment: row.monthlyPayment,
+        principal: row.principal,
+        interest: row.interest
+      }))
+    );
+    
+    try {
+      const saveResult = await saveAmortizationSchedule(initialValues?.id, newSchedule);
+      console.log('Résultat de la sauvegarde:', saveResult);
+      
+      if (saveResult) {
+        console.log('✅ FORM - Sauvegarde réussie');
+        
+        // Mettre à jour l'état local
+        setManualAmortizationSchedule(newSchedule);
+        
+        // Mettre à jour l'investissement complet
+        const updatedInvestment = {
+          ...values,
+          amortizationSchedule: newSchedule
+        };
+        onSubmit(updatedInvestment);
+        
+        console.log('✅ FORM - État local et état global mis à jour');
+        console.log('FORM - Récapitulatif:');
+        console.log('- Nombre de lignes sauvegardées:', newSchedule.length);
+        console.log('- ID de l\'investissement:', initialValues?.id);
+        console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+        
+        // Afficher un message de confirmation à l'utilisateur avec plus de détails
+        alert(`Tableau d'amortissement sauvegardé avec succès ! (${newSchedule.length} lignes)`);
+        
+        return true;
+      } else {
+        console.error('❌ FORM - Échec de la sauvegarde');
+        console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+        
+        // Informer l'utilisateur de l'échec
+        alert("Erreur lors de la sauvegarde du tableau d'amortissement. Veuillez réessayer.");
+        
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ FORM - EXCEPTION lors de la sauvegarde:', error);
+      console.log('=============== FIN SAVE AMORTIZATION (FORM) ===============');
+      
+      // Informer l'utilisateur de l'erreur
+      alert("Erreur lors de la sauvegarde : " + (error instanceof Error ? error.message : String(error)));
+      
+      return false;
+    }
+  };
+
+  // Réinitialiser le tableau d'amortissement
+  const handleResetAmortization = async () => {
+    console.log('Resetting Amortization Schedule');
+    setManualAmortizationSchedule(null);
+    
+    // Mettre à jour l'investissement sans le tableau d'amortissement personnalisé
+    onSubmit({
+      ...values,
+      amortizationSchedule: undefined
+    });
+    console.log('Amortization Schedule Reset in State');
+
+    // Aussi supprimer de la base de données si un ID est disponible
+    try {
+      if (initialValues?.id) {
+        const success = await saveAmortizationSchedule(initialValues.id, []);
+        
+        if (success) {
+          console.log('Amortization schedule reset in database');
+        } else {
+          console.error('Failed to reset amortization schedule in database');
+        }
+      } else {
+        console.warn('Cannot reset amortization schedule: No investment ID provided');
+      }
+    } catch (error) {
+      console.error('Error resetting amortization schedule:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -245,34 +483,14 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
         </div>
       </div>
 
-      {/* Financing */}
+      {/* Loan Calculator */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Financement</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <h3 className="text-lg font-semibold mb-4">Crédit et amortissement</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Date de début
-            </label>
-            <input
-              type="date"
-              {...register('startDate')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Différé (mois)
-            </label>
-            <input
-              type="number"
-              min="0"
-              {...register('deferredPeriod')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Apport
+              Montant de l'apport
             </label>
             <input
               type="number"
@@ -282,7 +500,7 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Somme empruntée
+              Montant du prêt
             </label>
             <input
               type="number"
@@ -292,7 +510,7 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Durée (années)
+              Durée du prêt (années)
             </label>
             <input
               type="number"
@@ -313,7 +531,7 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Assurance (%)
+              Taux d'assurance (%)
             </label>
             <input
               type="number"
@@ -322,31 +540,133 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
           </div>
-          <div className="flex items-end">
-            <div className="bg-gray-50 p-4 rounded-md w-full">
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm text-gray-600">Mensualité (hors assurance)</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(monthlyPayment)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Assurance mensuelle</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(monthlyInsurance)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Mensualité totale</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(monthlyPayment + monthlyInsurance)}
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Date de début
+            </label>
+            <input
+              type="date"
+              {...register('startDate')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
           </div>
         </div>
+
+        <div className="mt-4">
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              {...register('hasDeferral')}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="ml-2 text-sm text-gray-700">Différé de remboursement</span>
+          </label>
+        </div>
+
+        {values.hasDeferral && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Type de différé
+              </label>
+              <select
+                {...register('deferralType')}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="none">Aucun</option>
+                <option value="partial">Partiel</option>
+                <option value="total">Total</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {values.deferralType === 'partial' && 'Différé partiel: Vous ne remboursez que les intérêts pendant la période de différé.'}
+                {values.deferralType === 'total' && 'Différé total: Vous ne remboursez ni le capital ni les intérêts pendant la période de différé.'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Durée du différé (mois)
+              </label>
+              <input
+                type="number"
+                {...register('deferredPeriod')}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          <div className="bg-gray-50 p-4 rounded-md">
+            <p className="text-sm text-gray-600">Mensualité du crédit</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatCurrency(monthlyPayment)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Hors assurance: {formatCurrency(monthlyPayment)}
+            </p>
+            <p className="text-xs text-gray-500">
+              Assurance mensuelle: {formatCurrency(monthlyInsurance)}
+            </p>
+            <p className="text-xs text-gray-500">
+              Total: {formatCurrency(monthlyPayment + monthlyInsurance)}
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAmortization(!showAmortization)}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              {showAmortization ? 'Masquer le tableau d\'amortissement' : 'Afficher le tableau d\'amortissement'}
+            </button>
+          </div>
+        </div>
+
+        {/* Tableau d'amortissement */}
+        {showAmortization && (
+          <div className="mt-4">
+            <AmortizationTable 
+              schedule={amortizationSchedule} 
+              onClose={() => setShowAmortization(false)} 
+              onSave={handleSaveAmortization}
+              onReset={handleResetAmortization}
+            />
+            
+            {/* Ajout du composant d'importation PDF */}
+            <div className="mt-4">
+              <h4 className="text-md font-semibold mb-2">Importer depuis un PDF</h4>
+              <p className="text-sm text-gray-600 mb-4">
+                Vous pouvez importer votre tableau d'amortissement directement depuis un PDF fourni par votre banque.
+              </p>
+              <PDFAmortizationImporter
+                onAmortizationImported={(amortizationRows, interestRate) => {
+                  // Mettre à jour les valeurs calculées à partir du tableau d'amortissement importé
+                  if (amortizationRows.length > 0) {
+                    // Extraire des informations utiles comme le montant du prêt, la durée, etc.
+                    const loanAmount = amortizationRows[0].remainingBalance;
+                    const loanDuration = Math.ceil(amortizationRows.length / 12);
+                    
+                    // Mettre à jour le formulaire avec ces valeurs
+                    reset({
+                      ...values,
+                      loanAmount,
+                      loanDuration,
+                      interestRate
+                    });
+                    
+                    // Notifier de la mise à jour
+                    onSubmit({
+                      ...values,
+                      loanAmount,
+                      loanDuration,
+                      interestRate
+                    });
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Annual Expenses */}
@@ -413,13 +733,6 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
           </div>
         </div>
       </div>
-
-      {showAmortization && (
-        <AmortizationTable
-          schedule={amortizationSchedule}
-          onClose={() => setShowAmortization(false)}
-        />
-      )}
     </div>
   );
 }

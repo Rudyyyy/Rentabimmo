@@ -67,8 +67,26 @@ export default function Dashboard() {
   }, [propertyOrder]);
 
   useEffect(() => {
-    loadProperties();
+    // Load properties on mount and navigation
+    if (user) {
+      loadProperties();
+      console.log("Loading properties - path or user changed", location.pathname);
+    }
   }, [location.pathname, user]);
+
+  // Add a new useEffect to catch navigation events
+  useEffect(() => {
+    // This will run when the component mounts
+    if (user) {
+      console.log("Dashboard mounted - loading properties");
+      loadProperties();
+    }
+    
+    // This will run when the component unmounts
+    return () => {
+      console.log("Dashboard unmounting");
+    };
+  }, []);
 
   useEffect(() => {
     calculateCashFlowData();
@@ -80,18 +98,26 @@ export default function Dashboard() {
       setError(null);
       
       if (!user) {
+        console.error("Erreur: Utilisateur non authentifié");
         throw new Error('User not authenticated');
       }
 
+      console.log("🔍 Chargement des biens pour l'utilisateur:", user.id);
+      
       const { data, error: fetchError } = await supabase
         .from('properties')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("❌ Erreur lors du chargement des biens:", fetchError);
+        throw fetchError;
+      }
       
       const properties = data || [];
+      console.log(`✅ ${properties.length} biens chargés:`, properties.map(p => ({ id: p.id, name: p.name })));
+      
       setProperties(properties);
       
       // Initialiser les préférences et l'ordre pour les nouveaux biens

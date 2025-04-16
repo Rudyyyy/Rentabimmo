@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
-import { Investment, defaultInvestment, FinancialMetrics } from '../types/investment';
+import { Investment, defaultInvestment, FinancialMetrics, AmortizationRow } from '../types/investment';
 import { useAuth } from '../contexts/AuthContext';
 import InvestmentForm from '../components/InvestmentForm';
 import ResultsDisplay from '../components/ResultsDisplay';
@@ -31,18 +31,45 @@ export default function PropertyForm() {
   async function loadProperty() {
     try {
       setLoading(true);
+      console.log('============ DÉBUT CHARGEMENT DU BIEN ============');
+      console.log('Chargement du bien avec ID:', id);
+      
       const { data, error } = await supabase
         .from('properties')
         .select('*')
         .eq('id', id)
         .single();
 
-      if (error) throw error;
-      if (data) {
+      if (error) {
+        console.error('❌ Erreur lors du chargement du bien:', error);
+        throw error;
+      }
+      
+      if (data && id) {
+        console.log('✅ Bien chargé avec succès, ID:', id);
+        console.log('Données brutes:', data);
+        
+        // S'assurer que l'ID est présent dans l'investissement
         const loadedInvestmentData = {
           ...defaultInvestment,
-          ...data.investment_data as Investment
+          ...data.investment_data as Investment,
+          id: id // Ajouter l'ID explicitement pour s'assurer qu'il est disponible
         };
+        
+        console.log('✅ Données d\'investissement chargées avec succès');
+        
+        // Vérifier spécifiquement le tableau d'amortissement
+        if (loadedInvestmentData.amortizationSchedule && loadedInvestmentData.amortizationSchedule.length > 0) {
+          console.log('✅ Tableau d\'amortissement trouvé:', 
+            `${loadedInvestmentData.amortizationSchedule.length} lignes`);
+          // Afficher quelques lignes pour vérification
+          console.log('Exemple de données (première ligne):', 
+            loadedInvestmentData.amortizationSchedule[0]);
+        } else {
+          console.log('⚠️ Aucun tableau d\'amortissement personnalisé trouvé');
+        }
+        
+        console.log('Mise à jour de l\'état avec les données chargées...');
         setInvestmentData(loadedInvestmentData);
         reset({ 
           name: data.name,
@@ -52,22 +79,72 @@ export default function PropertyForm() {
         // Calculate initial metrics
         const initialMetrics = calculateFinancialMetrics(loadedInvestmentData);
         setMetrics(initialMetrics);
+        
+        console.log('✅ Chargement du bien terminé avec succès');
+      } else {
+        console.error('❌ Aucune donnée trouvée pour l\'ID:', id);
       }
+      
+      console.log('============ FIN CHARGEMENT DU BIEN ============');
     } catch (error) {
-      console.error('Error loading property:', error);
+      console.error('❌ Exception lors du chargement du bien:', error);
     } finally {
       setLoading(false);
     }
   }
 
   const handleCalculate = (data: Investment) => {
-    const updatedInvestment = {
+    console.log('============ DÉBUT CALCUL DES MÉTRIQUES ============');
+    console.log('handleCalculate appelé avec données:', data);
+    
+    // S'assurer de conserver l'ID
+    const currentId = data.id || investmentData.id;
+    console.log('ID à préserver:', currentId);
+    
+    // S'assurer de conserver le tableau d'amortissement s'il existe
+    const hasCustomAmortization = !!data.amortizationSchedule && data.amortizationSchedule.length > 0;
+    const existingAmortization = !!investmentData.amortizationSchedule && investmentData.amortizationSchedule.length > 0;
+    
+    // Décider quel tableau d'amortissement utiliser
+    let amortizationSchedule: AmortizationRow[] = [];
+    if (hasCustomAmortization && data.amortizationSchedule) {
+      console.log('Utilisation du tableau d\'amortissement fourni:', 
+        `${data.amortizationSchedule.length} lignes`);
+      amortizationSchedule = data.amortizationSchedule;
+    } else if (existingAmortization && investmentData.amortizationSchedule) {
+      console.log('Conservation du tableau d\'amortissement existant:', 
+        `${investmentData.amortizationSchedule.length} lignes`);
+      amortizationSchedule = investmentData.amortizationSchedule;
+    } else {
+      console.log('Aucun tableau d\'amortissement disponible');
+      amortizationSchedule = [];
+    }
+    
+    // Créer une copie profonde des données pour éviter les références
+    const updatedInvestment = JSON.parse(JSON.stringify({
       ...defaultInvestment,
-      ...data
-    };
+      ...data,
+      id: currentId, // Préserver explicitement l'ID
+      amortizationSchedule: amortizationSchedule // Préserver explicitement le tableau d'amortissement
+    }));
+    
+    console.log('Mise à jour de l\'investissement terminée');
+    console.log('- ID préservé:', updatedInvestment.id);
+    console.log('- Tableau d\'amortissement:', 
+      updatedInvestment.amortizationSchedule.length > 0 ? 
+      `${updatedInvestment.amortizationSchedule.length} lignes` : 
+      'Aucun tableau'
+    );
+    
+    // Mettre à jour l'état avec la nouvelle copie
     setInvestmentData(updatedInvestment);
+    
+    // Calculer les métriques
+    console.log('Calcul des métriques...');
     const results = calculateFinancialMetrics(updatedInvestment);
     setMetrics(results);
+    
+    console.log('============ FIN CALCUL DES MÉTRIQUES ============');
   };
 
   const onSubmit = async (formData: { name: string, description?: string }) => {
@@ -85,6 +162,7 @@ export default function PropertyForm() {
 
     try {
       setLoading(true);
+      console.log("=== DÉBUT SAUVEGARDE DU BIEN ===");
 
       // Vérifier les données minimales requises
       if (!formData.name.trim()) {
@@ -98,14 +176,24 @@ export default function PropertyForm() {
         description: formData.description?.trim() || ''
       };
 
+      console.log("Investissement avant sauvegarde:", updatedInvestment);
+      console.log("ID du bien:", id);
+      console.log("Tableau d'amortissement:", 
+        updatedInvestment.amortizationSchedule ? 
+        `${updatedInvestment.amortizationSchedule.length} lignes` : 
+        'Aucun tableau'
+      );
+
       // Préparation de l'objet à enregistrer
       const propertyData = {
-        name: formData.name.trim(), // Le nom doit être non vide à ce stade grâce à la validation
+        name: formData.name.trim(),
         investment_data: updatedInvestment,
         user_id: user.id
       };
 
       if (id) {
+        console.log("Mise à jour d'un bien existant");
+        
         // S'assurer que le nom est présent pour la mise à jour
         const updateData = {
           name: formData.name.trim(),
@@ -113,21 +201,34 @@ export default function PropertyForm() {
           user_id: user.id
         };
         
+        console.log("Données envoyées à Supabase:", updateData);
+        
         const { data, error } = await supabase
           .from('properties')
           .update(updateData)
           .eq('id', id)
-          .select(); // Ajouter .select() pour récupérer les données mises à jour
+          .select();
         
-        if (error) throw error;
+        if (error) {
+          console.error("Erreur Supabase:", error);
+          throw error;
+        }
+        
+        console.log("Réponse de Supabase:", data);
+        console.log("Mise à jour réussie!");
       } else {
+        console.log("Création d'un nouveau bien");
+        
         // Insertion du bien avec les données complètes
         const { data, error } = await supabase
           .from('properties')
           .insert([propertyData])
           .select();
                 
-        if (error) throw error;
+        if (error) {
+          console.error("Erreur Supabase:", error);
+          throw error;
+        }
         
         if (!data || data.length === 0) {
           throw new Error("Le bien a été créé mais les données n'ont pas été retournées");
@@ -136,22 +237,22 @@ export default function PropertyForm() {
         console.log("Bien créé avec succès:", data[0]);
       }
       
+      console.log("=== FIN SAUVEGARDE DU BIEN ===");
       // Redirection vers le dashboard seulement après confirmation de succès
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error saving property:', error);
       // Affichage d'une alerte utilisateur avec les détails de l'erreur
       let errorMessage = 'Erreur lors de la sauvegarde du bien';
       
       if (error instanceof Error) {
         errorMessage += `: ${error.message}`;
-        console.log('Détails de l\'erreur:', {
+        console.error('Détails de l\'erreur:', {
           name: error.name,
           message: error.message,
           stack: error.stack,
         });
       } else {
-        console.log('Erreur non standard:', error);
+        console.error('Erreur non standard:', error);
       }
       
       // Afficher l'erreur à l'utilisateur

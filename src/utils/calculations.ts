@@ -17,8 +17,8 @@ export function calculateMonthlyPayment(
   const numberOfPayments = (duration * 12);
 
   // Calcul de la mensualité standard
-  return (amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-         (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+  return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+         (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
 }
 
 export function generateAmortizationSchedule(
@@ -38,7 +38,8 @@ export function generateAmortizationSchedule(
   const deferred = Number(deferredPeriod);
 
   const monthlyRate = rate / 12 / 100;
-  let remainingBalance = amount;
+  let totalDue = Number(amount.toFixed(2));
+  let remainingPrincipal = Number(amount.toFixed(2));
   let totalPaid = 0;
   let deferredInterest = 0;
   
@@ -54,40 +55,41 @@ export function generateAmortizationSchedule(
   }
 
   // Calculate monthly payment for the total duration (loan duration + deferral period)
-  const monthlyPayment = calculateMonthlyPayment(amount, rate, duration);
+  const monthlyPayment = Number(calculateMonthlyPayment(amount, rate, duration).toFixed(2));
 
   // Période de différé
   for (let month = 1; month <= deferred; month++) {
-    const interest = remainingBalance * monthlyRate;
+    const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
     const currentDate = new Date(startDateTime);
     currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
     if (deferralType === 'total') {
-      // Différé total : accumulation des intérêts
-      deferredInterest += interest;
+      deferredInterest = Number((deferredInterest + interest).toFixed(2));
+      totalDue = Number((totalDue + interest).toFixed(2));
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance,
+        remainingBalance: Number(totalDue.toFixed(2)),
+        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
         monthlyPayment: 0,
         principal: 0,
-        interest,
-        totalPaid,
+        interest: Number(interest.toFixed(2)),
+        totalPaid: Number(totalPaid.toFixed(2)),
         isDeferred: true
       });
     } else if (deferralType === 'partial') {
-      // Différé partiel : paiement des intérêts uniquement
-      totalPaid += interest;
+      totalPaid = Number((totalPaid + interest).toFixed(2));
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance,
-        monthlyPayment: interest,
+        remainingBalance: Number(totalDue.toFixed(2)),
+        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
+        monthlyPayment: Number(interest.toFixed(2)),
         principal: 0,
-        interest,
-        totalPaid,
+        interest: Number(interest.toFixed(2)),
+        totalPaid: Number(totalPaid.toFixed(2)),
         isDeferred: true
       });
     }
@@ -96,29 +98,31 @@ export function generateAmortizationSchedule(
   // Période d'amortissement
   if (deferralType === 'total' && deferredInterest > 0) {
     // Add deferred interest to remaining balance
-    remainingBalance += deferredInterest;
+    totalDue = Number((remainingPrincipal + deferredInterest).toFixed(2));
     
     // Calculate new monthly payment with updated balance
-    const updatedMonthlyPayment = calculateMonthlyPayment(remainingBalance, rate, duration);
+    const updatedMonthlyPayment = Number(calculateMonthlyPayment(totalDue, rate, duration).toFixed(2));
 
     // Regular amortization period
     for (let month = deferred + 1; month <= (duration * 12) + deferred; month++) {
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
-      const interest = remainingBalance * monthlyRate;
-      const principal = updatedMonthlyPayment - interest;
-      remainingBalance = Math.max(0, remainingBalance - principal);
-      totalPaid += updatedMonthlyPayment;
+      const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
+      const principal = Number((updatedMonthlyPayment - interest).toFixed(2));
+      remainingPrincipal = Number(Math.max(0, remainingPrincipal - principal).toFixed(2));
+      totalPaid = Number((totalPaid + updatedMonthlyPayment).toFixed(2));
+      totalDue = Number((remainingPrincipal + deferredInterest).toFixed(2));
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance,
-        monthlyPayment: updatedMonthlyPayment,
-        principal,
-        interest,
-        totalPaid,
+        remainingBalance: Number(totalDue.toFixed(2)),
+        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
+        monthlyPayment: Number(updatedMonthlyPayment.toFixed(2)),
+        principal: Number(principal.toFixed(2)),
+        interest: Number(interest.toFixed(2)),
+        totalPaid: Number(totalPaid.toFixed(2)),
         isDeferred: false
       });
     }
@@ -128,19 +132,21 @@ export function generateAmortizationSchedule(
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
-      const interest = remainingBalance * monthlyRate;
-      const principal = monthlyPayment - interest;
-      remainingBalance = Math.max(0, remainingBalance - principal);
-      totalPaid += monthlyPayment;
+      const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
+      const principal = Number((monthlyPayment - interest).toFixed(2));
+      remainingPrincipal = Number(Math.max(0, remainingPrincipal - principal).toFixed(2));
+      totalPaid = Number((totalPaid + monthlyPayment).toFixed(2));
+      totalDue = Number(Math.max(0, totalDue - principal).toFixed(2));
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance,
-        monthlyPayment,
-        principal,
-        interest,
-        totalPaid,
+        remainingBalance: Number(totalDue.toFixed(2)),
+        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
+        monthlyPayment: Number(monthlyPayment.toFixed(2)),
+        principal: Number(principal.toFixed(2)),
+        interest: Number(interest.toFixed(2)),
+        totalPaid: Number(totalPaid.toFixed(2)),
         isDeferred: false
       });
     }

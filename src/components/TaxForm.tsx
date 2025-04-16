@@ -439,7 +439,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         // On calcule avec les résultats de l'année précédente
         const yearResults = calculateAllTaxRegimes(investment, year, previousYearResults);
         const taxResults = yearResults[regime as TaxRegime];
-        netIncomeData.push(taxResults.netIncome);
+        netIncomeData.push(taxResults?.netIncome || 0);
                         
         // On sauvegarde les résultats pour l'année suivante
         previousYearResults = yearResults;

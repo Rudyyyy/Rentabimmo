@@ -20,7 +20,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Investment, YearlyExpenses, ExpenseProjection, TaxRegime, TaxParameters, TaxResults, defaultInvestment } from '../types/investment';
+import { Investment, YearlyExpenses, ExpenseProjection, TaxRegime, TaxParameters, TaxResults, defaultInvestment, DeferralType, AmortizationRow } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';
 import { Bar } from 'react-chartjs-2';
@@ -34,6 +34,9 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import PDFAmortizationImporter from './PDFAmortizationImporter';
+import { saveAmortizationSchedule, getAmortizationSchedule } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 ChartJS.register(
   CategoryScale,
@@ -52,6 +55,8 @@ interface Props {
 function AcquisitionForm({ onSubmit, initialValues }: Props) {
   const [showAmortization, setShowAmortization] = useState(false);
   const [loanAmountWarning, setLoanAmountWarning] = useState(false);
+  const [showPdfImporter, setShowPdfImporter] = useState(false);
+  const [manualAmortizationSchedule, setManualAmortizationSchedule] = useState<AmortizationRow[] | null>(null);
 
   const handleInputChange = (field: keyof Investment, value: any) => {
     let updatedInvestment = {
@@ -106,10 +111,22 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
       updatedInvestment.deferredInterest = deferredInterest;
     }
 
+    updatedInvestment.startDate = updatedInvestment.startDate ?? new Date().toISOString().split('T')[0];
+
+    // Si nous avons un tableau d'amortissement modifié manuellement, l'inclure dans l'investissement mis à jour
+    if (manualAmortizationSchedule) {
+      updatedInvestment.amortizationSchedule = manualAmortizationSchedule;
+    }
+
     onSubmit(updatedInvestment);
   };
 
   const amortizationResult = useMemo(() => {
+    // Si nous avons un tableau d'amortissement modifié manuellement, l'utiliser
+    if (manualAmortizationSchedule) {
+      return { schedule: manualAmortizationSchedule, deferredInterest: 0 };
+    }
+    
     if (!initialValues?.loanAmount || !initialValues?.interestRate || !initialValues?.loanDuration) {
       return { schedule: [], deferredInterest: 0 };
     }
@@ -127,7 +144,8 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
     initialValues?.loanDuration,
     initialValues?.deferralType,
     initialValues?.deferredPeriod,
-    initialValues?.startDate
+    initialValues?.startDate,
+    manualAmortizationSchedule
   ]);
 
   const chartData = {
@@ -217,6 +235,122 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
     Number(initialValues?.mandatoryDiagnostics || 0) +
     Number(initialValues?.renovationCosts || 0);
 
+  const handleSubmitAmortization = async (updatedSchedule: AmortizationRow[]) => {
+    console.log('Tableau d\'amortissement correctement ajouté:', updatedSchedule.length, 'lignes');
+    
+    // Créer une copie profonde pour éviter les problèmes de référence
+    const scheduleCopy = JSON.parse(JSON.stringify(updatedSchedule));
+    
+    // Mettre à jour l'état local
+    setManualAmortizationSchedule(scheduleCopy);
+    
+    // Créer un investissement complet avec toutes les propriétés requises
+    const updatedInvestment: Investment = {
+      ...defaultInvestment,
+      ...initialValues,
+      amortizationSchedule: scheduleCopy
+    };
+    
+    // Vérifier explicitement que le tableau d'amortissement a été ajouté
+    if (!updatedInvestment.amortizationSchedule || updatedInvestment.amortizationSchedule.length === 0) {
+      console.error("❌ ERREUR: Le tableau d'amortissement n'a pas été correctement ajouté à l'investissement");
+    } else {
+      console.log("✅ Tableau d'amortissement correctement ajouté:", updatedInvestment.amortizationSchedule.length, "lignes");
+    }
+    
+    console.log('AcquisitionForm - Mise à jour de l\'investissement avec le tableau d\'amortissement');
+    onSubmit(updatedInvestment);
+    
+    // Sauvegarde directe du tableau d'amortissement via l'API si un ID est disponible
+    if (initialValues?.id) {
+      console.log('Sauvegarde directe du tableau via API pour l\'ID:', initialValues.id);
+      
+      try {
+        const success = await saveAmortizationSchedule(initialValues.id, scheduleCopy);
+        if (success) {
+          console.log('✅ Sauvegarde directe du tableau réussie via API');
+        } else {
+          console.error('❌ Échec de la sauvegarde directe du tableau via API');
+        }
+      } catch (error) {
+        console.error('❌ Exception lors de la sauvegarde directe:', error);
+      }
+    } else {
+      console.log('ℹ️ Pas d\'ID disponible - Tableau sauvegardé uniquement en mémoire');
+      console.log('Le tableau sera sauvegardé en base de données lors de la prochaine sauvegarde complète de l\'investissement');
+      
+      // Afficher une alerte utilisateur plus explicative
+      alert("Le tableau d'amortissement a été enregistré temporairement, mais ne sera persisté en base de données que lorsque le bien sera sauvegardé.\n\nPensez à cliquer sur 'Enregistrer' en haut de la page pour finaliser l'enregistrement du bien et de ses données.");
+    }
+    
+    setShowAmortization(false);
+  };
+
+  // Réinitialiser le tableau d'amortissement
+  const handleResetAmortization = () => {
+    console.log('AcquisitionForm - Réinitialisation du tableau d\'amortissement');
+    
+    // Effacer le tableau d'amortissement manuel
+    setManualAmortizationSchedule(null);
+    
+    // Mettre à jour l'investissement sans tableau d'amortissement personnalisé
+    const updatedInvestment: Investment = {
+      ...defaultInvestment,
+      ...initialValues,
+      amortizationSchedule: undefined
+    };
+    
+    onSubmit(updatedInvestment);
+    
+    // Réinitialisation directe du tableau d'amortissement via l'API si un ID est disponible
+    if (initialValues?.id) {
+      console.log('Réinitialisation directe du tableau via API pour l\'ID:', initialValues.id);
+      
+      // Appel asynchrone sans await pour ne pas bloquer l'interface
+      saveAmortizationSchedule(initialValues.id, [])
+        .then(success => {
+          if (success) {
+            console.log('✅ Réinitialisation directe du tableau réussie via API');
+          } else {
+            console.error('❌ Échec de la réinitialisation directe du tableau via API');
+          }
+        })
+        .catch(error => {
+          console.error('❌ Exception lors de la réinitialisation directe:', error);
+        });
+    }
+    
+    setShowAmortization(false);
+  };
+
+  // Montrer le tableau d'amortissement
+  const handleShowAmortization = async () => {
+    console.log('AcquisitionForm - Affichage du tableau d\'amortissement');
+    
+    // Si un ID d'investissement est disponible, essayer de charger les données les plus récentes
+    if (initialValues?.id) {
+      console.log('Chargement du tableau d\'amortissement à jour depuis la base de données pour ID:', initialValues.id);
+      try {
+        const latestSchedule = await getAmortizationSchedule(initialValues.id);
+        
+        if (latestSchedule && latestSchedule.length > 0) {
+          console.log('✅ Tableau d\'amortissement récupéré de la base de données:', latestSchedule.length, 'lignes');
+          
+          // Mettre à jour l'état local avec les données récupérées
+          setManualAmortizationSchedule(latestSchedule);
+          console.log('✅ État local mis à jour avec les données récentes');
+        } else {
+          console.log('ℹ️ Pas de tableau personnalisé en base de données, utilisation du tableau calculé');
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération du tableau:', error);
+        console.log('ℹ️ Utilisation du tableau calculé par défaut');
+      }
+    }
+    
+    setShowAmortization(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Purchase Details */}
@@ -259,7 +393,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             </div>
             <input
               type="number"
-              value={initialValues?.notaryFees || ''}
+              value={initialValues?.notaryFees || 0}
               onChange={(e) => handleInputChange('notaryFees', Number(e.target.value))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -289,7 +423,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             </div>
             <input
               type="number"
-              value={initialValues?.bankGuaranteeFees || ''}
+              value={initialValues?.bankGuaranteeFees || 0}
               onChange={(e) => handleInputChange('bankGuaranteeFees', Number(e.target.value))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -304,7 +438,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             </div>
             <input
               type="number"
-              value={initialValues?.mandatoryDiagnostics || ''}
+              value={initialValues?.mandatoryDiagnostics || 0}
               onChange={(e) => handleInputChange('mandatoryDiagnostics', Number(e.target.value))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -499,31 +633,117 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
           </div>
         </div>
 
-        {/* Graphique d'amortissement */}
-        {amortizationResult.schedule.length > 0 && (
-          <div className="mt-6">
-            <div className="h-64">
-              <Bar data={chartData} options={chartOptions} />
+        {/* Affichage des informations de crédit */}
+        <div className="mt-4 space-y-4">
+          <h4 className="text-md font-semibold">Informations de crédit</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-600">Mensualité du crédit</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
+                  initialValues?.loanAmount && initialValues?.interestRate && initialValues?.loanDuration
+                    ? (initialValues.loanAmount * (initialValues.interestRate / 1200) * Math.pow(1 + initialValues.interestRate / 1200, initialValues.loanDuration * 12)) /
+                      (Math.pow(1 + initialValues.interestRate / 1200, initialValues.loanDuration * 12) - 1)
+                    : 0
+                )}
+              </p>
             </div>
-            <div className="mt-4">
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-600">Intérêts différés</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
+                  initialValues?.deferredInterest || 0
+                )}
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
               <button
                 type="button"
-                onClick={() => setShowAmortization(true)}
-                className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                onClick={() => handleShowAmortization()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Voir le tableau d'amortissement détaillé
+                Voir tableau d'amortissement
+              </button>
+              
+              {/* Nouveau bouton pour importer un PDF */}
+              <button
+                type="button"
+                onClick={() => setShowPdfImporter(!showPdfImporter)}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {showPdfImporter ? 'Cacher' : 'Importer un PDF'}
               </button>
             </div>
           </div>
-        )}
+          
+          {/* Affichage du tableau d'amortissement */}
+          {showAmortization && (
+            <div className="mt-4">
+              <AmortizationTable 
+                schedule={amortizationResult.schedule}
+                onClose={() => setShowAmortization(false)}
+                onSave={handleSubmitAmortization}
+                onReset={handleResetAmortization}
+              />
+            </div>
+          )}
+          
+          {/* Affichage de l'importateur PDF */}
+          {showPdfImporter && (
+            <div className="mt-4">
+              <PDFAmortizationImporter
+                onAmortizationImported={(amortizationRows, interestRate) => {
+                  // Fermer l'importateur après avoir importé les données
+                  setShowPdfImporter(false);
+                  
+                  // Récupérer les informations importantes du tableau
+                  if (amortizationRows.length > 0) {
+                    // Capital restant dû initial (montant du prêt)
+                    const loanAmount = amortizationRows[0].remainingBalance;
+                    
+                    // Durée du prêt en années
+                    const loanDuration = Math.ceil(amortizationRows.length / 12);
+                    
+                    // Mettre à jour l'investissement avec les nouvelles valeurs
+                    const updatedInvestment = {
+                      ...defaultInvestment,
+                      ...initialValues,
+                      loanAmount,
+                      loanDuration,
+                      interestRate,
+                      startDate: initialValues?.startDate || new Date().toISOString().split('T')[0], // Default to today's date if undefined
+                      // Mise à jour automatique de l'apport
+                      downPayment: Math.max(0, 
+                        (initialValues?.purchasePrice || 0) + 
+                        (initialValues?.agencyFees || 0) + 
+                        (initialValues?.notaryFees || 0) + 
+                        (initialValues?.bankFees || 0) + 
+                        (initialValues?.bankGuaranteeFees || 0) +
+                        (initialValues?.renovationCosts || 0) - 
+                        loanAmount
+                      )
+                    };
+                    
+                    // Notifier le parent des changements
+                    onSubmit(updatedInvestment);
+                    
+                    // Afficher le tableau d'amortissement importé
+                    setShowAmortization(true);
+                  }
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
-      {showAmortization && (
-        <AmortizationTable
-          schedule={amortizationResult.schedule}
-          onClose={() => setShowAmortization(false)}
-        />
-      )}
+      {/* Graphique d'amortissement */}
+      <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
+        <h4 className="text-md font-semibold mb-4">Visualisation de l'amortissement</h4>
+        <div className="h-80">
+          <Bar data={chartData} options={chartOptions} />
+        </div>
+      </div>
     </div>
   );
 }

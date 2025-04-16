@@ -266,17 +266,6 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
         // Pour les années suivantes, on passe les résultats de l'année précédente
         yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
       }
-      
-      // Log pour vérifier les résultats fiscaux année par année
-      if (year === startYear || year === endYear) {
-        console.log(`[RENTABILITE GLOBALE] Calcul séquentiel - Année ${year}:`, {
-          context: 'sequential_calculation',
-          reelFoncierResult: yearlyResults[year]['reel-foncier'],
-          previousYearDeficit: year > startYear ? 
-            yearlyResults[year - 1]['reel-foncier'].deficit : 
-            investment.taxParameters.previousDeficit
-        });
-      }
     });
 
     const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
