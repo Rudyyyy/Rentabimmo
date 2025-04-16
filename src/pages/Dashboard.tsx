@@ -19,6 +19,7 @@ import { Database } from '../types/supabase';
 import { Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { useLocation } from 'react-router-dom';
+import QuickPropertyForm from '../components/QuickPropertyForm';
 
 ChartJS.register(
   CategoryScale,
@@ -52,6 +53,7 @@ export default function Dashboard() {
     const savedOrder = localStorage.getItem('propertyOrder');
     return savedOrder ? JSON.parse(savedOrder) : [];
   });
+  const [showQuickForm, setShowQuickForm] = useState(false);
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const location = useLocation();
@@ -388,8 +390,46 @@ export default function Dashboard() {
     return indexA - indexB;
   });
 
+  const handleQuickPropertySave = async (investment: Investment) => {
+    try {
+      if (!user) return;
+      
+      // Créer un nouvel investissement dans la base de données
+      const { data, error } = await supabase
+        .from('properties')
+        .insert([
+          {
+            user_id: user.id,
+            name: `Bien ${properties.length + 1}`,
+            investment_data: investment
+          }
+        ])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Recharger les propriétés
+      await loadProperties();
+      
+      // Fermer le formulaire rapide
+      setShowQuickForm(false);
+      
+      // Rediriger vers la page de propriété avec la bonne route
+      navigate(`/property/${data.id}`);
+    } catch (error) {
+      console.error('Erreur lors de la création du bien:', error);
+      setError('Erreur lors de la création du bien. Veuillez réessayer.');
+    }
+  };
+
+  const handleDetailedForm = () => {
+    setShowQuickForm(false);
+    navigate('/acquisition/new');
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100">
       <div className="flex">
         {/* Sidebar avec la liste des biens */}
         <div className="w-80 min-h-screen bg-white border-r border-gray-200">
@@ -556,6 +596,25 @@ export default function Dashboard() {
           </main>
         </div>
       </div>
+
+      {/* Bouton d'ajout de bien */}
+      <div className="fixed bottom-6 right-6">
+        <button
+          onClick={() => setShowQuickForm(true)}
+          className="bg-blue-600 text-white rounded-full p-3 shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      </div>
+      
+      {/* Formulaire rapide */}
+      {showQuickForm && (
+        <QuickPropertyForm
+          onClose={() => setShowQuickForm(false)}
+          onSave={handleQuickPropertySave}
+          onDetailedForm={handleDetailedForm}
+        />
+      )}
     </div>
   );
 }
