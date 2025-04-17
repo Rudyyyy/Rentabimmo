@@ -388,8 +388,11 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
               Frais de notaire
               <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
             </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Montant moyen : environ 7 à 8 % du prix pour l'ancien et 2 à 3 % dans le neuf.
+            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-96">
+              Montant moyen : environ 7 à 8 % du prix pour l'ancien et 2 à 3 % dans le neuf.<br/>
+              Dans le formulaire simplifié, les valeurs utilisées sont :<br/>
+              • Bien ancien : 7,5% du prix d'achat<br/>
+              • Bien neuf : 2,5% du prix d'achat
             </div>
             <input
               type="number"

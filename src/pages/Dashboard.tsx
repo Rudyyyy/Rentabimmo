@@ -81,7 +81,7 @@ export default function Dashboard() {
     // This will run when the component mounts
     if (user) {
       console.log("Dashboard mounted - loading properties");
-      loadProperties();
+    loadProperties();
     }
     
     // This will run when the component unmounts
@@ -105,7 +105,7 @@ export default function Dashboard() {
       }
 
       console.log("🔍 Chargement des biens pour l'utilisateur:", user.id);
-      
+
       const { data, error: fetchError } = await supabase
         .from('properties')
         .select('*')
@@ -234,29 +234,29 @@ export default function Dashboard() {
       ...properties
         .filter(property => showInDashboard[property.id])
         .map((property, index) => ({
-          label: property.name,
-          data: years.map(year => 
-            cashFlowData
-              .filter(d => d.propertyName === property.name && d.year === year)
-              .reduce((sum, d) => sum + d.cashFlow, 0)
-          ),
-          borderColor: [
-            'rgb(59, 130, 246)', // blue
-            'rgb(16, 185, 129)', // green
-            'rgb(239, 68, 68)',  // red
-            'rgb(245, 158, 11)', // yellow
-            'rgb(168, 85, 247)'  // purple
-          ][index % 5],
-          backgroundColor: [
-            'rgba(59, 130, 246, 0.1)',
-            'rgba(16, 185, 129, 0.1)',
-            'rgba(239, 68, 68, 0.1)',
-            'rgba(245, 158, 11, 0.1)',
-            'rgba(168, 85, 247, 0.1)'
-          ][index % 5],
-          tension: 0.1,
-          fill: true
-        })),
+        label: property.name,
+        data: years.map(year => 
+          cashFlowData
+            .filter(d => d.propertyName === property.name && d.year === year)
+            .reduce((sum, d) => sum + d.cashFlow, 0)
+        ),
+        borderColor: [
+          'rgb(59, 130, 246)', // blue
+          'rgb(16, 185, 129)', // green
+          'rgb(239, 68, 68)',  // red
+          'rgb(245, 158, 11)', // yellow
+          'rgb(168, 85, 247)'  // purple
+        ][index % 5],
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.1)',
+          'rgba(16, 185, 129, 0.1)',
+          'rgba(239, 68, 68, 0.1)',
+          'rgba(245, 158, 11, 0.1)',
+          'rgba(168, 85, 247, 0.1)'
+        ][index % 5],
+        tension: 0.1,
+        fill: true
+      })),
       // Ligne de total
       {
         label: 'Total',
@@ -425,7 +425,7 @@ export default function Dashboard() {
 
   const handleDetailedForm = () => {
     setShowQuickForm(false);
-    navigate('/acquisition/new');
+    navigate('/property/new');
   };
 
   return (
@@ -433,15 +433,8 @@ export default function Dashboard() {
       <div className="flex">
         {/* Sidebar avec la liste des biens */}
         <div className="w-80 min-h-screen bg-white border-r border-gray-200">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <div className="p-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Mes biens immobiliers</h2>
-            <button
-              onClick={() => navigate('/property/new')}
-              className="p-1 rounded-full hover:bg-gray-100"
-              title="Ajouter un bien"
-            >
-              <Plus className="h-5 w-5 text-gray-600" />
-            </button>
           </div>
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="properties">

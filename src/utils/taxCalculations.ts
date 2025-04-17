@@ -271,26 +271,26 @@ export function calculateAllTaxRegimes(
   previousYearResults?: Record<TaxRegime, TaxResults>
 ): Record<TaxRegime, TaxResults> {
   const yearExpenses = investment.expenses.find(e => e.year === year);
-  const defaultExpenses: YearlyExpenses = {
-    year,
-    propertyTax: 0,
-    condoFees: 0,
-    propertyInsurance: 0,
-    managementFees: 0,
-    unpaidRentInsurance: 0,
-    repairs: 0,
-    otherDeductible: 0,
-    otherNonDeductible: 0,
-    rent: 0,
-    furnishedRent: 0,
-    tenantCharges: 0,
-    tax: 0,
-    deficit: 0,
-    loanPayment: 0,
-    loanInsurance: 0,
-    taxBenefit: 0,
-    interest: 0
-  };
+    const defaultExpenses: YearlyExpenses = {
+      year,
+      propertyTax: 0,
+      condoFees: 0,
+      propertyInsurance: 0,
+      managementFees: 0,
+      unpaidRentInsurance: 0,
+      repairs: 0,
+      otherDeductible: 0,
+      otherNonDeductible: 0,
+      rent: 0,
+      furnishedRent: 0,
+      tenantCharges: 0,
+      tax: 0,
+      deficit: 0,
+      loanPayment: 0,
+      loanInsurance: 0,
+      taxBenefit: 0,
+      interest: 0
+    };
 
   // Pour la première année, on utilise le déficit initial de l'investissement
   // Pour les années suivantes, on utilise le déficit reporté calculé l'année précédente

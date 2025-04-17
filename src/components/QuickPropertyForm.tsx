@@ -8,10 +8,14 @@ interface Props {
 }
 
 const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm }) => {
+  const defaultName = `Bien ${new Date().getFullYear()}`;
+  const defaultDescription = 'Description du bien';
+
   const [projectStartDate, setProjectStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [purchasePrice, setPurchasePrice] = useState<string>('');
-  const [rentalStartDate, setRentalStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isNewProperty, setIsNewProperty] = useState<boolean>(true);
+  const [name, setName] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validateForm = (): boolean => {
@@ -23,10 +27,6 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
     
     if (!purchasePrice || isNaN(Number(purchasePrice)) || Number(purchasePrice) <= 0) {
       newErrors.purchasePrice = 'Le prix d\'achat doit être un nombre positif';
-    }
-    
-    if (!rentalStartDate) {
-      newErrors.rentalStartDate = 'La date de démarrage est requise';
     }
     
     setErrors(newErrors);
@@ -60,6 +60,8 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
     const investment: Investment = {
       id: '',
       userId: '',
+      name: name || defaultName,
+      description: description || defaultDescription,
       projectStartDate,
       projectEndDate: endDate.toISOString().split('T')[0],
       purchasePrice: price,
@@ -77,7 +79,7 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
       deferralType: 'none',
       deferredPeriod: 0,
       startDate: projectStartDate,
-      rentalStartDate,
+      rentalStartDate: projectStartDate,
       saleDate: '',
       expenses: [],
       taxParameters: {
@@ -107,6 +109,44 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nom du bien
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onFocus={(e) => {
+                if (!name) e.target.placeholder = '';
+              }}
+              onBlur={(e) => {
+                if (!name) e.target.placeholder = defaultName;
+              }}
+              placeholder={defaultName}
+              className="w-full px-3 py-2 border rounded-md border-gray-300 placeholder-gray-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onFocus={(e) => {
+                if (!description) e.target.placeholder = '';
+              }}
+              onBlur={(e) => {
+                if (!description) e.target.placeholder = defaultDescription;
+              }}
+              placeholder={defaultDescription}
+              rows={3}
+              className="w-full px-3 py-2 border rounded-md border-gray-300 placeholder-gray-400 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Date de début du projet
             </label>
             <input
@@ -134,21 +174,6 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
             />
             {errors.purchasePrice && (
               <p className="text-red-500 text-xs mt-1">{errors.purchasePrice}</p>
-            )}
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date de démarrage
-            </label>
-            <input
-              type="date"
-              value={rentalStartDate}
-              onChange={(e) => setRentalStartDate(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md ${errors.rentalStartDate ? 'border-red-500' : 'border-gray-300'}`}
-            />
-            {errors.rentalStartDate && (
-              <p className="text-red-500 text-xs mt-1">{errors.rentalStartDate}</p>
             )}
           </div>
           
