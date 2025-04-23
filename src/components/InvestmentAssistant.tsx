@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Minimize2, Maximize2 } from 'lucide-react';
 import { Investment } from '../types/investment';
 import { processUserMessage } from '../services/openai';
+import { processUserMessageWithMistral } from '../services/mistral';
 
 interface Message {
   id: string;
@@ -26,6 +27,9 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Détermine si nous sommes en environnement de développement
+  const isDevelopment = import.meta.env.DEV;
+
   // Scroll to bottom when new messages arrive
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,9 +46,9 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
         id: Date.now().toString(),
         type: 'assistant',
         content: "Bonjour ! Je suis votre assistant d'investissement immobilier. Je peux vous aider à :\n\n" +
-                "• Créer une nouvelle simulation d'investissement\n" +
-                "• Analyser vos résultats\n" +
-                "• Optimiser votre stratégie\n\n" +
+                "  • Créer une nouvelle simulation d'investissement\n" +
+                "  • Analyser vos résultats\n" +
+                "  • Optimiser votre stratégie\n\n" +
                 "Comment puis-je vous aider aujourd'hui ?",
         timestamp: new Date()
       };
@@ -74,14 +78,22 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
         .map(m => m.investment)
         .pop();
 
-      // Process message with AI
-      const aiResponse = await processUserMessage(inputValue.trim(), {
-        previousMessages: messages.map(m => ({
-          role: m.type,
-          content: m.content
-        })),
-        currentInvestment: lastInvestment
-      });
+      // Process message with AI (Mistral in development, OpenAI in production)
+      const aiResponse = isDevelopment
+        ? await processUserMessageWithMistral(inputValue.trim(), {
+            previousMessages: messages.map(m => ({
+              role: m.type,
+              content: m.content
+            })),
+            currentInvestment: lastInvestment
+          })
+        : await processUserMessage(inputValue.trim(), {
+            previousMessages: messages.map(m => ({
+              role: m.type,
+              content: m.content
+            })),
+            currentInvestment: lastInvestment
+          });
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -102,7 +114,7 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: "Désolé, je rencontre des difficultés techniques. Veuillez réessayer.",
+        content: "Désolé, une erreur s'est produite. Veuillez réessayer.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -111,128 +123,92 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
   return (
-    <>
-      {/* Bouton flottant */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-40 p-3 rounded-full shadow-lg transition-all duration-200 ${
-          isOpen ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-        }`}
-      >
-        {isOpen ? (
-          <X className="h-6 w-6 text-white" />
-        ) : (
-          <MessageSquare className="h-6 w-6 text-white" />
-        )}
-      </button>
-
-      {/* Fenêtre de chat */}
-      {isOpen && (
-        <div className={`fixed right-6 bottom-24 z-30 w-96 rounded-lg shadow-xl transition-all duration-200 ${
-          isMinimized ? 'h-14' : 'h-[600px]'
-        }`}>
-          {/* En-tête */}
-          <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
-            <h3 className="font-semibold">Assistant Investissement</h3>
-            <div className="flex space-x-2">
+    <div className="fixed bottom-6 right-4 z-50">
+      {!isOpen ? (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-blue-600 text-white rounded-full p-3 shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+        >
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      ) : (
+        <div className={`bg-white rounded-lg shadow-xl ${isMinimized ? 'w-64' : 'w-96'} h-[600px] flex flex-col`}>
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="font-semibold">Assistant d'investissement</h3>
+            <div className="flex items-center">
               <button
                 onClick={() => setIsMinimized(!isMinimized)}
-                className="p-1 hover:bg-blue-500 rounded"
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
               >
-                {isMinimized ? (
-                  <Maximize2 className="h-4 w-4" />
-                ) : (
-                  <Minimize2 className="h-4 w-4" />
-                )}
+                {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 hover:bg-blue-500 rounded"
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg ml-1"
               >
-                <X className="h-4 w-4" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
-
-          {!isMinimized && (
-            <>
-              {/* Zone des messages */}
-              <div className="bg-white h-[calc(100%-8rem)] overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.type === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.type === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap">{message.content}</div>
-                      <div
-                        className={`text-xs mt-1 ${
-                          message.type === 'user'
-                            ? 'text-blue-100'
-                            : 'text-gray-500'
-                        }`}
-                      >
-                        {message.timestamp.toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <div className="flex space-x-2">
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200"></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
+          
+          <div className="flex-1 overflow-y-auto p-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`mb-4 ${
+                  message.type === 'user' ? 'text-right' : 'text-left'
+                }`}
+              >
+                <div
+                  className={`inline-block p-3 rounded-lg whitespace-pre-wrap ${
+                    message.type === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {message.content}
+                </div>
               </div>
-
-              {/* Zone de saisie */}
-              <div className="bg-white border-t p-4 rounded-b-lg">
-                <form onSubmit={handleSubmit} className="flex space-x-2">
-                  <textarea
-                    ref={inputRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Posez votre question..."
-                    className="flex-1 resize-none border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={1}
-                  />
-                  <button
-                    type="submit"
-                    className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    disabled={!inputValue.trim()}
-                  >
-                    <Send className="h-5 w-5" />
-                  </button>
-                </form>
+            ))}
+            {isTyping && (
+              <div className="text-left">
+                <div className="inline-block p-3 rounded-lg bg-gray-100 text-gray-800">
+                  En train d'écrire...
+                </div>
               </div>
-            </>
-          )}
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-4 border-t">
+            <div className="flex gap-2 items-center">
+              <textarea
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+                placeholder="Tapez votre message..."
+                className="flex-1 p-2 border rounded-lg resize-none"
+                rows={1}
+              />
+              <button
+                type="submit"
+                disabled={!inputValue.trim() || isTyping}
+                className="w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
