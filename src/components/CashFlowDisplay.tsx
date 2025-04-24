@@ -424,8 +424,6 @@ export default function CashFlowDisplay({ investment }: Props) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Cash Flow</h1>
-      
       {/* Graphique d'évolution du cash flow net */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h3 className="text-lg font-semibold mb-4">Évolution du cash flow net par régime fiscal</h3>

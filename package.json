@@ -10,17 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@headlessui/react": "^1.7.18",
+    "@headlessui/react": "^1.7.19",
     "@supabase/supabase-js": "^2.39.7",
     "@types/react-beautiful-dnd": "^13.1.8",
-    "chart.js": "^4.4.1",
+    "chart.js": "^4.4.9",
     "lucide-react": "^0.344.0",
     "openai": "^4.95.0",
     "pdf.js-extract": "^0.2.1",
     "pdfjs-dist": "^5.1.91",
     "react": "^18.3.1",
     "react-beautiful-dnd": "^13.1.1",
-    "react-chartjs-2": "^5.2.0",
+    "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.51.0",
     "react-router-dom": "^6.22.2"

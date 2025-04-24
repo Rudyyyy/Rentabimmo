@@ -617,8 +617,6 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Revente</h1>
-
       {/* Formulaire des paramètres */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h3 className="text-lg font-semibold mb-4">Paramètres de revente</h3>

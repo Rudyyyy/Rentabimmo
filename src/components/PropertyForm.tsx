@@ -21,7 +21,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Brain } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { Investment, defaultInvestment } from '../types/investment';
@@ -35,9 +35,18 @@ import TaxForm from './TaxForm';
 import { calculateFinancialMetrics } from '../utils/calculations';
 import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
-import IRRDisplay from './IRRDisplay';
+import Analysis from '../pages/Analysis';
+import PropertyNavigation from './PropertyNavigation';
 
-type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr';
+type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr' | 'analysis';
+
+type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
+type SubTab = {
+  location: 'frais' | 'revenus';
+  imposition: 'annee-courante' | 'historique-projection';
+  rentabilite: 'rentabilite-brute-nette' | 'cashflow' | 'revente';
+  bilan: 'statistiques' | 'analyse-ia';
+};
 
 export default function PropertyForm() {
   // États pour gérer le chargement, les métriques et les données d'investissement
@@ -47,7 +56,8 @@ export default function PropertyForm() {
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<any>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
-  const [currentView, setCurrentView] = useState<View>('acquisition');
+  const [currentMainTab, setCurrentMainTab] = useState<MainTab>('acquisition');
+  const [currentSubTab, setCurrentSubTab] = useState<string | undefined>(undefined);
   const [nameError, setNameError] = useState<string | null>(null);
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string, description?: string }>();
   
@@ -343,76 +353,91 @@ export default function PropertyForm() {
     }
   }
 
-  // Fonction pour rendre le contenu approprié selon la vue courante
+  const handleTabChange = (mainTab: MainTab, subTab?: string) => {
+    setCurrentMainTab(mainTab);
+    setCurrentSubTab(subTab);
+  };
+
   const renderContent = () => {
     if (!metrics) return null;
 
-    switch (currentView) {
+    switch (currentMainTab) {
       case 'acquisition':
         return (
-          <AcquisitionForm 
+          <AcquisitionForm
             onSubmit={handleCalculate}
             initialValues={investmentData}
           />
         );
+      
+      case 'location':
+        if (currentSubTab === 'frais') {
+          return (
+            <ExpensesForm
+              investment={investmentData}
+              onUpdate={handleInvestmentUpdate}
+            />
+          );
+        } else if (currentSubTab === 'revenus') {
+          return (
+            <RevenuesForm
+              investment={investmentData}
+              onUpdate={handleInvestmentUpdate}
+            />
+          );
+        }
+        break;
+
       case 'imposition':
         return (
           <TaxForm
             investment={investmentData}
             onUpdate={handleInvestmentUpdate}
+            currentSubTab={currentSubTab as 'annee-courante' | 'historique-projection'}
           />
         );
-      case 'frais':
-        return (
-          <ExpensesForm
-            investment={investmentData}
-            onUpdate={handleInvestmentUpdate}
-          />
-        );
-      case 'revenus':
-        return (
-          <RevenuesForm
-            investment={investmentData}
-            onUpdate={handleInvestmentUpdate}
-          />
-        );
-      case 'profitability':
-        return (
-          <ResultsDisplay 
-            metrics={metrics}
-            investment={investmentData}
-            currentYearData={getCurrentYearData()}
-            historicalData={getHistoricalAndProjectionData().historicalData}
-            projectionData={getHistoricalAndProjectionData().projectionData}
-            onUpdate={handleInvestmentUpdate}
-          />
-        );
-      case 'cashflow':
-        return (
-          <CashFlowDisplay
-            investment={investmentData}
-          />
-        );
+
+      case 'rentabilite':
+        if (currentSubTab === 'rentabilite-brute-nette') {
+          return (
+            <ResultsDisplay 
+              metrics={metrics}
+              investment={investmentData}
+              currentYearData={getCurrentYearData()}
+              historicalData={getHistoricalAndProjectionData().historicalData}
+              projectionData={getHistoricalAndProjectionData().projectionData}
+              onUpdate={handleInvestmentUpdate}
+            />
+          );
+        } else if (currentSubTab === 'cashflow') {
+          return (
+            <CashFlowDisplay
+              investment={investmentData}
+            />
+          );
+        } else if (currentSubTab === 'revente') {
+          return (
+            <SaleDisplay 
+              investment={investmentData} 
+              onUpdate={handleInvestmentUpdate}
+            />
+          );
+        }
+        break;
+
       case 'bilan':
-        return (
-          <BalanceDisplay
-            investment={investmentData}
-          />
-        );
-      case 'sale':
-        return (
-          <SaleDisplay 
-            investment={investmentData} 
-            onUpdate={handleInvestmentUpdate}
-          />
-        );
-      case 'irr':
-        return (
-          <IRRDisplay investment={investmentData} />
-        );
-      default:
-        return null;
+        if (currentSubTab === 'statistiques') {
+          return (
+            <BalanceDisplay
+              investment={investmentData}
+            />
+          );
+        } else if (currentSubTab === 'analyse-ia') {
+          return <Analysis />;
+        }
+        break;
     }
+    return null;
   };
 
   // Fonction pour obtenir les données de l'année courante
@@ -562,212 +587,109 @@ export default function PropertyForm() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Nom du bien <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  {...nameRef}
+                  value={investmentData.name || ''}
+                  onChange={(e) => {
+                    // Mettre à jour à la fois le formulaire et l'état local
+                    nameRef.onChange(e); // Pour React Hook Form
+                    handleNameChange(e); // Pour l'état local et la validation
+                  }}
+                  className={`mt-1 block w-full rounded-md ${
+                    nameError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  } shadow-sm`}
+                  placeholder="Ex: Appartement Centre-ville"
+                />
+                {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Date de début
+                </label>
+                <input
+                  type="date"
+                  value={investmentData.projectStartDate}
+                  onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectStartDate: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Date de fin
+                </label>
+                <input
+                  type="date"
+                  value={investmentData.projectEndDate}
+                  onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectEndDate: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Description
+              </label>
+              <textarea
+                value={investmentData.description || ''}
+                onChange={(e) => handleInvestmentUpdate({ ...investmentData, description: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="Description du projet d'investissement..."
+                rows={3}
+              />
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="text-lg font-semibold mb-4">Informations générales</h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Nom du bien <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      {...nameRef}
-                      value={investmentData.name || ''}
-                      onChange={(e) => {
-                        // Mettre à jour à la fois le formulaire et l'état local
-                        nameRef.onChange(e); // Pour React Hook Form
-                        handleNameChange(e); // Pour l'état local et la validation
-                      }}
-                      className={`mt-1 block w-full rounded-md ${
-                        nameError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                      } shadow-sm`}
-                      placeholder="Ex: Appartement Centre-ville"
-                    />
-                    {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Date de début
-                    </label>
-                    <input
-                      type="date"
-                      value={investmentData.projectStartDate}
-                      onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectStartDate: e.target.value })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Date de fin
-                    </label>
-                    <input
-                      type="date"
-                      value={investmentData.projectEndDate}
-                      onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectEndDate: e.target.value })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={investmentData.description || ''}
-                    onChange={(e) => handleInvestmentUpdate({ ...investmentData, description: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    placeholder="Description du projet d'investissement..."
-                  />
-                </div>
-              </div>
-            </div>
+        </div>
 
-            <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('acquisition')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'acquisition'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Acquisition
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('frais')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'frais'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Frais
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('revenus')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'revenus'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Revenus
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('imposition')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'imposition'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Imposition
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('profitability')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'profitability'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Rentabilité globale
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('cashflow')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'cashflow'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Cash Flow
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('sale')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'sale'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Revente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('irr')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'irr'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  TRI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('bilan')}
-                  className={`px-4 py-2 rounded-md ${
-                    currentView === 'bilan'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Bilan
-                </button>
-              </div>
-            </div>
-
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <PropertyNavigation 
+            onTabChange={handleTabChange} 
+            initialMainTab={currentMainTab}
+            initialSubTab={currentSubTab}
+          />
+          <div className="mt-6">
             {renderContent()}
+          </div>
+        </div>
 
-            <div className="flex justify-between pt-6">
+        <div className="flex justify-between pt-6">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Annuler
+          </button>
+          
+          <div className="flex space-x-4">
+            {id && (
               <button
                 type="button"
-                onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                onClick={handleDelete}
+                className="flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
-                Annuler
+                <Trash2 className="h-5 w-5 mr-2" />
+                Supprimer
               </button>
-              
-              <div className="flex space-x-4">
-                {id && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                  >
-                    <Trash2 className="h-5 w-5 mr-2" />
-                    Supprimer
-                  </button>
-                )}
-                
-                <button
-                  type="submit"
-                  disabled={loading || !investmentData.name?.trim()}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {id ? 'Enregistrer les modifications' : 'Créer le bien'}
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
+            )}
+            
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={loading || !investmentData.name?.trim()}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {id ? 'Enregistrer les modifications' : 'Créer le bien'}
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   );

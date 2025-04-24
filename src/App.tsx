@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PropertyForm from './components/PropertyForm';
 import { GlobalProfitability } from './pages/GlobalProfitability';
+import Analysis from './pages/Analysis';
 import InvestmentAssistant from './components/InvestmentAssistant';
 
 function App() {
@@ -44,6 +45,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <GlobalProfitability />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analysis"
+              element={
+                <ProtectedRoute>
+                  <Analysis />
                 </ProtectedRoute>
               }
             />

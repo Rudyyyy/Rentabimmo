@@ -213,6 +213,15 @@ export interface Investment {
   taxResults: Record<TaxRegime, TaxResults>;
   capitalGainResults?: Record<TaxRegime, CapitalGainResults>;
   taxRegime: TaxRegime;
+
+  // Propriétés pour l'analyse
+  propertyType: 'new' | 'old';
+  monthlyPayment: number;
+  monthlyCashFlow: number;
+  cashFlowYears: number[];
+  maintenanceProvision: number;
+  grossYield: number;
+  netYield: number;
 }
 
 export const defaultTaxParameters: TaxParameters = {
@@ -346,7 +355,14 @@ export const defaultInvestment: Investment = {
       netIncome: 0
     }
   },
-  taxRegime: 'micro-foncier'
+  taxRegime: 'micro-foncier',
+  propertyType: 'new',
+  monthlyPayment: 0,
+  monthlyCashFlow: 0,
+  cashFlowYears: [],
+  maintenanceProvision: 0,
+  grossYield: 0,
+  netYield: 0
 };
 
 const handleResetAmortization = () => {

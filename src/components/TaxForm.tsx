@@ -28,21 +28,20 @@ import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 interface Props {
   investment: Investment;
   onUpdate: (updatedInvestment: Investment) => void;
+  currentSubTab: 'annee-courante' | 'historique-projection';
 }
 
-const REGIME_LABELS = {
+const REGIME_LABELS: { [key in TaxRegime]: string } = {
   'micro-foncier': 'Location nue - Micro-foncier',
   'reel-foncier': 'Location nue - Frais réels',
   'micro-bic': 'LMNP - Micro-BIC',
   'reel-bic': 'LMNP - Frais réels'
 };
 
-export default function TaxForm({ investment, onUpdate }: Props) {
-  // État local pour gérer l'année courante et le régime sélectionné
-  const [currentYear] = useState(new Date().getFullYear());
-  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime);
-  const [currentView, setCurrentView] = useState<'parameters' | 'projection'>('parameters');
-  const [projectionRegime, setProjectionRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
+export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) {
+  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>('micro-foncier');
+  const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
+  const currentYear = new Date().getFullYear();
 
   // Mise à jour des résultats fiscaux à chaque changement de paramètres
   useEffect(() => {
@@ -489,40 +488,10 @@ export default function TaxForm({ investment, onUpdate }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Navigation */}
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex space-x-4">
-          <button
-            type="button"
-            onClick={() => setCurrentView('parameters')}
-            className={`px-4 py-2 rounded-md ${
-              currentView === 'parameters'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Année courante
-          </button>
-          <button
-            type="button"
-            onClick={() => setCurrentView('projection')}
-            className={`px-4 py-2 rounded-md ${
-              currentView === 'projection'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Historique et projection
-          </button>
-        </div>
-      </div>
-
-      {/* Sélection du régime fiscal */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Régime fiscal
-        </label>
-        <div className="space-y-2">
+      {/* Régime fiscal */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-semibold mb-4">Régime fiscal</h3>
+        <div className="flex space-x-6">
           <div className="flex items-center">
             <input
               type="radio"
@@ -582,7 +551,7 @@ export default function TaxForm({ investment, onUpdate }: Props) {
         </div>
       </div>
 
-      {currentView === 'parameters' ? (
+      {currentSubTab === 'annee-courante' ? (
         <>
           {/* Paramètres fiscaux communs */}
           <div className="bg-white p-6 rounded-lg shadow-md">
@@ -660,30 +629,6 @@ export default function TaxForm({ investment, onUpdate }: Props) {
                   type="number"
                   value={investment.taxParameters.furnitureAmortizationYears}
                   onChange={(e) => handleTaxParameterChange('furnitureAmortizationYears', Number(e.target.value))}
-                  placeholder="5 ans par défaut"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Valeur des travaux
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.worksValue}
-                  onChange={(e) => handleTaxParameterChange('worksValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement des travaux (années)
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.worksAmortizationYears}
-                  onChange={(e) => handleTaxParameterChange('worksAmortizationYears', Number(e.target.value))}
-                  placeholder="10 ans par défaut"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
@@ -748,294 +693,9 @@ export default function TaxForm({ investment, onUpdate }: Props) {
               <Bar data={chartData} options={chartOptions} />
             </div>
           </div>
-
-          {/* Nouvelle section d'explications avec onglets */}
-          <div className="bg-white p-6 rounded-lg shadow-md mt-6">
-            <h3 className="text-lg font-semibold mb-4">Explications et calculs</h3>
-            
-            {/* Navigation des onglets */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="-mb-px flex space-x-8">
-                {Object.entries(REGIME_LABELS).map(([regime, label]) => (
-                  <button
-                    key={regime}
-                    type="button"
-                    onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
-                    className={`
-                      whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                      ${projectionRegime === regime
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                    `}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="space-y-6">
-              {/* Contenu de l'onglet Micro-foncier */}
-              {projectionRegime === 'micro-foncier' && (
-                <div>
-                  <div className="pl-4 border-l-2 border-blue-200 space-y-2">
-                    <p>Le régime micro-foncier est le plus simple. Il s'applique automatiquement si vos revenus fonciers sont inférieurs à 15 000 € par an.</p>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <h5 className="font-medium mb-2">Algorithme de calcul :</h5>
-                      <ol className="list-decimal pl-5 space-y-1 text-sm">
-                        <li>Revenu brut = Loyer nu uniquement : {formatCurrency(investment.expenses.find(e => e.year === currentYear)?.rent || 0)}</li>
-                        <li>Abattement forfaitaire de 30% : {formatCurrency((investment.expenses.find(e => e.year === currentYear)?.rent || 0) * 0.3)}</li>
-                        <li>Revenu imposable = 70% du revenu brut : {formatCurrency((investment.expenses.find(e => e.year === currentYear)?.rent || 0) * 0.7)}</li>
-                        <li>Impôt = Revenu imposable × Taux d'imposition ({investment.taxParameters.taxRate}%)</li>
-                        <li>Prélèvements sociaux = Revenu imposable × 17.2%</li>
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Contenu de l'onglet Réel Foncier */}
-              {projectionRegime === 'reel-foncier' && (
-                <div>
-                  <div className="pl-4 border-l-2 border-green-200 space-y-2">
-                    <p>Le régime réel permet de déduire les charges réelles et de créer un déficit foncier imputable sur vos revenus.</p>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <h5 className="font-medium mb-2">Algorithme de calcul :</h5>
-                      <ol className="list-decimal pl-5 space-y-1 text-sm">
-                        <li>Revenu brut = Loyer nu uniquement : {formatCurrency(investment.expenses.find(e => e.year === currentYear)?.rent || 0)}</li>
-                        <li>Charges déductibles :</li>
-                        <ul className="list-disc pl-5 space-y-1 text-sm ml-4">
-                          {(() => {
-                            const yearExpenses: YearlyExpenses = investment.expenses.find(e => e.year === currentYear) || {
-                              year: currentYear,
-                              propertyTax: 0,
-                              condoFees: 0,
-                              propertyInsurance: 0,
-                              managementFees: 0,
-                              unpaidRentInsurance: 0,
-                              repairs: 0,
-                              otherDeductible: 0,
-                              otherNonDeductible: 0,
-                              rent: 0,
-                              furnishedRent: 0,
-                              tenantCharges: 0,
-                              tax: 0,
-                              deficit: 0,
-                              loanPayment: 0,
-                              loanInsurance: 0,
-                              taxBenefit: 0,
-                              interest: 0
-                            };
-                            return (
-                              <>
-                                <li>Taxe foncière : {formatCurrency(yearExpenses.propertyTax || 0)}</li>
-                                <li>Charges de copropriété : {formatCurrency(yearExpenses.condoFees || 0)}</li>
-                                <li>Assurance PNO : {formatCurrency(yearExpenses.propertyInsurance || 0)}</li>
-                                <li>Frais de gestion : {formatCurrency(yearExpenses.managementFees || 0)}</li>
-                                <li>Assurance loyers impayés : {formatCurrency(yearExpenses.unpaidRentInsurance || 0)}</li>
-                                <li>Réparations : {formatCurrency(yearExpenses.repairs || 0)}</li>
-                                <li>Autres charges déductibles : {formatCurrency(yearExpenses.otherDeductible || 0)}</li>
-                                <li>Assurance emprunt : {formatCurrency(yearExpenses.loanInsurance || 0)}</li>
-                                <li>Intérêts d'emprunt : {formatCurrency(yearExpenses.interest || 0)}</li>
-                                <li className="text-red-600">Moins charges locataires : -{formatCurrency(yearExpenses.tenantCharges || 0)}</li>
-                              </>
-                            );
-                          })()}
-                        </ul>
-                        <li>Déficit antérieur reporté : {formatCurrency(investment.taxParameters.previousDeficit || 0)}</li>
-                        <li>Revenu imposable = Revenu brut - Charges déductibles - Déficit reporté</li>
-                        <li>Si résultat négatif : création d'un déficit (plafonné à {formatCurrency(investment.taxParameters.deficitLimit)})</li>
-                        <li>Impôt = Revenu imposable × Taux d'imposition ({investment.taxParameters.taxRate}%)</li>
-                        <li>Prélèvements sociaux = Revenu imposable × 17.2%</li>
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Contenu de l'onglet Micro-BIC */}
-              {projectionRegime === 'micro-bic' && (
-                <div>
-                  <div className="pl-4 border-l-2 border-purple-200 space-y-2">
-                    <p>Le régime micro-BIC s'applique aux locations meublées avec des recettes annuelles inférieures à 72 600 €.</p>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <h5 className="font-medium mb-2">Algorithme de calcul :</h5>
-                      <ol className="list-decimal pl-5 space-y-1 text-sm">
-                        <li>Revenu brut = Loyer meublé uniquement : {formatCurrency(investment.expenses.find(e => e.year === currentYear)?.furnishedRent || 0)}</li>
-                        <li>Abattement forfaitaire de 50% : {formatCurrency((investment.expenses.find(e => e.year === currentYear)?.furnishedRent || 0) * 0.5)}</li>
-                        <li>Revenu imposable = 50% du revenu brut : {formatCurrency((investment.expenses.find(e => e.year === currentYear)?.furnishedRent || 0) * 0.5)}</li>
-                        <li>Impôt = Revenu imposable × Taux d'imposition ({investment.taxParameters.taxRate}%)</li>
-                        <li>Prélèvements sociaux = Revenu imposable × 17.2%</li>
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Contenu de l'onglet Réel BIC */}
-              {projectionRegime === 'reel-bic' && (
-                <div>
-                  <div className="pl-4 border-l-2 border-orange-200 space-y-2">
-                    <p>Le régime réel BIC permet de déduire toutes les charges et d'amortir les biens.</p>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <h5 className="font-medium mb-2">Algorithme de calcul :</h5>
-                      <ol className="list-decimal pl-5 space-y-1 text-sm">
-                        <li>Revenu brut = Loyer meublé uniquement : {formatCurrency(investment.expenses.find(e => e.year === currentYear)?.furnishedRent || 0)}</li>
-                        <li>Charges déductibles :</li>
-                        <ul className="list-disc pl-5 space-y-1 text-sm ml-4">
-                          {(() => {
-                            const yearExpenses: YearlyExpenses = investment.expenses.find(e => e.year === currentYear) || {
-                              year: currentYear,
-                              propertyTax: 0,
-                              condoFees: 0,
-                              propertyInsurance: 0,
-                              managementFees: 0,
-                              unpaidRentInsurance: 0,
-                              repairs: 0,
-                              otherDeductible: 0,
-                              otherNonDeductible: 0,
-                              rent: 0,
-                              furnishedRent: 0,
-                              tenantCharges: 0,
-                              tax: 0,
-                              deficit: 0,
-                              loanPayment: 0,
-                              loanInsurance: 0,
-                              taxBenefit: 0,
-                              interest: 0
-                            };
-                            return (
-                              <>
-                                <li>Taxe foncière : {formatCurrency(yearExpenses.propertyTax || 0)}</li>
-                                <li>Charges de copropriété : {formatCurrency(yearExpenses.condoFees || 0)}</li>
-                                <li>Assurance PNO : {formatCurrency(yearExpenses.propertyInsurance || 0)}</li>
-                                <li>Frais de gestion : {formatCurrency(yearExpenses.managementFees || 0)}</li>
-                                <li>Assurance loyers impayés : {formatCurrency(yearExpenses.unpaidRentInsurance || 0)}</li>
-                                <li>Réparations : {formatCurrency(yearExpenses.repairs || 0)}</li>
-                                <li>Autres charges déductibles : {formatCurrency(yearExpenses.otherDeductible || 0)}</li>
-                                <li>Assurance emprunt : {formatCurrency(yearExpenses.loanInsurance || 0)}</li>
-                                <li>Intérêts d'emprunt : {formatCurrency(yearExpenses.interest || 0)}</li>
-                                <li className="text-red-600">Moins charges locataires : -{formatCurrency(yearExpenses.tenantCharges || 0)}</li>
-                              </>
-                            );
-                          })()}
-                        </ul>
-                        <li>Amortissements :</li>
-                        <ul className="list-disc pl-5 space-y-1 text-sm ml-4">
-                          <li>Immeuble ({investment.taxParameters.buildingAmortizationYears} ans) : {formatCurrency(investment.taxParameters.buildingValue / investment.taxParameters.buildingAmortizationYears)}</li>
-                          <li>Meubles ({investment.taxParameters.furnitureAmortizationYears} ans) : {formatCurrency(investment.taxParameters.furnitureValue / investment.taxParameters.furnitureAmortizationYears)}</li>
-                          <li>Travaux ({investment.taxParameters.worksAmortizationYears} ans) : {formatCurrency(investment.taxParameters.worksValue / investment.taxParameters.worksAmortizationYears)}</li>
-                          <li>Autres ({investment.taxParameters.otherAmortizationYears} ans) : {formatCurrency(investment.taxParameters.otherValue / investment.taxParameters.otherAmortizationYears)}</li>
-                          <li className="font-bold text-blue-700">Amortissement total disponible : {formatCurrency(
-                            (investment.taxParameters.buildingValue / investment.taxParameters.buildingAmortizationYears) +
-                            (investment.taxParameters.furnitureValue / investment.taxParameters.furnitureAmortizationYears) +
-                            (investment.taxParameters.worksValue / investment.taxParameters.worksAmortizationYears) +
-                            (investment.taxParameters.otherValue / investment.taxParameters.otherAmortizationYears)
-                          )}</li>
-                        </ul>
-                        <li>Résultat avant amortissement = Revenu brut - Charges déductibles</li>
-                        <li className="font-bold text-blue-700">Amortissement utilisé = Min(Amortissement total, Résultat avant amortissement)</li>
-                        <li className="italic text-gray-500">Note : Les amortissements ne peuvent pas créer de déficit fiscal, ils sont limités au montant du résultat avant amortissement.</li>
-                        <li>Revenu imposable = Revenu brut - Charges déductibles - Amortissements utilisés</li>
-                        <li>Impôt = Revenu imposable × Taux d'imposition ({investment.taxParameters.taxRate}%)</li>
-                        <li>Prélèvements sociaux = Revenu imposable × 17.2%</li>
-                      </ol>
-                    </div>
-                    
-                    <div className="bg-yellow-50 p-4 rounded-md border-l-4 border-yellow-500 mt-2">
-                      <p className="font-semibold">Important :</p>
-                      <p>Les amortissements qui n'ont pas pu être utilisés une année ne sont pas perdus. Par contre, ils seront réintégrés et imposés lors de la revente du bien.</p>
-                      <p>Cette colonne "Amortissement utilisé" vous permet donc de suivre le montant d'amortissement effectivement déduit chaque année, et de calculer le montant qui devra être réintégré à la revente.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Note sur les prélèvements sociaux (toujours visible) */}
-              <div className="mt-4 bg-gray-50 p-4 rounded-md">
-                <h4 className="text-md font-semibold text-gray-700 mb-2">Note sur les prélèvements sociaux</h4>
-                <p className="text-sm text-gray-600">Les prélèvements sociaux (17.2%) s'appliquent sur le revenu imposable, quel que soit le régime choisi. Ils se décomposent en :</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600 mt-2">
-                  <li>CSG (Contribution Sociale Généralisée) : 9.2%</li>
-                  <li>CRDS (Contribution au Remboursement de la Dette Sociale) : 0.5%</li>
-                  <li>Prélèvement de solidarité : 7.5%</li>
-                </ul>
-              </div>
-            </div>
-          </div>
         </>
       ) : (
         <>
-          {/* Paramètres de projection */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Paramètres de projection</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Augmentation annuelle du loyer nu (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.expenseProjection.rentIncrease}
-                  onChange={(e) => handleExpenseProjectionChange('rentIncrease', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Augmentation annuelle du loyer meublé (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.expenseProjection.furnishedRentIncrease}
-                  onChange={(e) => handleExpenseProjectionChange('furnishedRentIncrease', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Augmentation annuelle des charges locataire (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.expenseProjection.tenantChargesIncrease}
-                  onChange={(e) => handleExpenseProjectionChange('tenantChargesIncrease', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Augmentation annuelle de l'aide fiscale (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.expenseProjection.taxBenefitIncrease}
-                  onChange={(e) => handleExpenseProjectionChange('taxBenefitIncrease', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Graphique d'évolution des revenus nets */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="h-96">
-              <Line data={netIncomeEvolutionData} options={netIncomeEvolutionOptions} />
-            </div>
-          </div>
-
-          {/* Graphique de comparaison des totaux cumulés */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="h-96">
-              <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
-            </div>
-          </div>
-
-          {/* Onglets de régime */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-8">
