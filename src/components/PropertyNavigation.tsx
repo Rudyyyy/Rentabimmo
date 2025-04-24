@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
+import { FaHome, FaKey, FaCalculator, FaChartLine, FaChartBar } from 'react-icons/fa';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 type SubTab = {
@@ -73,35 +74,40 @@ export default function PropertyNavigation({ onTabChange, initialMainTab = 'acqu
     <div className="w-full">
       {/* Navigation principale */}
       <Tab.Group selectedIndex={getSelectedMainTabIndex()} onChange={(index) => handleMainTabChange(['acquisition', 'location', 'imposition', 'rentabilite', 'bilan'][index] as MainTab)}>
-        <Tab.List className="flex space-x-2 mb-6">
+        <Tab.List className="flex space-x-4 mb-6">
           <Tab className={({ selected }) =>
-            `px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
+            `flex items-center px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
              ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
           }>
+            <FaHome className="mr-2 h-5 w-5" />
             Acquisition
           </Tab>
           <Tab className={({ selected }) =>
-            `px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
+            `flex items-center px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
              ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
           }>
+            <FaKey className="mr-2 h-5 w-5" />
             Location
           </Tab>
           <Tab className={({ selected }) =>
-            `px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
+            `flex items-center px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
              ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
           }>
+            <FaCalculator className="mr-2 h-5 w-5" />
             Imposition
           </Tab>
           <Tab className={({ selected }) =>
-            `px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
+            `flex items-center px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
              ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
           }>
+            <FaChartLine className="mr-2 h-5 w-5" />
             Rentabilité
           </Tab>
           <Tab className={({ selected }) =>
-            `px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
+            `flex items-center px-6 py-3 text-base font-medium rounded-md focus:outline-none transition-colors duration-200
              ${selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
           }>
+            <FaChartBar className="mr-2 h-5 w-5" />
             Bilan
           </Tab>
         </Tab.List>
