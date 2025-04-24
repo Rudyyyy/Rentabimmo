@@ -717,6 +717,50 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
               </nav>
             </div>
 
+            {/* Graphiques de projection */}
+            <div className="mt-6 space-y-6">
+              {/* Graphique des totaux cumulés */}
+              <div className="h-96">
+                <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
+              </div>
+
+              {/* Graphique d'évolution des revenus nets */}
+              <div className="h-96">
+                <Line 
+                  data={netIncomeEvolutionData} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'top' as const,
+                      },
+                      title: {
+                        display: true,
+                        text: 'Évolution des revenus nets par régime fiscal'
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context: any) {
+                            return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      y: {
+                        ticks: {
+                          callback: function(value: any) {
+                            return formatCurrency(value);
+                          }
+                        }
+                      }
+                    }
+                  }} 
+                />
+              </div>
+            </div>
+
             {/* Table de projection */}
             <div className="mt-6">
               {renderHistoricalAndProjectionTable()}

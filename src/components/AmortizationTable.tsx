@@ -124,18 +124,6 @@ const AmortizationTable: React.FC<Props> = ({ schedule, onClose, onSave, onReset
     console.log("Tableau réinitialisé avec:", schedule);
   };
 
-  // Formate un nombre avec 2 décimales
-  const formatNumber = (value: number) => value.toFixed(2);
-
-  // Formate un nombre en devise EUR selon le format français
-  const formatCurrency = (value: number) => 
-    new Intl.NumberFormat('fr-FR', { 
-      style: 'currency', 
-      currency: 'EUR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-
   // Formate une date en format "mois année" en français
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

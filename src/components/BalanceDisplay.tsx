@@ -50,6 +50,7 @@ ChartJS.register(
 // Interface définissant les props du composant
 interface Props {
   investment: Investment;
+  currentSubTab?: string;
 }
 
 // Interface pour stocker les données de balance calculées
@@ -74,21 +75,7 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
   'reel-bic': 'LMNP - Frais réels'
 };
 
-const BalanceDisplay: React.FC<Props> = ({ investment }) => {
-  // État pour stocker les données de balance calculées
-  const [balanceData, setBalanceData] = useState<BalanceData>({
-    years: [],
-    data: {
-      'micro-foncier': [],
-      'reel-foncier': [],
-      'micro-bic': [],
-      'reel-bic': []
-    }
-  });
-
-  // Utiliser le régime fiscal sélectionné dans TaxForm
-  const selectedRegime = investment.selectedRegime || 'micro-foncier';
-
+const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
   // Identifiant unique pour le stockage local
   const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
   
@@ -98,17 +85,21 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     return (stored as TaxRegime) || 'micro-foncier';
   });
 
+  const [balanceData, setBalanceData] = useState<BalanceData>({ years: [], data: {} as Record<TaxRegime, Array<BalanceYearResult>> });
+
+
   // Sauvegarde du régime sélectionné dans le localStorage
   useEffect(() => {
     localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegimeLocal);
   }, [selectedRegimeLocal, investmentId]);
 
-  // Fonctions utilitaires pour le formatage des valeurs
-  const formatCurrency = (amount: number) => 
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+  // Fonction pour formater les montants en euros
+  const formatCurrency = (value: number) => 
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 
+  // Fonction pour formater les pourcentages
   const formatPercent = (value: number) => 
-    new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    `${(value * 100).toFixed(1)}%`;
 
   /**
    * Calcul des données de balance pour chaque année et régime fiscal
@@ -144,7 +135,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     (Object.keys(REGIME_LABELS) as TaxRegime[]).forEach((regime) => {
       let cumulativeCashFlow = 0;
       
-      years.forEach((year, yearIndex) => {
+      years.forEach((year) => {
         // Récupérer les dépenses de l'année
         const yearExpense = investment.expenses.find(e => e.year === year);
         
@@ -229,11 +220,7 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     calculateBalanceData();
   }, [calculateBalanceData]);
 
-  // Calcul du rendement pour le tableau
-  const getYieldValueForTable = (regimeData: BalanceYearResult[], year: number) => {
-    // ... existing code ...
-  };
-
+  
   // Fonction utilitaire pour calculer le rendement annuel comme il apparaît dans le tableau
   const calculateAnnualReturn = (revenues: number, effort: number, numberOfYears: number) => {
     // Si le bilan est négatif
@@ -369,6 +356,50 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
     return minCumulativeCashFlow < 0 
       ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
       : downPayment;
+  };
+
+  // Calcul des données statistiques pour l'analyse IA
+  const getStatisticsData = () => {
+    const currentYear = new Date().getFullYear();
+    const yearIndex = balanceData.years.findIndex(year => year === currentYear);
+    
+    if (yearIndex === -1 || !balanceData.data[selectedRegimeLocal]) {
+      return null;
+    }
+
+    const regimeData = balanceData.data[selectedRegimeLocal];
+    const currentYearData = regimeData[yearIndex];
+
+    // Calcul de l'effort (apport + cash flow négatif cumulé)
+    const downPayment = Number(investment.downPayment);
+    let minCumulativeCashFlow = 0;
+    for (let i = 0; i <= yearIndex; i++) {
+      const yearCashFlow = regimeData[i]?.cumulativeCashFlow || 0;
+      if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
+        minCumulativeCashFlow = yearCashFlow;
+      }
+    }
+    const effort = minCumulativeCashFlow < 0 
+      ? downPayment - minCumulativeCashFlow
+      : downPayment;
+
+    // Cash flow annuel moyen
+    const cashFlow = currentYearData.annualCashFlow;
+
+    // Bilan de revente
+    const saleBalance = currentYearData.saleBalance;
+
+    // Rendement total et annuel
+    const totalReturn = (currentYearData.totalGain / effort) * 100;
+    const annualReturn = totalReturn / yearIndex;
+
+    return {
+      effort,
+      cashFlow,
+      saleBalance,
+      totalReturn,
+      annualReturn
+    };
   };
 
   return (
@@ -543,13 +574,32 @@ const BalanceDisplay: React.FC<Props> = ({ investment }) => {
                   },
                   title: {
                     display: false
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context: any) {
+                        return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                      }
+                    }
                   }
                 },
                 scales: {
                   y: {
                     beginAtZero: true,
                     ticks: {
-                      callback: (value: any) => formatCurrency(value)
+                      callback: function(value: any) {
+                        return formatCurrency(value);
+                      }
+                    },
+                    title: {
+                      display: true,
+                      text: 'Effort total (€)'
+                    }
+                  },
+                  x: {
+                    title: {
+                      display: true,
+                      text: 'Année'
                     }
                   }
                 }

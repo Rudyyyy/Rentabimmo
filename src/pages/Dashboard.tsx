@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building, Pencil } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import {
@@ -160,8 +160,6 @@ export default function Dashboard() {
   function calculateCashFlowData() {
     const allCashFlows: CashFlowData[] = [];
     const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
 
     properties.forEach(property => {
       // Ne calculer que pour les biens affichés dans le dashboard

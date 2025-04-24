@@ -276,8 +276,9 @@ export class PDFAmortizationExtractor {
           principal,
           interest,
           remainingBalance,
-          totalPaid: 0, // Ce sera calculé plus tard
-          isDeferred: false // Par défaut, on considère que ce n'est pas une échéance différée
+          remainingPrincipal: remainingBalance,
+          totalPaid: 0,
+          isDeferred: false
         };
       }
     } catch (error) {

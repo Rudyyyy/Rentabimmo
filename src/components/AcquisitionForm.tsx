@@ -20,7 +20,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Investment, YearlyExpenses, ExpenseProjection, TaxRegime, TaxParameters, TaxResults, defaultInvestment, DeferralType, AmortizationRow } from '../types/investment';
+import { Investment, defaultInvestment, AmortizationRow } from '../types/investment';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';
 import { Bar } from 'react-chartjs-2';
@@ -36,7 +36,6 @@ import {
 } from 'chart.js';
 import PDFAmortizationImporter from './PDFAmortizationImporter';
 import { saveAmortizationSchedule, getAmortizationSchedule } from '../lib/api';
-import { supabase } from '../lib/supabase';
 
 ChartJS.register(
   CategoryScale,

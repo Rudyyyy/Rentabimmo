@@ -222,6 +222,7 @@ export interface Investment {
   maintenanceProvision: number;
   grossYield: number;
   netYield: number;
+  cashOnCashReturn: number;
 }
 
 export const defaultTaxParameters: TaxParameters = {
@@ -362,7 +363,8 @@ export const defaultInvestment: Investment = {
   cashFlowYears: [],
   maintenanceProvision: 0,
   grossYield: 0,
-  netYield: 0
+  netYield: 0,
+  cashOnCashReturn: 0
 };
 
 const handleResetAmortization = () => {

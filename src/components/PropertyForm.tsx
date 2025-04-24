@@ -426,14 +426,13 @@ export default function PropertyForm() {
         break;
 
       case 'bilan':
-        if (currentSubTab === 'statistiques') {
+        if (currentSubTab === 'statistiques' || currentSubTab === 'analyse-ia') {
           return (
             <BalanceDisplay
               investment={investmentData}
+              currentSubTab={currentSubTab}
             />
           );
-        } else if (currentSubTab === 'analyse-ia') {
-          return <Analysis />;
         }
         break;
     }

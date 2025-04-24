@@ -24,5 +24,3 @@ dist-ssr
 *.sw?
 .env
 apikey.txt
-
-OPENAI_API_KEY=votre_clé_api

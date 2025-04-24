@@ -4,7 +4,16 @@ export function createInvestment(name: string): Investment {
   const currentYear = new Date().getFullYear();
   
   return {
+    id: '',
     name,
+    propertyType: 'new',
+    monthlyPayment: 0,
+    monthlyCashFlow: 0,
+    cashFlowYears: [],
+    maintenanceProvision: 0,
+    grossYield: 0,
+    netYield: 0,
+    cashOnCashReturn: 0,
     projectStartDate: new Date().toISOString(),
     projectEndDate: new Date(currentYear + 20, 11, 31).toISOString(),
     purchasePrice: 0,

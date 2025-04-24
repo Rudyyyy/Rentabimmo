@@ -61,6 +61,14 @@ const QuickPropertyForm: React.FC<Props> = ({ onClose, onSave, onDetailedForm })
       id: '',
       name: name || defaultName,
       description: description || defaultDescription,
+      propertyType: isNewProperty ? 'new' : 'old',
+      monthlyPayment: (loanAmount * (0.03/12) * Math.pow(1 + 0.03/12, 240)) / (Math.pow(1 + 0.03/12, 240) - 1), // Calcul PMT pour 20 ans à 3%
+      monthlyCashFlow: 0,
+      cashFlowYears: [],
+      grossYield: 0,
+      netYield: 0,
+      cashOnCashReturn: 0,
+      maintenanceProvision: price * 0.01, // 1% du prix d'achat pour la provision d'entretien
       projectStartDate,
       projectEndDate: endDate.toISOString().split('T')[0],
       purchasePrice: price,

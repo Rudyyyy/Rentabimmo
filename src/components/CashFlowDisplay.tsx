@@ -59,8 +59,6 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
   'reel-bic': 'LMNP - Frais réels'
 };
 
-const STORAGE_KEY = 'selectedCashFlowRegime';
-
 export default function CashFlowDisplay({ investment }: Props) {
   // État du régime fiscal sélectionné, persistant dans le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
@@ -135,8 +133,6 @@ export default function CashFlowDisplay({ investment }: Props) {
 
         // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
         const yearResults = yearlyResults[year];
-        const tax = yearResults[regime]?.tax || 0;
-        const socialCharges = yearResults[regime]?.socialCharges || 0;
         const totalTax = yearResults[regime]?.totalTax || 0;
         
         // Si l'imposition est à 0 mais que les revenus sont positifs, ajouter un log spécifique

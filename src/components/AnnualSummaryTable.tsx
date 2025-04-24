@@ -18,7 +18,7 @@
  * et prend en compte les évolutions des revenus et charges sur la période.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Investment, TaxRegime, TaxResults } from '../types/investment';
 import { calculateTaxResults } from '../utils/taxCalculations';
 

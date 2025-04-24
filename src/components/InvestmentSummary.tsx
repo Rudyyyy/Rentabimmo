@@ -77,7 +77,7 @@ export const InvestmentSummary: React.FC<InvestmentSummaryProps> = ({ investment
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Rentaité globale</h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Rentabilité globale</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Affichage du rendement brut */}

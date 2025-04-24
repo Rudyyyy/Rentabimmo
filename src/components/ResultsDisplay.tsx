@@ -70,9 +70,8 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
   'reel-bic': 'LMNP - Frais réels'
 };
 
-const STORAGE_KEY = 'selectedProfitabilityRegime';
 
-export default function ResultsDisplay({ metrics, investment, onUpdate }: Props) {
+export default function ResultsDisplay({ investment }: Props) {
   // État pour le régime fiscal sélectionné, initialisé depuis le localStorage
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
     const stored = localStorage.getItem(`selectedRegime_${investment.purchasePrice}_${investment.startDate}`);
@@ -284,8 +283,6 @@ export default function ResultsDisplay({ metrics, investment, onUpdate }: Props)
 
         // Récupérer les composants fiscaux spécifiques au régime
         const regimeResults = yearResults[regime];
-        const tax = regimeResults?.tax || 0;
-        const socialCharges = regimeResults?.socialCharges || 0;
         const totalTax = regimeResults?.totalTax || 0;
 
         return {
