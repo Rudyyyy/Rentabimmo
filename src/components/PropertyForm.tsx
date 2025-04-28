@@ -37,6 +37,7 @@ import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
 import Analysis from '../pages/Analysis';
 import PropertyNavigation from './PropertyNavigation';
+import Notification from './Notification';
 
 type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr' | 'analysis';
 
@@ -54,6 +55,7 @@ export default function PropertyForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentMainTab, setCurrentMainTab] = useState<MainTab>('acquisition');
@@ -192,13 +194,19 @@ export default function PropertyForm() {
   const onSubmit = async (formData: { name: string, description?: string }) => {
     if (!investmentData) {
       console.error("Données d'investissement manquantes");
-      alert("Erreur: Données d'investissement manquantes");
+      setNotification({
+        message: "Erreur: Données d'investissement manquantes",
+        type: 'error'
+      });
       return;
     }
 
     if (!user) {
       console.error("Utilisateur non connecté");
-      alert("Erreur: Vous devez être connecté pour enregistrer un bien");
+      setNotification({
+        message: "Erreur: Vous devez être connecté pour enregistrer un bien",
+        type: 'error'
+      });
       return;
     }
 
@@ -234,7 +242,7 @@ export default function PropertyForm() {
 
       // Préparation de l'objet à enregistrer
       const propertyData = {
-        name: formData.name.trim(), // Le nom doit être non vide à ce stade grâce à la validation
+        name: formData.name.trim(),
         investment_data: updatedInvestment,
         user_id: user.id
       };
@@ -253,7 +261,7 @@ export default function PropertyForm() {
           .from('properties')
           .update(updateData)
           .eq('id', id)
-          .select(); // Ajouter .select() pour récupérer les données mises à jour
+          .select();
         
         if (error) {
           console.error("❌ ERREUR lors de la mise à jour:", error);
@@ -305,27 +313,30 @@ export default function PropertyForm() {
       
       console.log('==================== FIN SAUVEGARDE PROPRIÉTÉ ====================');
       
-      // Redirection vers le dashboard seulement après confirmation de succès
-      console.log("Navigation vers le dashboard après création/mise à jour du bien");
-      navigate('/dashboard');
+      // Afficher une notification de succès au lieu de rediriger
+      setNotification({
+        message: id ? "Les modifications ont été enregistrées avec succès" : "Le bien a été créé avec succès",
+        type: 'success'
+      });
     } catch (error) {
-      // Affichage d'une alerte utilisateur avec les détails de l'erreur
+      // Affichage d'une notification d'erreur
       let errorMessage = 'Erreur lors de la sauvegarde du bien';
       
       if (error instanceof Error) {
         errorMessage += `: ${error.message}`;
-        console.log('Détails de l\'erreur:', {
+        console.error('Détails de l\'erreur:', {
           name: error.name,
           message: error.message,
           stack: error.stack,
         });
       } else {
-        console.log('Erreur non standard:', error);
+        console.error('Erreur non standard:', error);
       }
       
-      // Afficher l'erreur à l'utilisateur
-      alert(errorMessage);
-      console.log('==================== FIN SAUVEGARDE PROPRIÉTÉ (ERREUR) ====================');
+      setNotification({
+        message: errorMessage,
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -561,6 +572,13 @@ export default function PropertyForm() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
