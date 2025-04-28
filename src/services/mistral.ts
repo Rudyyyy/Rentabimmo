@@ -61,7 +61,7 @@ export async function processUserMessageWithMistral(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'mistral',
+        model: 'mixtral',
         messages: messages,
         stream: false,
       }),
