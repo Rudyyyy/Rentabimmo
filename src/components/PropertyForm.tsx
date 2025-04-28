@@ -68,7 +68,10 @@ export default function PropertyForm() {
     if (investmentData.name) {
       setValue('name', investmentData.name);
     }
-  }, [investmentData.name, setValue]);
+    if (investmentData.description) {
+      setValue('description', investmentData.description);
+    }
+  }, [investmentData.name, investmentData.description, setValue]);
 
   // Chargement initial des données si un ID est fourni
   useEffect(() => {
@@ -188,6 +191,11 @@ export default function PropertyForm() {
       setNameError(null);
     }
     handleInvestmentUpdate({ ...investmentData, name: e.target.value });
+  };
+
+  // Gestionnaire de mise à jour de description
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInvestmentUpdate({ ...investmentData, description: e.target.value });
   };
 
   // Fonction pour sauvegarder les données dans Supabase
@@ -656,8 +664,12 @@ export default function PropertyForm() {
                 Description
               </label>
               <textarea
+                {...register('description')}
                 value={investmentData.description || ''}
-                onChange={(e) => handleInvestmentUpdate({ ...investmentData, description: e.target.value })}
+                onChange={(e) => {
+                  register('description').onChange(e); // Pour React Hook Form
+                  handleDescriptionChange(e); // Pour l'état local
+                }}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Description du projet d'investissement..."
                 rows={3}

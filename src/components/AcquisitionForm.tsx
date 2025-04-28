@@ -157,17 +157,33 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
     datasets: [
       {
         label: 'Capital',
-        data: amortizationResult.schedule
-          .filter((_, index) => index % 12 === 0)
-          .map(row => row.principal),
+        data: Object.values(amortizationResult.schedule
+          .reduce((acc, row) => {
+            const year = new Date(row.date).getFullYear();
+            if (!acc[year]) {
+              acc[year] = { principal: 0, interest: 0 };
+            }
+            acc[year].principal += row.principal;
+            acc[year].interest += row.interest;
+            return acc;
+          }, {} as Record<number, { principal: number; interest: number }>))
+          .map(({ principal }) => principal),
         backgroundColor: 'rgb(59, 130, 246)',
         stack: 'Stack 0',
       },
       {
         label: 'Intérêts',
-        data: amortizationResult.schedule
-          .filter((_, index) => index % 12 === 0)
-          .map(row => row.interest),
+        data: Object.values(amortizationResult.schedule
+          .reduce((acc, row) => {
+            const year = new Date(row.date).getFullYear();
+            if (!acc[year]) {
+              acc[year] = { principal: 0, interest: 0 };
+            }
+            acc[year].principal += row.principal;
+            acc[year].interest += row.interest;
+            return acc;
+          }, {} as Record<number, { principal: number; interest: number }>))
+          .map(({ interest }) => interest),
         backgroundColor: 'rgb(239, 68, 68)',
         stack: 'Stack 0',
       }
