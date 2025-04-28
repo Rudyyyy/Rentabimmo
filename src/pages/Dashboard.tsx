@@ -20,6 +20,7 @@ import { Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
+import CashFlowGoal from '../components/CashFlowGoal';
 
 ChartJS.register(
   CategoryScale,
@@ -54,6 +55,10 @@ export default function Dashboard() {
     return savedOrder ? JSON.parse(savedOrder) : [];
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
+  const [cashFlowGoal, setCashFlowGoal] = useState<number>(() => {
+    const savedGoal = localStorage.getItem('cashFlowGoal');
+    return savedGoal ? parseFloat(savedGoal) : 0;
+  });
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const location = useLocation();
@@ -67,6 +72,11 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem('propertyOrder', JSON.stringify(propertyOrder));
   }, [propertyOrder]);
+
+  // Ajouter un useEffect pour sauvegarder l'objectif
+  useEffect(() => {
+    localStorage.setItem('cashFlowGoal', cashFlowGoal.toString());
+  }, [cashFlowGoal]);
 
   useEffect(() => {
     // Load properties on mount and navigation
@@ -268,7 +278,18 @@ export default function Dashboard() {
         borderWidth: 2,
         tension: 0.1,
         fill: false
-      }
+      },
+      // Ligne d'objectif
+      ...(cashFlowGoal > 0 ? [{
+        label: 'Objectif',
+        data: years.map(() => cashFlowGoal * 12),
+        borderColor: 'rgb(59, 130, 246)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        tension: 0,
+        fill: false,
+        pointRadius: 0
+      }] : [])
     ]
   };
 
@@ -582,6 +603,17 @@ export default function Dashboard() {
                     <Line data={chartData} options={chartOptions} />
                   </div>
                 </div>
+
+                {/* Cash Flow Goal */}
+                <CashFlowGoal 
+                  cashFlowData={years.map(year => ({
+                    year,
+                    total: cashFlowData
+                      .filter(d => d.year === year)
+                      .reduce((sum, d) => sum + d.cashFlow, 0)
+                  }))}
+                  onGoalChange={setCashFlowGoal}
+                />
               </div>
             )}
           </main>
