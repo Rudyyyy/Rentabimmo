@@ -35,6 +35,16 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     return { startYear, endYear, currentYear };
   }, [investment.projectStartDate, investment.projectEndDate]);
 
+  // Calcul de l'année à afficher dans le titre de la base de projection
+  const getBaseProjectionYear = () => {
+    if (years.startYear > years.currentYear) {
+      return years.startYear;
+    } else if (years.endYear < years.currentYear) {
+      return years.endYear;
+    }
+    return years.currentYear;
+  };
+
   const handleExpenseChange = (year: number, field: keyof YearlyExpenses, value: number) => {
     const updatedExpenses = [...investment.expenses];
     const expenseIndex = updatedExpenses.findIndex(e => e.year === year);
@@ -507,25 +517,30 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
     });
   };
 
+  // Fonction pour déterminer si une colonne doit être masquée
+  const shouldHideColumn = (field: keyof YearlyExpenses) => {
+    // Vérifier si toutes les valeurs pour ce champ sont à 0 dans toutes les années
+    return investment.expenses.every(expense => !expense[field]);
+  };
+
+  // Fonction pour déterminer si une colonne de projection doit être masquée
+  const shouldHideProjectionColumn = (field: keyof YearlyExpenses) => {
+    // Vérifier si toutes les valeurs projetées pour ce champ sont à 0
+    const projectedExpenses = investment.expenses.filter(expense => expense.year > years.currentYear);
+    if (projectedExpenses.length === 0) return true;
+    
+    // Vérifier si toutes les valeurs sont à 0
+    return projectedExpenses.every(expense => {
+      const value = expense[field];
+      return value === 0 || value === null || value === undefined;
+    });
+  };
+
   const renderHistoricalTable = () => {
     const rows = [];
     for (let year = years.startYear; year <= years.currentYear; year++) {
-      const expense = investment.expenses.find(e => e.year === year) || {
-        year,
-        rent: 0,
-        furnishedRent: 0,
-        tenantCharges: 0,
-        taxBenefit: 0
-      };
-
-      const totalNu = 
-        Number(expense.rent || 0) +
-        Number(expense.tenantCharges || 0) +
-        Number(expense.taxBenefit || 0);
-
-      const totalMeuble = 
-        Number(expense.furnishedRent || 0) +
-        Number(expense.tenantCharges || 0);
+      const yearExpense = investment.expenses.find(e => e.year === year);
+      if (!yearExpense) continue;
 
       rows.push(
         <tr key={year} className={year === years.currentYear ? 'bg-blue-50' : ''}>
@@ -535,7 +550,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             <input
               type="number"
-              value={expense.rent || ''}
+              value={yearExpense.rent || ''}
               onChange={(e) => handleExpenseChange(year, 'rent', Number(e.target.value))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -543,7 +558,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             <input
               type="number"
-              value={expense.furnishedRent || ''}
+              value={yearExpense.furnishedRent || ''}
               onChange={(e) => handleExpenseChange(year, 'furnishedRent', Number(e.target.value))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -551,7 +566,7 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             <input
               type="number"
-              value={expense.taxBenefit || ''}
+              value={yearExpense.taxBenefit || ''}
               onChange={(e) => handleExpenseChange(year, 'taxBenefit', Number(e.target.value))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -559,16 +574,16 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
             <input
               type="number"
-              value={expense.tenantCharges || ''}
+              value={yearExpense.tenantCharges || ''}
               onChange={(e) => handleExpenseChange(year, 'tenantCharges', Number(e.target.value))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
           </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalNu)}
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatCurrency((yearExpense.rent || 0) + (yearExpense.tenantCharges || 0) + (yearExpense.taxBenefit || 0))}
           </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalMeuble)}
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatCurrency((yearExpense.furnishedRent || 0) + (yearExpense.tenantCharges || 0))}
           </td>
         </tr>
       );
@@ -579,45 +594,39 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
   const renderProjectedTable = () => {
     const rows = [];
     for (let year = years.currentYear + 1; year <= years.endYear; year++) {
-      const expense = investment.expenses.find(e => e.year === year);
-      if (!expense) continue;
-
-      const totalNu = 
-        Number(expense.rent || 0) +
-        Number(expense.tenantCharges || 0) +
-        Number(expense.taxBenefit || 0);
-
-      const totalMeuble = 
-        Number(expense.furnishedRent || 0) +
-        Number(expense.tenantCharges || 0);
+      const yearExpense = investment.expenses.find(e => e.year === year);
+      if (!yearExpense) continue;
 
       rows.push(
         <tr key={year}>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
             {year}
           </td>
+          {!shouldHideProjectionColumn('rent') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearExpense.rent || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('furnishedRent') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearExpense.furnishedRent || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('taxBenefit') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearExpense.taxBenefit || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('tenantCharges') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(yearExpense.tenantCharges || 0)}
+            </td>
+          )}
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.rent || 0)}
+            {formatCurrency((yearExpense.rent || 0) + (yearExpense.tenantCharges || 0) + (yearExpense.taxBenefit || 0))}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.furnishedRent || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            <input
-              type="number"
-              value={expense.taxBenefit || ''}
-              onChange={(e) => handleExpenseChange(year, 'taxBenefit', Number(e.target.value))}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.tenantCharges || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalNu)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-700">
-            {formatCurrency(totalMeuble)}
+            {formatCurrency((yearExpense.furnishedRent || 0) + (yearExpense.tenantCharges || 0))}
           </td>
         </tr>
       );
@@ -627,47 +636,10 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Tableau d'historique */}
-      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Historique
-        </h3>
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Année
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Loyer nu
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Loyer meublé
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Aide fiscale
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Charges locataire
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Total nu
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Total meublé
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {renderHistoricalTable()}
-          </tbody>
-        </table>
-      </div>
-
       {/* Base de projection */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Base de projection ({years.currentYear})
+          Base de projection ({getBaseProjectionYear()})
         </h3>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -780,10 +752,10 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
         </div>
       </div>
 
-      {/* Tableau de projection */}
+      {/* Tableau d'historique */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Projection
+          Historique
         </h3>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -803,6 +775,51 @@ export default function RevenuesForm({ investment, onUpdate }: Props) {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Charges locataire
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total nu
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total meublé
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {renderHistoricalTable()}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Tableau de projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Projection
+        </h3>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Année
+              </th>
+              {!shouldHideProjectionColumn('rent') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Loyer nu
+                </th>
+              )}
+              {!shouldHideProjectionColumn('furnishedRent') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Loyer meublé
+                </th>
+              )}
+              {!shouldHideProjectionColumn('taxBenefit') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Aide fiscale
+                </th>
+              )}
+              {!shouldHideProjectionColumn('tenantCharges') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Charges locataire
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Total nu
               </th>

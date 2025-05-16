@@ -46,6 +46,16 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return { startYear, endYear, currentYear };
   }, [investment.projectStartDate, investment.projectEndDate]);
 
+  // Calcul de l'année à afficher dans le titre de la base de projection
+  const getBaseProjectionYear = () => {
+    if (years.startYear > years.currentYear) {
+      return years.startYear;
+    } else if (years.endYear < years.currentYear) {
+      return years.endYear;
+    }
+    return years.currentYear;
+  };
+
   /**
    * Gestionnaire de modification des dépenses
    * Met à jour les dépenses pour une année donnée et recalcule les projections
@@ -656,13 +666,17 @@ function ExpensesForm({ investment, onUpdate }: Props) {
             />
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(loanInfo.payment)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearlyInterests)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(loanInfo.insurance)}
+            <div>
+              {formatCurrency(loanInfo.payment)}
+              <div className="text-xs text-gray-400 mt-1">
+                Intérêts : {formatCurrency(yearlyInterests)}
+                {loanInfo.insurance > 0 && (
+                  <>
+                    {" | Ass. : "}{formatCurrency(loanInfo.insurance)}
+                  </>
+                )}
+              </div>
+            </div>
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-800">
             {formatCurrency(totalExpenses)}
@@ -674,6 +688,16 @@ function ExpensesForm({ investment, onUpdate }: Props) {
       );
     }
     return rows;
+  };
+
+  // Fonction pour déterminer si une colonne de projection doit être masquée
+  const shouldHideProjectionColumn = (field: keyof YearlyExpenses) => {
+    const projectedExpenses = investment.expenses.filter(expense => expense.year > years.currentYear);
+    if (projectedExpenses.length === 0) return true;
+    return projectedExpenses.every(expense => {
+      const value = expense[field];
+      return value === 0 || value === null || value === undefined;
+    });
   };
 
   /**
@@ -717,39 +741,61 @@ function ExpensesForm({ investment, onUpdate }: Props) {
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
             {year}
           </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.propertyTax || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.condoFees || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.propertyInsurance || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.managementFees || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.unpaidRentInsurance || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.repairs || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.otherDeductible || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(expense.otherNonDeductible || 0)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(loanInfo.payment)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(yearlyInterests)}
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(loanInfo.insurance)}
-          </td>
+          {!shouldHideProjectionColumn('propertyTax') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.propertyTax || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('condoFees') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.condoFees || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('propertyInsurance') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.propertyInsurance || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('managementFees') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.managementFees || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('unpaidRentInsurance') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.unpaidRentInsurance || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('repairs') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.repairs || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('otherDeductible') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.otherDeductible || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('otherNonDeductible') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {formatCurrency(expense.otherNonDeductible || 0)}
+            </td>
+          )}
+          {!shouldHideProjectionColumn('loanPayment') && (
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <div>
+                {formatCurrency(loanInfo.payment)}
+                <div className="text-xs text-gray-400 mt-1">
+                  Intérêts : {formatCurrency(yearlyInterests)}
+                  {loanInfo.insurance > 0 && (
+                    <>
+                      {" | Ass. : "}{formatCurrency(loanInfo.insurance)}
+                    </>
+                  )}
+                </div>
+              </div>
+            </td>
+          )}
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-800">
             {formatCurrency(totalExpenses)}
           </td>
@@ -855,78 +901,10 @@ function ExpensesForm({ investment, onUpdate }: Props) {
 
   return (
     <div className="space-y-8">
-      {/* Historical Data */}
-      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Historique
-        </h3>
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Année
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Taxe foncière
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Charges copropriété
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Assurance propriétaire
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Frais d'agence
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Assurance loyers impayés
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Travaux
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Autres (déductibles)
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Autres (non déductibles)
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Prêt
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Dont intérêts
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Assurance prêt
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase tracking-wider">
-                Total dépenses
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-blue-800 uppercase tracking-wider">
-                Dont déductible
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {renderHistoricalTable()}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Projection Parameters */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Paramètres de projection
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {renderProjectionParameters()}
-        </div>
-      </div>
-
       {/* Base de projection */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Base de projection (2025)
+          Base de projection ({getBaseProjectionYear()})
         </h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -966,66 +944,66 @@ function ExpensesForm({ investment, onUpdate }: Props) {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   2025
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.propertyTax || 0}
+                    value={investment.expenseProjection.baseYear.propertyTax || ''}
                     onChange={(e) => handleBaseYearChange('propertyTax', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.condoFees || 0}
+                    value={investment.expenseProjection.baseYear.condoFees || ''}
                     onChange={(e) => handleBaseYearChange('condoFees', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.propertyInsurance || 0}
+                    value={investment.expenseProjection.baseYear.propertyInsurance || ''}
                     onChange={(e) => handleBaseYearChange('propertyInsurance', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.managementFees || 0}
+                    value={investment.expenseProjection.baseYear.managementFees || ''}
                     onChange={(e) => handleBaseYearChange('managementFees', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.unpaidRentInsurance || 0}
+                    value={investment.expenseProjection.baseYear.unpaidRentInsurance || ''}
                     onChange={(e) => handleBaseYearChange('unpaidRentInsurance', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.repairs || 0}
+                    value={investment.expenseProjection.baseYear.repairs || ''}
                     onChange={(e) => handleBaseYearChange('repairs', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.otherDeductible || 0}
+                    value={investment.expenseProjection.baseYear.otherDeductible || ''}
                     onChange={(e) => handleBaseYearChange('otherDeductible', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <input
                     type="number"
-                    value={investment.expenseProjection.baseYear?.otherNonDeductible || 0}
+                    value={investment.expenseProjection.baseYear.otherNonDeductible || ''}
                     onChange={(e) => handleBaseYearChange('otherNonDeductible', Number(e.target.value))}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
@@ -1036,10 +1014,20 @@ function ExpensesForm({ investment, onUpdate }: Props) {
         </div>
       </div>
 
-      {/* Projected Data */}
+      {/* Paramètres de projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Paramètres de projection
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {renderProjectionParameters()}
+        </div>
+      </div>
+
+      {/* Historical Data */}
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Projection
+          Historique
         </h3>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -1075,16 +1063,80 @@ function ExpensesForm({ investment, onUpdate }: Props) {
                 Prêt
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Dont intérêts
+                Total
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Assurance prêt
+                Dépenses déductibles
               </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {renderHistoricalTable()}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Tableau de projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Projection
+        </h3>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Année
+              </th>
+              {!shouldHideProjectionColumn('propertyTax') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Taxe foncière
+                </th>
+              )}
+              {!shouldHideProjectionColumn('condoFees') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Charges copropriété
+                </th>
+              )}
+              {!shouldHideProjectionColumn('propertyInsurance') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assurance propriétaire
+                </th>
+              )}
+              {!shouldHideProjectionColumn('managementFees') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Frais d'agence
+                </th>
+              )}
+              {!shouldHideProjectionColumn('unpaidRentInsurance') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assurance loyers impayés
+                </th>
+              )}
+              {!shouldHideProjectionColumn('repairs') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Travaux
+                </th>
+              )}
+              {!shouldHideProjectionColumn('otherDeductible') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Autres déductibles
+                </th>
+              )}
+              {!shouldHideProjectionColumn('otherNonDeductible') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Autres non déductibles
+                </th>
+              )}
+              {!shouldHideProjectionColumn('loanPayment') && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Prêt
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase tracking-wider">
                 Total dépenses
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-blue-800 uppercase tracking-wider">
-                Dont déductible
+                Dépenses déductibles
               </th>
             </tr>
           </thead>
