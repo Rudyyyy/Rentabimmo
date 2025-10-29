@@ -18,7 +18,7 @@
  * - Le coût total de l'investissement
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,

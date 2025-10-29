@@ -3,22 +3,44 @@ import { Investment, FinancialMetrics, AmortizationRow, DeferralType } from '../
 export function calculateMonthlyPayment(
   loanAmount: number,
   annualRate: number,
-  years: number
+  years: number,
+  deferralType: DeferralType = 'none',
+  deferredPeriod: number = 0
 ): number {
   // Conversion explicite en nombres
   const amount = Number(loanAmount);
   const rate = Number(annualRate);
   const duration = Number(years);
+  const deferred = Number(deferredPeriod);
 
   if (amount <= 0 || rate <= 0 || duration <= 0) return 0;
   
   const monthlyRate = rate / 12 / 100;
-  // Add deferred period to total duration
-  const numberOfPayments = (duration * 12);
-
-  // Calcul de la mensualité standard
-  return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-         (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+  
+  if (deferralType === 'none' || deferred === 0) {
+    // Calcul de la mensualité standard sans différé
+    const numberOfPayments = duration * 12;
+    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+  } else if (deferralType === 'partial') {
+    // Différé partiel : on paie les intérêts pendant le différé
+    // La mensualité est calculée sur la durée totale moins le différé
+    const numberOfPayments = (duration * 12) - deferred;
+    if (numberOfPayments <= 0) return 0;
+    
+    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+  } else if (deferralType === 'total') {
+    // Différé total : on ne paie rien pendant le différé
+    // La mensualité est calculée sur la durée totale moins le différé
+    const numberOfPayments = (duration * 12) - deferred;
+    if (numberOfPayments <= 0) return 0;
+    
+    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+  }
+  
+  return 0;
 }
 
 export function generateAmortizationSchedule(
@@ -55,7 +77,7 @@ export function generateAmortizationSchedule(
   }
 
   // Calculate monthly payment for the total duration (loan duration + deferral period)
-  const monthlyPayment = Number(calculateMonthlyPayment(amount, rate, duration).toFixed(2));
+  const monthlyPayment = Number(calculateMonthlyPayment(amount, rate, duration, deferralType, deferred).toFixed(2));
 
   // Période de différé
   for (let month = 1; month <= deferred; month++) {
@@ -101,7 +123,7 @@ export function generateAmortizationSchedule(
     totalDue = Number((remainingPrincipal + deferredInterest).toFixed(2));
     
     // Calculate new monthly payment with updated balance
-    const updatedMonthlyPayment = Number(calculateMonthlyPayment(totalDue, rate, duration).toFixed(2));
+    const updatedMonthlyPayment = Number(calculateMonthlyPayment(totalDue, rate, duration, 'none', 0).toFixed(2));
 
     // Regular amortization period
     for (let month = deferred + 1; month <= (duration * 12) + deferred; month++) {
@@ -262,7 +284,9 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
   const monthlyPayment = calculateMonthlyPayment(
     Number(investment.loanAmount),
     Number(investment.interestRate),
-    Number(investment.loanDuration)
+    Number(investment.loanDuration),
+    investment.deferralType || 'none',
+    Number(investment.deferredPeriod || 0)
   );
 
   const monthlyInsurance = (Number(investment.loanAmount) * Number(investment.insuranceRate) / 100) / (Number(investment.loanDuration) * 12);

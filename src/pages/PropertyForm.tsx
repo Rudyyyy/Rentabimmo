@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Info } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { Investment, defaultInvestment, FinancialMetrics, AmortizationRow } from '../types/investment';
@@ -23,6 +23,7 @@ export default function PropertyForm() {
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentView, setCurrentView] = useState<View>('form');
   const { register, handleSubmit, reset, formState } = useForm<{ name: string, description?: string }>();
+  const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -413,24 +414,64 @@ export default function PropertyForm() {
       <div className="relative z-10 min-h-screen bg-white/80">
         <header className="bg-white/80 backdrop-blur-sm shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
                 <img
                   src="/logo.png"
                   alt="Rentab'immo"
                   className="h-8 w-auto"
                 />
-                <h1 className="ml-3 text-2xl font-bold text-gray-900">
-                  {id ? 'Modifier le bien' : 'Nouveau bien'}
-                </h1>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="group relative min-w-0">
+                      <span className="text-xl font-semibold text-gray-900 truncate max-w-[52vw]">
+                        {investmentData?.name?.trim() || (id ? 'Bien sans nom' : 'Nouveau bien')}
+                      </span>
+                      {/* Infobulle description au survol (à côté du nom) */}
+                      {Boolean(investmentData?.description) && (
+                        <span className="inline-flex items-center align-middle ml-2 text-gray-500" aria-hidden>
+                          <Info className="h-4 w-4" />
+                        </span>
+                      )}
+                      {Boolean(investmentData?.description) && (
+                        <div className="absolute left-0 top-full mt-2 w-[48vw] max-w-xl z-20 hidden group-hover:block">
+                          <div className="rounded-lg shadow-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                            {investmentData.description}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-sm text-gray-600">
+                    {investmentData?.projectStartDate && investmentData?.projectEndDate ? (
+                      <span>
+                        Du {new Date(investmentData.projectStartDate).toLocaleDateString()} au {new Date(investmentData.projectEndDate).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">Dates non définies</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Retour
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Bouton édition via popup */}
+                <button
+                  type="button"
+                  onClick={() => setIsGeneralModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 shadow-sm"
+                  title="Modifier les informations générales"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span className="hidden sm:inline">Éditer</span>
+                </button>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="flex items-center text-gray-600 hover:text-gray-900"
+                >
+                  <ArrowLeft className="h-5 w-5 mr-2" />
+                  Retour
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -442,46 +483,6 @@ export default function PropertyForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nom du bien <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    {...register('name', { 
-                      required: "Le nom du bien est obligatoire",
-                      minLength: { value: 2, message: "Le nom doit comporter au moins 2 caractères" }
-                    })}
-                    className={`mt-1 block w-full rounded-md ${
-                      !formState.errors.name 
-                        ? "border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
-                        : "border-red-300 focus:border-red-500 focus:ring-red-500"
-                    } shadow-sm`}
-                    placeholder="Ex: Appartement Centre-ville"
-                  />
-                  {formState.errors.name && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {formState.errors.name.message?.toString() || "Le nom du bien est obligatoire"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-md mt-4">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-                  <textarea
-                    {...register('description')}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    placeholder="Description du projet d'investissement..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-
               <div className="bg-white p-4 rounded-lg shadow-md mb-6">
                 <div className="flex space-x-4">
                   <button
@@ -556,7 +557,7 @@ export default function PropertyForm() {
                   
                   <button
                     type="submit"
-                    disabled={loading || !investmentData || !formState.isValid || formState.isSubmitting}
+                    disabled={loading || !investmentData?.name?.trim()}
                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {id ? 'Enregistrer les modifications' : 'Créer le bien'}
@@ -566,6 +567,88 @@ export default function PropertyForm() {
             </form>
           )}
         </main>
+
+        {isGeneralModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setIsGeneralModalOpen(false)} />
+            <div className="relative z-10 w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-xl border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Informations générales</h3>
+                <button onClick={() => setIsGeneralModalOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Nom du bien <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      {...register('name', { required: "Le nom du bien est obligatoire", minLength: { value: 2, message: "Le nom doit comporter au moins 2 caractères" } })}
+                      value={investmentData.name || ''}
+                      onChange={(e) => setInvestmentData({ ...investmentData, name: e.target.value })}
+                      className={`mt-1 block w-full rounded-md ${!formState.errors.name ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500' : 'border-red-300 focus:border-red-500 focus:ring-red-500'} shadow-sm`}
+                      placeholder="Ex: Appartement Centre-ville"
+                    />
+                    {formState.errors.name && (
+                      <p className="mt-1 text-sm text-red-600">{formState.errors.name.message?.toString() || "Le nom du bien est obligatoire"}</p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date de début</label>
+                      <input
+                        type="date"
+                        value={investmentData.projectStartDate}
+                        onChange={(e) => setInvestmentData({ ...investmentData, projectStartDate: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date de fin</label>
+                      <input
+                        type="date"
+                        value={investmentData.projectEndDate}
+                        onChange={(e) => setInvestmentData({ ...investmentData, projectEndDate: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea
+                      {...register('description')}
+                      value={investmentData.description || ''}
+                      onChange={(e) => setInvestmentData({ ...investmentData, description: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Description du projet d'investissement..."
+                      rows={4}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsGeneralModalOpen(false)}
+                  className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Déclencher la sauvegarde puis fermer la popup
+                    handleSubmit(onSubmit)();
+                    setIsGeneralModalOpen(false);
+                  }}
+                  disabled={loading || !investmentData?.name?.trim()}
+                  className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -35,6 +35,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import GeneralInfoSummary from './GeneralInfoSummary';
 
 // Configuration de Chart.js pour le graphique
 ChartJS.register(
@@ -404,6 +405,9 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
 
   return (
     <div className="space-y-6">
+      {/* Bloc synthèse + projection déplacé ici en tête de Statistiques */}
+      <GeneralInfoSummary investment={investment} />
+
       {/* Section de synthèse avec le meilleur scénario */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-semibold text-gray-900">Solde en fin d'opération</h2>

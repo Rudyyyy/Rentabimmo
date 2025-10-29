@@ -16,7 +16,7 @@
  * Les modifications sont propagées au composant parent via la prop onSubmit.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Investment, AmortizationRow } from '../types/investment';
 import AmortizationTable from './AmortizationTable';

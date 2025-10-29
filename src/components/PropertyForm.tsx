@@ -20,8 +20,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Brain } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Trash2, Brain, Pencil, Info } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { Investment, defaultInvestment } from '../types/investment';
@@ -36,8 +36,11 @@ import { calculateFinancialMetrics } from '../utils/calculations';
 import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
 import Analysis from '../pages/Analysis';
-import PropertyNavigation from './PropertyNavigation';
+import HierarchicalNavigation from './HierarchicalNavigation';
+import MobileNavigation from './MobileNavigation';
+import SidebarContent from './SidebarContent';
 import Notification from './Notification';
+import GeneralInfoSummary from './GeneralInfoSummary';
 
 type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr' | 'analysis';
 
@@ -53,6 +56,7 @@ export default function PropertyForm() {
   // États pour gérer le chargement, les métriques et les données d'investissement
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -62,6 +66,7 @@ export default function PropertyForm() {
   const [currentSubTab, setCurrentSubTab] = useState<string | undefined>(undefined);
   const [nameError, setNameError] = useState<string | null>(null);
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string, description?: string }>();
+  const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
   
   // Surveiller les changements de nom dans l'état investmentData et synchroniser avec le formulaire
   useEffect(() => {
@@ -72,6 +77,19 @@ export default function PropertyForm() {
       setValue('description', investmentData.description);
     }
   }, [investmentData.name, investmentData.description, setValue]);
+
+  // Synchronisation avec les paramètres d'URL
+  useEffect(() => {
+    const mainTab = searchParams.get('tab') as MainTab;
+    const subTab = searchParams.get('subtab');
+    
+    if (mainTab && ['acquisition', 'location', 'imposition', 'rentabilite', 'bilan'].includes(mainTab)) {
+      setCurrentMainTab(mainTab);
+      if (subTab) {
+        setCurrentSubTab(subTab);
+      }
+    }
+  }, [searchParams]);
 
   // Chargement initial des données si un ID est fourni
   useEffect(() => {
@@ -180,6 +198,21 @@ export default function PropertyForm() {
     setInvestmentData(newInvestment);
     const newMetrics = calculateFinancialMetrics(newInvestment);
     setMetrics(newMetrics);
+  };
+
+  // Gestionnaire pour les mises à jour de champs individuels
+  const handleFieldUpdate = (field: keyof Investment, value: any) => {
+    console.log('handleFieldUpdate called with:', field, value);
+    console.log('Current investmentData before update:', investmentData);
+    const updatedInvestment = {
+      ...investmentData,
+      [field]: value
+    };
+    console.log('Updated investment:', updatedInvestment);
+    setInvestmentData(updatedInvestment);
+    const newMetrics = calculateFinancialMetrics(updatedInvestment);
+    setMetrics(newMetrics);
+    console.log('investmentData state updated, new value should be:', updatedInvestment);
   };
 
   // Gestionnaire de mise à jour de nom avec validation
@@ -375,6 +408,18 @@ export default function PropertyForm() {
   const handleTabChange = (mainTab: MainTab, subTab?: string) => {
     setCurrentMainTab(mainTab);
     setCurrentSubTab(subTab);
+    
+    // Mettre à jour l'URL avec les nouveaux paramètres
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('tab', mainTab);
+    
+    if (subTab) {
+      newSearchParams.set('subtab', subTab);
+    } else {
+      newSearchParams.delete('subtab');
+    }
+    
+    setSearchParams(newSearchParams, { replace: true });
   };
 
   const renderContent = () => {
@@ -587,19 +632,67 @@ export default function PropertyForm() {
           onClose={() => setNotification(null)}
         />
       )}
+      {/* Navigation mobile */}
+      <MobileNavigation 
+        currentMainTab={currentMainTab}
+        currentSubTab={currentSubTab}
+        onTabChange={handleTabChange}
+      />
+      
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+        <div className="px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
+            {/* Logo à gauche */}
             <div className="flex items-center">
               <img
                 src="/logo.png"
                 alt="Rentab'immo"
                 className="h-8 w-auto"
               />
-              <h1 className="ml-3 text-2xl font-bold text-gray-900">
-                {id ? 'Modifier le bien' : 'Nouveau bien'}
-              </h1>
             </div>
+            
+            {/* Informations générales centrées */}
+            <div className="flex items-center gap-4 min-w-0 max-w-2xl">
+              <div className="group relative min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-lg font-semibold text-gray-900 truncate">
+                    {investmentData?.name?.trim() || (id ? 'Bien sans nom' : 'Nouveau bien')}
+                  </span>
+                  {Boolean(investmentData?.description) && (
+                    <span className="inline-flex items-center text-gray-500" aria-hidden>
+                      <Info className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+                {Boolean(investmentData?.description) && (
+                  <div className="absolute left-0 top-full mt-2 w-96 max-w-xl z-20 hidden group-hover:block">
+                    <div className="rounded-lg shadow-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                      {investmentData.description}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="hidden sm:block text-sm text-gray-600">
+                {investmentData?.projectStartDate && investmentData?.projectEndDate ? (
+                  <span>
+                    Du {new Date(investmentData.projectStartDate).toLocaleDateString()} au {new Date(investmentData.projectEndDate).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">Dates non définies</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGeneralModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 shadow-sm flex-shrink-0"
+                title="Modifier les informations générales"
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden sm:inline">Éditer</span>
+              </button>
+            </div>
+            
+            {/* Bouton retour à droite */}
             <button
               onClick={() => navigate('/dashboard')}
               className="flex items-center text-gray-600 hover:text-gray-900"
@@ -611,82 +704,38 @@ export default function PropertyForm() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
-          <div className="grid grid-cols-1 gap-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nom du bien <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...nameRef}
-                  value={investmentData.name || ''}
-                  onChange={(e) => {
-                    // Mettre à jour à la fois le formulaire et l'état local
-                    nameRef.onChange(e); // Pour React Hook Form
-                    handleNameChange(e); // Pour l'état local et la validation
-                  }}
-                  className={`mt-1 block w-full rounded-md ${
-                    nameError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                  } shadow-sm`}
-                  placeholder="Ex: Appartement Centre-ville"
-                />
-                {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Date de début
-                </label>
-                <input
-                  type="date"
-                  value={investmentData.projectStartDate}
-                  onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectStartDate: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Date de fin
-                </label>
-                <input
-                  type="date"
-                  value={investmentData.projectEndDate}
-                  onChange={(e) => handleInvestmentUpdate({ ...investmentData, projectEndDate: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Description
-              </label>
-              <textarea
-                {...register('description')}
-                value={investmentData.description || ''}
-                onChange={(e) => {
-                  register('description').onChange(e); // Pour React Hook Form
-                  handleDescriptionChange(e); // Pour l'état local
-                }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Description du projet d'investissement..."
-                rows={3}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <PropertyNavigation 
+      <main className="px-4 py-8 sm:px-6 lg:px-8">
+        {/* Navigation principale pour desktop */}
+        <div className="hidden lg:block mb-6">
+          <HierarchicalNavigation 
             onTabChange={handleTabChange} 
             initialMainTab={currentMainTab}
             initialSubTab={currentSubTab}
+            investmentData={investmentData}
+            metrics={metrics}
+            showSidebar={false}
           />
-          <div className="mt-6">
-            {renderContent()}
-          </div>
+        </div>
+
+        <div className="flex gap-6 items-start">
+          {/* Sidebar avec informations contextuelles uniquement */}
+          <aside className="hidden lg:block w-110 shrink-0">
+            <div className="sticky top-4">
+              <SidebarContent 
+                currentMainTab={currentMainTab}
+                investmentData={investmentData}
+                metrics={metrics}
+                onInvestmentUpdate={handleFieldUpdate}
+              />
+            </div>
+          </aside>
+          
+          {/* Zone principale avec contenu */}
+          <section className="flex-1 min-w-0">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              {renderContent()}
+            </div>
+          </section>
         </div>
 
         <div className="flex justify-between pt-6">
@@ -720,6 +769,84 @@ export default function PropertyForm() {
           </div>
         </div>
       </main>
+
+      {isGeneralModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setIsGeneralModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-xl border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Informations générales</h3>
+              <button onClick={() => setIsGeneralModalOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Nom du bien <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    {...register('name', { required: "Le nom du bien est obligatoire", minLength: { value: 2, message: "Le nom doit comporter au moins 2 caractères" } })}
+                    value={investmentData.name || ''}
+                    onChange={(e) => setInvestmentData({ ...investmentData, name: e.target.value })}
+                    className={`mt-1 block w-full rounded-md ${!errors.name ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500' : 'border-red-300 focus:border-red-500 focus:ring-red-500'} shadow-sm`}
+                    placeholder="Ex: Appartement Centre-ville"
+                  />
+                  {errors.name && (
+                    <p className="mt-1 text-sm text-red-600">{errors.name.message?.toString() || "Le nom du bien est obligatoire"}</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date de début</label>
+                    <input
+                      type="date"
+                      value={investmentData.projectStartDate}
+                      onChange={(e) => setInvestmentData({ ...investmentData, projectStartDate: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date de fin</label>
+                    <input
+                      type="date"
+                      value={investmentData.projectEndDate}
+                      onChange={(e) => setInvestmentData({ ...investmentData, projectEndDate: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    {...register('description')}
+                    value={investmentData.description || ''}
+                    onChange={(e) => setInvestmentData({ ...investmentData, description: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Description du projet d'investissement..."
+                    rows={4}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsGeneralModalOpen(false)}
+                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => { handleSubmit(onSubmit)(); setIsGeneralModalOpen(false); }}
+                disabled={loading || !investmentData?.name?.trim()}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

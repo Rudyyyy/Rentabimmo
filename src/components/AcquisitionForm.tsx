@@ -21,7 +21,7 @@
 
 import { useState, useMemo } from 'react';
 import { Investment, defaultInvestment, AmortizationRow } from '../types/investment';
-import { generateAmortizationSchedule } from '../utils/calculations';
+import { generateAmortizationSchedule, calculateMonthlyPayment } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';
 import { Bar } from 'react-chartjs-2';
 import { HelpCircle } from 'lucide-react';
@@ -368,391 +368,112 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Purchase Details */}
+      {/* Informations de crédit et boutons */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Détails de l'acquisition</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Prix d'achat
-            </label>
-            <input
-              type="number"
-              value={initialValues?.purchasePrice || 0}
-              onChange={(e) => handleInputChange('purchasePrice', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
+        <h4 className="text-md font-semibold mb-4">Informations de crédit</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+            <p className="text-sm text-blue-700 font-medium">Mensualité du crédit</p>
+            <p className="text-lg font-bold text-blue-900">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
+                initialValues?.loanAmount && initialValues?.interestRate && initialValues?.loanDuration
+                  ? calculateMonthlyPayment(
+                      initialValues.loanAmount,
+                      initialValues.interestRate,
+                      initialValues.loanDuration,
+                      initialValues.deferralType || 'none',
+                      Number(initialValues.deferredPeriod || 0)
+                    )
+                  : 0
+              )}
+            </p>
           </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Frais d'agence
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Généralement inclus dans le prix de vente annoncé, sinon compter entre 3 et 8 %. Laisser à 0 s'ils sont inclus dans le prix de vente.
-            </div>
-            <input
-              type="number"
-              value={initialValues?.agencyFees || ''}
-              onChange={(e) => handleInputChange('agencyFees', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
+          <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+            <p className="text-sm text-blue-700 font-medium">Intérêts différés</p>
+            <p className="text-lg font-bold text-blue-900">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
+                initialValues?.deferredInterest || 0
+              )}
+            </p>
           </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Frais de notaire
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-96">
-              Montant moyen : environ 7 à 8 % du prix pour l'ancien et 2 à 3 % dans le neuf.<br/>
-              Dans le formulaire simplifié, les valeurs utilisées sont :<br/>
-              • Bien ancien : 7,5% du prix d'achat<br/>
-              • Bien neuf : 2,5% du prix d'achat
-            </div>
-            <input
-              type="number"
-              value={initialValues?.notaryFees || 0}
-              onChange={(e) => handleInputChange('notaryFees', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Frais de dossier bancaire
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Généralement entre 500 à 1500 €
-            </div>
-            <input
-              type="number"
-              value={initialValues?.bankFees || ''}
-              onChange={(e) => handleInputChange('bankFees', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Frais de garantie bancaire
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Hypothèque ou caution, entre 1 et 2 % du montant emprunté
-            </div>
-            <input
-              type="number"
-              value={initialValues?.bankGuaranteeFees || 0}
-              onChange={(e) => handleInputChange('bankGuaranteeFees', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Diagnostics immobiliers obligatoires
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Généralement inclus dans le prix de vente annoncé car il est la plupart du temps à la charge du vendeur. Laisser à 0 si c'est bien le cas.
-            </div>
-            <input
-              type="number"
-              value={initialValues?.mandatoryDiagnostics || 0}
-              onChange={(e) => handleInputChange('mandatoryDiagnostics', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Travaux
-            </label>
-            <input
-              type="number"
-              value={initialValues?.renovationCosts || ''}
-              onChange={(e) => handleInputChange('renovationCosts', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex items-end">
-            <div className="bg-gray-50 p-4 rounded-md w-full">
-              <p className="text-sm text-gray-600">Coût total de l'opération</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {formatCurrency(totalInvestmentCost)}
-              </p>
-            </div>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => handleShowAmortization()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Voir tableau d'amortissement
+            </button>
+            
+            {/* Nouveau bouton pour importer un PDF */}
+            <button
+              type="button"
+              onClick={() => setShowPdfImporter(!showPdfImporter)}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {showPdfImporter ? 'Cacher' : 'Importer un PDF'}
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Financing */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Financement</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Date de début
-            </label>
-            <input
-              type="date"
-              value={initialValues?.startDate || ''}
-              onChange={(e) => handleInputChange('startDate', e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        
+        {/* Affichage du tableau d'amortissement */}
+        {showAmortization && (
+          <div className="mt-4">
+            <AmortizationTable 
+              schedule={amortizationResult.schedule}
+              onClose={() => setShowAmortization(false)}
+              onSave={handleSubmitAmortization}
+              onReset={handleResetAmortization}
             />
           </div>
-
-          <div>
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={initialValues?.hasDeferral || false}
-                onChange={(e) => handleInputChange('hasDeferral', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Différé</span>
-            </label>
-          </div>
-
-          {initialValues?.hasDeferral && (
-            <>
-              <div className="relative group">
-                <label className="block text-sm font-medium text-gray-700 flex items-center">
-                  Type de différé
-                  <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-                </label>
-                <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-96">
-                  • Différé total : Pendant cette période, vous ne remboursez ni capital, ni intérêts. Tous les intérêts s'ajoutent au capital restant dû.<br/>
-                  • Différé partiel : Vous remboursez uniquement les intérêts du prêt, mais pas le capital.
-                </div>
-                <div className="mt-2 space-x-4">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="radio"
-                      value="partial"
-                      checked={initialValues.deferralType === 'partial'}
-                      onChange={(e) => handleInputChange('deferralType', e.target.value)}
-                      className="form-radio h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2">Partiel</span>
-                  </label>
-                  <label className="inline-flex items-center">
-                    <input
-                      type="radio"
-                      value="total"
-                      checked={initialValues.deferralType === 'total'}
-                      onChange={(e) => handleInputChange('deferralType', e.target.value)}
-                      className="form-radio h-4 w-4 text-blue-600"
-                    />
-                    <span className="ml-2">Total</span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Différé (mois)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={initialValues?.deferredPeriod || ''}
-                  onChange={(e) => handleInputChange('deferredPeriod', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-
-              {initialValues.deferralType === 'total' && initialValues.deferredInterest > 0 && (
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Intérêts du différé
-                  </label>
-                  <input
-                    type="text"
-                    value={formatCurrency(initialValues.deferredInterest)}
-                    disabled
-                    className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm"
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Apport
-            </label>
-            <input
-              type="number"
-              value={initialValues?.downPayment || ''}
-              onChange={(e) => handleInputChange('downPayment', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Somme empruntée
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              La valeur doit être égale au coût total de l'opération moins l'apport.
-            </div>
-            <div className="space-y-1">
-              <input
-                type="number"
-                value={initialValues?.loanAmount || ''}
-                onChange={(e) => handleInputChange('loanAmount', Number(e.target.value))}
-                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-                  loanAmountWarning ? 'border-red-300' : ''
-                }`}
-              />
-              {loanAmountWarning && (
-                <p className="text-sm text-red-600">
-                  La valeur donnée est incohérente : la somme empruntée devrait être égale au coût total de l'opération moins l'apport.
-                </p>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Durée (années)
-            </label>
-            <input
-              type="number"
-              value={initialValues?.loanDuration || ''}
-              onChange={(e) => handleInputChange('loanDuration', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Taux d'intérêt (%)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={initialValues?.interestRate || ''}
-              onChange={(e) => handleInputChange('interestRate', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          <div className="relative group">
-            <label className="block text-sm font-medium text-gray-700 flex items-center">
-              Assurance (%)
-              <HelpCircle className="ml-1 h-4 w-4 text-gray-400" />
-            </label>
-            <div className="absolute left-0 -top-2 transform -translate-y-full hidden group-hover:block bg-gray-900 text-white text-sm rounded-lg p-2 w-72">
-              Assurance emprunteur (entre 0,1 % et 0,5 % du montant emprunté par an)
-            </div>
-            <input
-              type="number"
-              step="0.01"
-              value={initialValues?.insuranceRate || ''}
-              onChange={(e) => handleInputChange('insuranceRate', Number(e.target.value))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Affichage des informations de crédit */}
-        <div className="mt-4 space-y-4">
-          <h4 className="text-md font-semibold">Informations de crédit</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-4 rounded-md">
-              <p className="text-sm text-gray-600">Mensualité du crédit</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
-                  initialValues?.loanAmount && initialValues?.interestRate && initialValues?.loanDuration
-                    ? (initialValues.loanAmount * (initialValues.interestRate / 1200) * Math.pow(1 + initialValues.interestRate / 1200, initialValues.loanDuration * 12)) /
-                      (Math.pow(1 + initialValues.interestRate / 1200, initialValues.loanDuration * 12) - 1)
-                    : 0
-                )}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-md">
-              <p className="text-sm text-gray-600">Intérêts différés</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
-                  initialValues?.deferredInterest || 0
-                )}
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => handleShowAmortization()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Voir tableau d'amortissement
-              </button>
-              
-              {/* Nouveau bouton pour importer un PDF */}
-              <button
-                type="button"
-                onClick={() => setShowPdfImporter(!showPdfImporter)}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                {showPdfImporter ? 'Cacher' : 'Importer un PDF'}
-              </button>
-            </div>
-          </div>
-          
-          {/* Affichage du tableau d'amortissement */}
-          {showAmortization && (
-            <div className="mt-4">
-              <AmortizationTable 
-                schedule={amortizationResult.schedule}
-                onClose={() => setShowAmortization(false)}
-                onSave={handleSubmitAmortization}
-                onReset={handleResetAmortization}
-              />
-            </div>
-          )}
-          
-          {/* Affichage de l'importateur PDF */}
-          {showPdfImporter && (
-            <div className="mt-4">
-              <PDFAmortizationImporter
-                onAmortizationImported={(amortizationRows, interestRate) => {
-                  // Fermer l'importateur après avoir importé les données
-                  setShowPdfImporter(false);
+        )}
+        
+        {/* Affichage de l'importateur PDF */}
+        {showPdfImporter && (
+          <div className="mt-4">
+            <PDFAmortizationImporter
+              onAmortizationImported={(amortizationRows, interestRate) => {
+                // Fermer l'importateur après avoir importé les données
+                setShowPdfImporter(false);
+                
+                // Récupérer les informations importantes du tableau
+                if (amortizationRows.length > 0) {
+                  // Capital restant dû initial (montant du prêt)
+                  const loanAmount = amortizationRows[0].remainingBalance;
                   
-                  // Récupérer les informations importantes du tableau
-                  if (amortizationRows.length > 0) {
-                    // Capital restant dû initial (montant du prêt)
-                    const loanAmount = amortizationRows[0].remainingBalance;
-                    
-                    // Durée du prêt en années
-                    const loanDuration = Math.ceil(amortizationRows.length / 12);
-                    
-                    // Mettre à jour l'investissement avec les nouvelles valeurs
-                    const updatedInvestment = {
-                      ...defaultInvestment,
-                      ...initialValues,
-                      loanAmount,
-                      loanDuration,
-                      interestRate,
-                      startDate: initialValues?.startDate || new Date().toISOString().split('T')[0], // Default to today's date if undefined
-                      // Mise à jour automatique de l'apport
-                      downPayment: Math.max(0, 
-                        (initialValues?.purchasePrice || 0) + 
-                        (initialValues?.agencyFees || 0) + 
-                        (initialValues?.notaryFees || 0) + 
-                        (initialValues?.bankFees || 0) + 
-                        (initialValues?.bankGuaranteeFees || 0) +
-                        (initialValues?.renovationCosts || 0) - 
-                        loanAmount
-                      )
-                    };
-                    
-                    // Notifier le parent des changements
-                    onSubmit(updatedInvestment);
-                    
-                    // Afficher le tableau d'amortissement importé
-                    setShowAmortization(true);
-                  }
-                }}
-              />
-            </div>
-          )}
-        </div>
+                  // Durée du prêt en années
+                  const loanDuration = Math.ceil(amortizationRows.length / 12);
+                  
+                  // Mettre à jour l'investissement avec les nouvelles valeurs
+                  const updatedInvestment = {
+                    ...defaultInvestment,
+                    ...initialValues,
+                    loanAmount,
+                    loanDuration,
+                    interestRate,
+                    startDate: initialValues?.startDate || new Date().toISOString().split('T')[0], // Default to today's date if undefined
+                    // Mise à jour automatique de l'apport
+                    downPayment: Math.max(0, 
+                      (initialValues?.purchasePrice || 0) + 
+                      (initialValues?.agencyFees || 0) + 
+                      (initialValues?.notaryFees || 0) + 
+                      (initialValues?.bankFees || 0) + 
+                      (initialValues?.bankGuaranteeFees || 0) +
+                      (initialValues?.renovationCosts || 0) - 
+                      loanAmount
+                    )
+                  };
+                  
+                  // Notifier le parent des changements
+                  onSubmit(updatedInvestment);
+                  
+                  // Afficher le tableau d'amortissement importé
+                  setShowAmortization(true);
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Graphique d'amortissement */}
