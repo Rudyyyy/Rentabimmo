@@ -39,7 +39,7 @@ const REGIME_LABELS: { [key in TaxRegime]: string } = {
 };
 
 export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) {
-  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>('micro-foncier');
+  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
   const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
   const currentYear = new Date().getFullYear();
 
@@ -54,6 +54,13 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
       taxResults: results
     });
   }, [investment.taxParameters, selectedRegime, currentYear, investment.expenses]);
+
+  // Synchronisation avec la sélection provenant de l'extérieur (sidebar)
+  useEffect(() => {
+    if (investment.selectedRegime && investment.selectedRegime !== selectedRegime) {
+      setSelectedRegime(investment.selectedRegime);
+    }
+  }, [investment.selectedRegime]);
 
   // Synchronisation de projectionRegime avec selectedRegime
   useEffect(() => {
@@ -488,286 +495,88 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
 
   return (
     <div className="space-y-6">
-      {/* Régime fiscal */}
+      {/* Section 1: Année courante */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Régime fiscal</h3>
-        <div className="flex space-x-6">
-          <div className="flex items-center">
-            <input
-              type="radio"
-              id="micro-foncier"
-              name="taxRegime"
-              value="micro-foncier"
-              checked={selectedRegime === 'micro-foncier'}
-              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <label htmlFor="micro-foncier" className="ml-3 block text-sm font-medium text-gray-700">
-              Location nue - Micro-foncier
-            </label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="radio"
-              id="reel-foncier"
-              name="taxRegime"
-              value="reel-foncier"
-              checked={selectedRegime === 'reel-foncier'}
-              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <label htmlFor="reel-foncier" className="ml-3 block text-sm font-medium text-gray-700">
-              Location nue - Frais réels
-            </label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="radio"
-              id="micro-bic"
-              name="taxRegime"
-              value="micro-bic"
-              checked={selectedRegime === 'micro-bic'}
-              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <label htmlFor="micro-bic" className="ml-3 block text-sm font-medium text-gray-700">
-              LMNP - Micro-BIC
-            </label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="radio"
-              id="reel-bic"
-              name="taxRegime"
-              value="reel-bic"
-              checked={selectedRegime === 'reel-bic'}
-              onChange={(e) => setSelectedRegime(e.target.value as TaxRegime)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <label htmlFor="reel-bic" className="ml-3 block text-sm font-medium text-gray-700">
-              LMNP - Frais réels
-            </label>
-          </div>
+        <h3 className="text-lg font-semibold mb-4">Année courante</h3>
+        <div className="h-96">
+          <Bar data={chartData} options={chartOptions} />
         </div>
       </div>
 
-      {currentSubTab === 'annee-courante' ? (
-        <>
-          {/* Paramètres fiscaux communs */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Paramètres fiscaux communs</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Taux marginal d'imposition (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.taxParameters.taxRate}
-                  onChange={(e) => handleTaxParameterChange('taxRate', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Taux des prélèvements sociaux (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investment.taxParameters.socialChargesRate}
-                  onChange={(e) => handleTaxParameterChange('socialChargesRate', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+      {/* Section 2: Historique et projection */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-semibold mb-4">Historique et projection</h3>
+
+        {/* Graphiques de projection */}
+        <div className="mt-6 space-y-6">
+          {/* Graphique des totaux cumulés */}
+          <div className="h-96">
+            <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
           </div>
 
-          {/* Paramètres LMNP */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Paramètres LMNP</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Valeur du bien (hors terrain)
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.buildingValue}
-                  onChange={(e) => handleTaxParameterChange('buildingValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement du bien (années)
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.buildingAmortizationYears}
-                  onChange={(e) => handleTaxParameterChange('buildingAmortizationYears', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Valeur du mobilier
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.furnitureValue}
-                  onChange={(e) => handleTaxParameterChange('furnitureValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement du mobilier (années)
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.furnitureAmortizationYears}
-                  onChange={(e) => handleTaxParameterChange('furnitureAmortizationYears', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Valeur des autres éléments
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.otherValue}
-                  onChange={(e) => handleTaxParameterChange('otherValue', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Durée d'amortissement des autres éléments (années)
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.otherAmortizationYears}
-                  onChange={(e) => handleTaxParameterChange('otherAmortizationYears', Number(e.target.value))}
-                  placeholder="5 ans par défaut"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Paramètres Location Nue */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">Paramètres Location Nue</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Déficit foncier reporté
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.previousDeficit}
-                  onChange={(e) => handleTaxParameterChange('previousDeficit', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Plafond de déduction du déficit foncier
-                </label>
-                <input
-                  type="number"
-                  value={investment.taxParameters.deficitLimit}
-                  onChange={(e) => handleTaxParameterChange('deficitLimit', Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Graphique de comparaison */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="h-96">
-              <Bar data={chartData} options={chartOptions} />
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
-                {Object.entries(REGIME_LABELS).map(([regime, label]) => (
-                  <button
-                    key={regime}
-                    type="button"
-                    onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
-                    className={`
-                      whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                      ${projectionRegime === regime
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                    `}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            {/* Graphiques de projection */}
-            <div className="mt-6 space-y-6">
-              {/* Graphique des totaux cumulés */}
-              <div className="h-96">
-                <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
-              </div>
-
-              {/* Graphique d'évolution des revenus nets */}
-              <div className="h-96">
-                <Line 
-                  data={netIncomeEvolutionData} 
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'top' as const,
-                      },
-                      title: {
-                        display: true,
-                        text: 'Évolution des revenus nets par régime fiscal'
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context: any) {
-                            return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
-                          }
-                        }
-                      }
-                    },
-                    scales: {
-                      y: {
-                        ticks: {
-                          callback: function(value: any) {
-                            return formatCurrency(value);
-                          }
-                        }
+          {/* Graphique d'évolution des revenus nets */}
+          <div className="h-96">
+            <Line 
+              data={netIncomeEvolutionData} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top' as const,
+                  },
+                  title: {
+                    display: true,
+                    text: 'Évolution des revenus nets par régime fiscal'
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context: any) {
+                        return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
                       }
                     }
-                  }} 
-                />
-              </div>
-            </div>
-
-            {/* Table de projection */}
-            <div className="mt-6">
-              {renderHistoricalAndProjectionTable()}
-            </div>
+                  }
+                },
+                scales: {
+                  y: {
+                    ticks: {
+                      callback: function(value: any) {
+                        return formatCurrency(value);
+                      }
+                    }
+                  }
+                }
+              }} 
+            />
           </div>
-        </>
-      )}
+        </div>
+
+        {/* Sélection du régime juste au-dessus du tableau */}
+        <div className="mt-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {Object.entries(REGIME_LABELS).map(([regime, label]) => (
+              <button
+                key={regime}
+                type="button"
+                onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                  ${projectionRegime === regime
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Table de projection */}
+        <div className="mt-6">
+          {renderHistoricalAndProjectionTable()}
+        </div>
+      </div>
     </div>
   );
 }

@@ -29,6 +29,8 @@ import { useAuth } from '../contexts/AuthContext';
 import AcquisitionForm from './AcquisitionForm';
 import ExpensesForm from './ExpensesForm';
 import RevenuesForm from './RevenuesForm';
+import LocationForm from './LocationForm';
+import LocationTables from './LocationTables';
 import ResultsDisplay from './ResultsDisplay';
 import CashFlowDisplay from './CashFlowDisplay';
 import TaxForm from './TaxForm';
@@ -46,7 +48,7 @@ type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability'
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 type SubTab = {
-  location: 'frais' | 'revenus';
+  location: 'revenus' | 'frais';
   imposition: 'annee-courante' | 'historique-projection';
   rentabilite: 'rentabilite-brute-nette' | 'cashflow' | 'revente';
   bilan: 'statistiques' | 'analyse-ia';
@@ -435,22 +437,17 @@ export default function PropertyForm() {
         );
       
       case 'location':
-        if (currentSubTab === 'frais') {
-          return (
-            <ExpensesForm
-              investment={investmentData}
-              onUpdate={handleInvestmentUpdate}
-            />
-          );
-        } else if (currentSubTab === 'revenus') {
-          return (
-            <RevenuesForm
-              investment={investmentData}
-              onUpdate={handleInvestmentUpdate}
-            />
-          );
-        }
-        break;
+        return (
+          <LocationTables
+            investment={investmentData}
+            currentSubTab={currentSubTab || 'revenus'}
+            onUpdate={handleInvestmentUpdate}
+            allowManualEdit={true}
+            onManualEdit={(isEditing) => {
+              // Cette fonction sera gérée par LocationTables
+            }}
+          />
+        );
 
       case 'imposition':
         return (
@@ -719,22 +716,37 @@ export default function PropertyForm() {
 
         <div className="flex gap-6 items-start">
           {/* Sidebar avec informations contextuelles uniquement */}
-          <aside className="hidden lg:block w-110 shrink-0">
-            <div className="sticky top-4">
+        <aside className="hidden lg:block w-96 shrink-0">
+          <div className="sticky top-4">
+            {currentMainTab === 'location' ? (
+              <LocationForm
+                investment={investmentData}
+                onUpdate={handleInvestmentUpdate}
+                currentSubTab={currentSubTab || 'revenus'}
+                onManualEdit={(isEditing) => {
+                  // Cette fonction sera gérée par LocationForm
+                }}
+              />
+            ) : (
               <SidebarContent 
                 currentMainTab={currentMainTab}
                 investmentData={investmentData}
                 metrics={metrics}
                 onInvestmentUpdate={handleFieldUpdate}
               />
-            </div>
-          </aside>
+            )}
+          </div>
+        </aside>
           
           {/* Zone principale avec contenu */}
           <section className="flex-1 min-w-0">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              {renderContent()}
-            </div>
+            {currentMainTab === 'location' ? (
+              renderContent()
+            ) : (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                {renderContent()}
+              </div>
+            )}
           </section>
         </div>
 

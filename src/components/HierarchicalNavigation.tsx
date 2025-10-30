@@ -55,8 +55,8 @@ const tabConfigs: MainTabConfig[] = [
     icon: FaKey,
     description: 'Gestion des charges et revenus locatifs',
     subTabs: [
-      { id: 'frais', label: 'Frais', icon: FaMoneyBillWave, description: 'Charges et frais locatifs' },
-      { id: 'revenus', label: 'Revenus', icon: FaChartPie, description: 'Revenus locatifs' }
+      { id: 'revenus', label: 'Revenus', icon: FaChartPie, description: 'Revenus locatifs' },
+      { id: 'frais', label: 'Frais', icon: FaMoneyBillWave, description: 'Charges et frais locatifs' }
     ],
     sidebarContent: 'location'
   },
@@ -106,7 +106,7 @@ export default function HierarchicalNavigation({
 }: HierarchicalNavigationProps) {
   const [selectedMainTab, setSelectedMainTab] = useState<MainTab>(initialMainTab);
   const [selectedSubTabs, setSelectedSubTabs] = useState<Record<string, string>>({
-    location: 'frais',
+    location: 'revenus',
     imposition: initialSubTab || 'annee-courante',
     rentabilite: 'rentabilite-brute-nette',
     bilan: 'statistiques'
@@ -185,8 +185,8 @@ export default function HierarchicalNavigation({
         </Tab.List>
       </Tab.Group>
 
-      {/* Sous-navigation */}
-      {currentConfig?.subTabs && currentConfig.subTabs.length > 0 && (
+      {/* Sous-navigation (désactivée pour Imposition car contenu fusionné sur la page) */}
+      {selectedMainTab !== 'imposition' && currentConfig?.subTabs && currentConfig.subTabs.length > 0 && (
         <div className="animate-fadeIn">
           <Tab.Group 
             selectedIndex={getSelectedSubTabIndex(selectedMainTab)} 

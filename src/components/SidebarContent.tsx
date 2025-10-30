@@ -6,6 +6,7 @@ import {
   FaChartBar 
 } from 'react-icons/fa';
 import AcquisitionDetails from './AcquisitionDetails';
+import { TaxRegime } from '../types/investment';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -110,20 +111,208 @@ export default function SidebarContent({ currentMainTab, investmentData, metrics
         );
 
       case 'imposition':
+        const regimeLabels: Record<TaxRegime, string> = {
+          'micro-foncier': 'Location nue - Micro-foncier',
+          'reel-foncier': 'Location nue - Frais réels',
+          'micro-bic': 'LMNP - Micro-BIC',
+          'reel-bic': 'LMNP - Frais réels'
+        };
+
+        const currentRegime: TaxRegime = investmentData?.selectedRegime || investmentData?.taxRegime || 'micro-foncier';
+
+        const handleRegimeChange = (value: TaxRegime) => {
+          if (onInvestmentUpdate) {
+            onInvestmentUpdate('selectedRegime', value);
+            onInvestmentUpdate('taxRegime', value);
+          }
+        };
+
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Régime fiscal: libellé + saisie sur une ligne */}
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2">
                 <span className="text-sm text-gray-600">Régime fiscal</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {investmentData?.taxRegime || 'Non défini'}
-                </span>
+                <select
+                  value={currentRegime}
+                  onChange={(e) => handleRegimeChange(e.target.value as TaxRegime)}
+                  className="ml-3 w-56 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  {(Object.keys(regimeLabels) as TaxRegime[]).map((regime) => (
+                    <option key={regime} value={regime}>{regimeLabels[regime]}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Paramètres fiscaux communs: libellé + saisie sur une ligne */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Paramètres fiscaux communs</h4>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Taux marginal d'imposition (%)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={investmentData?.taxParameters?.taxRate ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    taxRate: Number(e.target.value)
+                  })}
+                  className="ml-3 w-28 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Taux d'imposition</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {investmentData?.taxRate || 0}%
-                </span>
+                <span className="text-sm text-gray-600">Taux des prélèvements sociaux (%)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={investmentData?.taxParameters?.socialChargesRate ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    socialChargesRate: Number(e.target.value)
+                  })}
+                  className="ml-3 w-28 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+            </div>
+
+            {/* Paramètres LMNP */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Paramètres LMNP</h4>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Valeur du bien (hors terrain)</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.buildingValue ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    buildingValue: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Durée d'amortissement du bien (années)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={investmentData?.taxParameters?.buildingAmortizationYears ?? 25}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    buildingAmortizationYears: Number(e.target.value)
+                  })}
+                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Valeur du mobilier</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.furnitureValue ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    furnitureValue: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Durée d'amortissement du mobilier (années)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={investmentData?.taxParameters?.furnitureAmortizationYears ?? 10}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    furnitureAmortizationYears: Number(e.target.value)
+                  })}
+                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Valeur des travaux</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.worksValue ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    worksValue: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Durée d'amortissement des travaux (années)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={investmentData?.taxParameters?.worksAmortizationYears ?? 10}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    worksAmortizationYears: Number(e.target.value)
+                  })}
+                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Valeur des autres éléments</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.otherValue ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    otherValue: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Durée d'amortissement autres éléments (années)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={investmentData?.taxParameters?.otherAmortizationYears ?? 5}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    otherAmortizationYears: Number(e.target.value)
+                  })}
+                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+            </div>
+
+            {/* Paramètres Location Nue */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Paramètres Location Nue</h4>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Déficit foncier reporté</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.previousDeficit ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    previousDeficit: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Plafond de déduction du déficit foncier</span>
+                <input
+                  type="number"
+                  step="100"
+                  value={investmentData?.taxParameters?.deficitLimit ?? 10700}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                    ...investmentData?.taxParameters,
+                    deficitLimit: Number(e.target.value)
+                  })}
+                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
+                />
               </div>
             </div>
           </div>

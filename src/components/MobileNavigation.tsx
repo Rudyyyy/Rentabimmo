@@ -20,13 +20,10 @@ const tabConfigs = [
 const subTabConfigs: Record<MainTab, { id: string; label: string }[]> = {
   acquisition: [],
   location: [
-    { id: 'frais', label: 'Frais' },
-    { id: 'revenus', label: 'Revenus' }
+    { id: 'revenus', label: 'Revenus' },
+    { id: 'frais', label: 'Frais' }
   ],
-  imposition: [
-    { id: 'annee-courante', label: 'Année courante' },
-    { id: 'historique-projection', label: 'Historique et projection' }
-  ],
+  imposition: [],
   rentabilite: [
     { id: 'rentabilite-brute-nette', label: 'Rentabilité brute et nette' },
     { id: 'cashflow', label: 'Cashflow' },
@@ -140,3 +137,4 @@ export default function MobileNavigation({ currentMainTab, currentSubTab, onTabC
     </div>
   );
 }
+
