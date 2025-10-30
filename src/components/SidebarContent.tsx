@@ -3,7 +3,8 @@ import {
   FaKey, 
   FaCalculator, 
   FaChartLine, 
-  FaChartBar 
+  FaChartBar,
+  FaMoneyBillWave 
 } from 'react-icons/fa';
 import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime } from '../types/investment';
@@ -12,6 +13,7 @@ type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bila
 
 interface SidebarContentProps {
   currentMainTab: MainTab;
+  currentSubTab?: string;
   investmentData?: any;
   metrics?: any;
   onInvestmentUpdate?: (field: any, value: any) => void;
@@ -25,10 +27,46 @@ const tabConfigs = [
   { id: 'bilan' as MainTab, label: 'Bilan', icon: FaChartBar },
 ];
 
-export default function SidebarContent({ currentMainTab, investmentData, metrics, onInvestmentUpdate }: SidebarContentProps) {
+export default function SidebarContent({ currentMainTab, currentSubTab, investmentData, metrics, onInvestmentUpdate }: SidebarContentProps) {
   const currentConfig = tabConfigs.find(tab => tab.id === currentMainTab);
 
   if (!currentConfig) return null;
+
+  // Utilitaires d'affichage
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
+
+  const isCashflowView = currentMainTab === 'rentabilite' && currentSubTab === 'cashflow';
+
+  // Calcul du cashflow (sans imposition) pour une année donnée selon un type de location
+  const calculateYearCashFlow = (year: number, type: 'nu' | 'meuble') => {
+    if (!investmentData?.expenses) return 0;
+    const expense = investmentData.expenses.find((e: any) => e.year === year);
+    if (!expense) return 0;
+
+    const rent = Number(expense.rent || 0);
+    const furnishedRent = Number(expense.furnishedRent || 0);
+    const tenantCharges = Number(expense.tenantCharges || 0);
+    const taxBenefit = Number(expense.taxBenefit || 0);
+
+    const revenues = type === 'meuble'
+      ? furnishedRent + tenantCharges
+      : rent + taxBenefit + tenantCharges;
+
+    const totalExpenses =
+      Number(expense.propertyTax || 0) +
+      Number(expense.condoFees || 0) +
+      Number(expense.propertyInsurance || 0) +
+      Number(expense.managementFees || 0) +
+      Number(expense.unpaidRentInsurance || 0) +
+      Number(expense.repairs || 0) +
+      Number(expense.otherDeductible || 0) +
+      Number(expense.otherNonDeductible || 0) +
+      Number(expense.loanPayment || 0) +
+      Number(expense.loanInsurance || 0);
+
+    return revenues - totalExpenses;
+  };
 
   const renderSidebarContent = () => {
     switch (currentMainTab) {
@@ -319,36 +357,80 @@ export default function SidebarContent({ currentMainTab, investmentData, metrics
         );
 
       case 'rentabilite':
+        const currentYear = new Date().getFullYear();
+        const cashFlowNu = calculateYearCashFlow(currentYear, 'nu');
+        const cashFlowMeuble = calculateYearCashFlow(currentYear, 'meuble');
+        const monthlyNu = cashFlowNu / 12;
+        const monthlyMeuble = cashFlowMeuble / 12;
+
         return (
           <div className="space-y-4">
             {metrics && (
               <div className="space-y-3">
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Rentabilité brute</span>
-                  <span className="text-sm font-semibold text-green-600">
-                    {metrics.grossYield?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Rentabilité nette</span>
-                  <span className="text-sm font-semibold text-blue-600">
-                    {metrics.netYield?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">TRI</span>
-                  <span className="text-sm font-semibold text-purple-600">
-                    {metrics.irr?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="border-t border-gray-200 pt-3">
-                  <div className="flex justify-between items-center py-2 bg-gradient-to-r from-blue-50 to-green-50 rounded-md px-3">
-                    <span className="text-sm font-semibold text-gray-900">ROI</span>
-                    <span className="text-lg font-bold text-blue-900">
-                      {metrics.roi?.toFixed(2) || '0.00'}%
+                {!isCashflowView && (
+                  <>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">Rentabilité brute</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        {metrics.grossYield?.toFixed(2) || '0.00'}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">Rentabilité nette</span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        {metrics.netYield?.toFixed(2) || '0.00'}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">TRI</span>
+                      <span className="text-sm font-semibold text-purple-600">
+                        {metrics.irr?.toFixed(2) || '0.00'}%
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="border-t border-gray-200 pt-3 space-y-2">
+                  <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
+                    cashFlowNu >= 0 ? 'bg-green-50' : 'bg-red-50'
+                  }`}>
+                    <span className={`text-sm font-semibold ${
+                      cashFlowNu >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      Location nue
+                      <span className="ml-2 text-xs font-normal text-gray-600">(Année {currentYear} · Mensuel {formatCurrency(monthlyNu)})</span>
+                    </span>
+                    <span className={`text-sm font-bold ${
+                      cashFlowNu >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      {formatCurrency(cashFlowNu)}
+                    </span>
+                  </div>
+                  <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
+                    cashFlowMeuble >= 0 ? 'bg-green-50' : 'bg-red-50'
+                  }`}>
+                    <span className={`text-sm font-semibold ${
+                      cashFlowMeuble >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      Location meublée
+                      <span className="ml-2 text-xs font-normal text-gray-600">(Année {currentYear} · Mensuel {formatCurrency(monthlyMeuble)})</span>
+                    </span>
+                    <span className={`text-sm font-bold ${
+                      cashFlowMeuble >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      {formatCurrency(cashFlowMeuble)}
                     </span>
                   </div>
                 </div>
+                {!isCashflowView && (
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="flex justify-between items-center py-2 bg-gradient-to-r from-blue-50 to-green-50 rounded-md px-3">
+                      <span className="text-sm font-semibold text-gray-900">ROI</span>
+                      <span className="text-lg font-bold text-blue-900">
+                        {metrics.roi?.toFixed(2) || '0.00'}%
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -414,8 +496,12 @@ export default function SidebarContent({ currentMainTab, investmentData, metrics
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6 space-y-6">
       <div className="flex items-center space-x-2">
-        <currentConfig.icon className="h-5 w-5 text-blue-600" />
-        <h3 className="text-lg font-semibold text-gray-900">{currentConfig.label}</h3>
+        {isCashflowView ? (
+          <FaMoneyBillWave className="h-5 w-5 text-blue-600" />
+        ) : (
+          <currentConfig.icon className="h-5 w-5 text-blue-600" />
+        )}
+        <h3 className="text-lg font-semibold text-gray-900">{isCashflowView ? 'Cashflow' : currentConfig.label}</h3>
       </div>
       <div className="border-t border-gray-100 pt-4">
         {renderSidebarContent()}

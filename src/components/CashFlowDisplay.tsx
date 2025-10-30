@@ -12,11 +12,10 @@
  * - Visualisation de l'évolution du cash flow dans le temps
  * - Persistance du régime fiscal sélectionné
  * 
- * Les calculs prennent en compte :
- * - Les revenus locatifs (nu ou meublé selon le régime)
- * - Les charges et dépenses déductibles et non déductibles
- * - L'imposition selon le régime fiscal
- * - Les remboursements de prêt
+   * Les calculs prennent en compte :
+   * - Les revenus locatifs (nu ou meublé selon le régime)
+   * - Les charges et dépenses déductibles et non déductibles
+   * - Les remboursements de prêt
  */
 
 import { useState, useEffect } from 'react';
@@ -88,20 +87,7 @@ export default function CashFlowDisplay({ investment }: Props) {
       (_, i) => startYear + i
     );
 
-    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
-    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
-
-    // Calcul des résultats fiscaux de manière séquentielle
-    years.forEach(year => {
-      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
-      if (year === startYear) {
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
-      } else {
-        // Pour les années suivantes, on passe les résultats de l'année précédente
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
-      }
-      
-    });
+    // Plus de calcul ni d'utilisation de l'imposition dans le cash flow
 
     const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
       const data = years.map(year => {
@@ -131,27 +117,9 @@ export default function CashFlowDisplay({ investment }: Props) {
           Number(yearExpense.loanPayment || 0) +
           Number(yearExpense.loanInsurance || 0);
 
-        // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
-        const yearResults = yearlyResults[year];
-        const totalTax = yearResults[regime]?.totalTax || 0;
-        
-        // Si l'imposition est à 0 mais que les revenus sont positifs, ajouter un log spécifique
-        if (totalTax === 0 && revenues > expenses && regime === investment.selectedRegime) {
-          console.warn(`ATTENTION: Imposition nulle malgré cash flow positif - Année ${year} - Régime ${regime}`, {
-            investmentId: `${investment.purchasePrice}_${investment.startDate}`,
-            revenuBrut: regime.includes('bic') ? furnishedRent : rent,
-            totalRevenus: revenues,
-            totalDepenses: expenses,
-            cashFlowAvantImpot: revenues - expenses,
-            resultatTaxCalculations: yearResults[regime]
-          });
-        }
-
-        // Cash flow
+        // Cash flow (sans imposition)
         const cashFlow = revenues - expenses;
-        const cashFlowNet = cashFlow - totalTax;
-
-        return cashFlowNet;
+        return cashFlow;
       });
 
       return {
@@ -197,7 +165,7 @@ export default function CashFlowDisplay({ investment }: Props) {
       },
       title: {
         display: true,
-        text: 'Évolution du cash flow net par régime fiscal'
+        text: 'Évolution du cash flow par régime fiscal'
       },
       tooltip: {
         callbacks: {
@@ -234,30 +202,7 @@ export default function CashFlowDisplay({ investment }: Props) {
       (_, i) => startYear + i
     );
 
-    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
-    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
-
-    // Calcul des résultats fiscaux de manière séquentielle
-    years.forEach(year => {
-      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
-      if (year === startYear) {
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
-      } else {
-        // Pour les années suivantes, on passe les résultats de l'année précédente
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
-      }
-    });
-
-    // Log comparatif pour tous les régimes sur la première année
-    if (years.length > 0) {
-      const firstYear = years[0];
-      console.log(`[CASH FLOW TABLEAU] Comparaison des régimes fiscaux pour l'année ${firstYear}:`, {
-        context: 'table_comparison',
-        investmentId: `${investment.purchasePrice}_${investment.startDate}`,
-        selectedRegime: investment.selectedRegime,
-        allRegimes: yearlyResults[firstYear]
-      });
-    }
+    // Plus de calcul ni de journalisation liés à l'imposition pour le tableau
 
     return (
       <div className="overflow-x-auto">
@@ -272,9 +217,6 @@ export default function CashFlowDisplay({ investment }: Props) {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Dépenses
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Imposition
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Cash Flow Net
@@ -312,62 +254,9 @@ export default function CashFlowDisplay({ investment }: Props) {
                 Number(yearExpense.loanPayment || 0) +
                 Number(yearExpense.loanInsurance || 0);
 
-              // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
-              const yearResults = yearlyResults[year];
-              const tax = yearResults[regime].tax || 0;
-              const socialCharges = yearResults[regime].socialCharges || 0;
-              const totalTax = yearResults[regime].totalTax || 0;
-              
-              // Log plus détaillé et structuré pour identifier d'où viennent les valeurs
-              console.log(`[CASH FLOW] Données fiscales pour ${investment.name || 'bien'} - Année ${year} - Régime ${regime}:`, {
-                // Identification claire du contexte d'appel
-                context: 'table_data_preparation',
-                // Données d'entrée
-                input: {
-                  investmentId,
-                  regime,
-                  year,
-                  annualRevenue: regime.includes('bic') ? furnishedRent : rent,
-                  tenantCharges,
-                  taxBenefit: taxBenefit || 0,
-                  expenses,
-                  selectedRegime: investment.selectedRegime
-                },
-                // Résultats de calcul d'impôt
-                taxResults: {
-                  ...yearResults[regime],
-                },
-                // Calculs de cash flow
-                cashFlowCalculations: {
-                  revenues,
-                  expenses,
-                  cashFlowBeforeTax: revenues - expenses,
-                  tax,
-                  socialCharges,
-                  totalTax,
-                  cashFlowAfterTax: revenues - expenses - totalTax
-                }
-              });
-              
-              // Si l'imposition est à 0 mais que les revenus sont positifs, ajouter un log spécifique
-              if (totalTax === 0 && revenues > expenses && regime === 'reel-foncier') {
-                console.warn(`ATTENTION: Imposition nulle malgré cash flow positif - Année ${year} - Régime ${regime}`, {
-                  investmentId: investmentId,
-                  revenuBrut: regime.includes('bic') ? furnishedRent : rent,
-                  totalRevenus: revenues,
-                  totalDepenses: expenses,
-                  cashFlowAvantImpot: revenues - expenses,
-                  resultatTaxCalculations: yearResults[regime],
-                  previousYearDeficit: year > startYear ? 
-                    yearlyResults[year - 1]['reel-foncier'].deficit : 
-                    investment.taxParameters.previousDeficit
-                });
-              }
-
-              // Cash flow
+              // Cash flow (sans imposition)
               const cashFlow = revenues - expenses;
-              const cashFlowNet = cashFlow - totalTax;
-              const monthlyCashFlow = cashFlowNet / 12;
+              const monthlyCashFlow = cashFlow / 12;
 
               return (
                 <tr key={year}>
@@ -380,22 +269,10 @@ export default function CashFlowDisplay({ investment }: Props) {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(expenses)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {totalTax > 0 ? (
-                      <div>
-                        <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
-                        <div className="text-xs text-gray-400">
-                          IR: {formatCurrency(tax)} + PS: {formatCurrency(socialCharges)}
-                        </div>
-                      </div>
-                    ) : (
-                      formatCurrency(0)
-                    )}
-                  </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                    cashFlowNet >= 0 ? 'text-emerald-600' : 'text-red-600'
+                    cashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'
                   }`}>
-                    {formatCurrency(cashFlowNet)}
+                    {formatCurrency(cashFlow)}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
                     monthlyCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'

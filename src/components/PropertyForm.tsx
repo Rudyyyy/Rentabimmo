@@ -730,6 +730,7 @@ export default function PropertyForm() {
             ) : (
               <SidebarContent 
                 currentMainTab={currentMainTab}
+                currentSubTab={currentSubTab}
                 investmentData={investmentData}
                 metrics={metrics}
                 onInvestmentUpdate={handleFieldUpdate}
