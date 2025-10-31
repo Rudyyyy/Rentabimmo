@@ -9,6 +9,8 @@ import {
 import { useEffect, useState } from 'react';
 import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime, Investment } from '../types/investment';
+import { calculateAllTaxRegimes } from '../utils/taxCalculations';
+import { generateAmortizationSchedule } from '../utils/calculations';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -47,7 +49,35 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
     const stored = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
     return stored ? JSON.parse(stored) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
   });
-  const [selectedRegime, setSelectedRegime] = useState<string>(() => localStorage.getItem(`selectedRegime_${investmentId}`) || 'micro-foncier');
+  // Récupérer le régime depuis localStorage (synchronisé avec les onglets de BalanceDisplay)
+  // On lit directement depuis localStorage à chaque rendu pour éviter les décalages
+  const getSelectedRegime = (): TaxRegime => {
+    if (typeof window === 'undefined') return 'micro-foncier';
+    const regime = localStorage.getItem(`selectedRegime_${investmentId}`) || 'micro-foncier';
+    return regime as TaxRegime;
+  };
+  
+  // État pour forcer le re-render quand le localStorage change
+  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(getSelectedRegime);
+  
+  // Synchroniser avec les changements dans localStorage (quand l'onglet change dans BalanceDisplay)
+  useEffect(() => {
+    // Vérifier périodiquement les changements du localStorage
+    const interval = setInterval(() => {
+      const currentRegimeValue = getSelectedRegime();
+      if (currentRegimeValue !== selectedRegime) {
+        setSelectedRegime(currentRegimeValue);
+      }
+    }, 200); // Vérifier toutes les 200ms
+    
+    return () => clearInterval(interval);
+  }, [investmentId, selectedRegime]);
+  
+  const [selectedSaleYear, setSelectedSaleYear] = useState<number>(() => {
+    if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    return startYear + 10; // 10 ans après la date de début du projet
+  });
   const [saleYears, setSaleYears] = useState<number[]>(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(`saleYears_${investmentId}`) : null;
     if (stored) return JSON.parse(stored);
@@ -132,6 +162,211 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
       Number(expense.loanInsurance || 0);
 
     return revenues - totalExpenses;
+  };
+
+  // Fonction helper pour calculer les valeurs de balance pour une année donnée
+  const calculateBalanceForYear = (year: number, regime: TaxRegime) => {
+    if (!investmentData) return null;
+
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    const endYear = new Date(investmentData.projectEndDate).getFullYear();
+    const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+    
+    if (year < startYear || year > endYear) return null;
+
+    // Calculer les résultats fiscaux pour toutes les années jusqu'à l'année sélectionnée
+    // Ne calculer que pour les années qui ont des dépenses
+    const yearlyResults: Record<number, Record<TaxRegime, any>> = {};
+    years.forEach(yr => {
+      if (yr > year) return;
+      
+      const yearExpense = investmentData.expenses?.find((e: any) => e.year === yr);
+      
+      // Si pas de dépenses pour cette année, utiliser des résultats fiscaux vides
+      if (!yearExpense) {
+        // Utiliser les résultats de l'année précédente ou des résultats vides
+        if (yr === startYear) {
+          // Pour la première année sans dépenses, créer des résultats vides
+          yearlyResults[yr] = {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        } else {
+          // Répéter les résultats de l'année précédente
+          yearlyResults[yr] = yearlyResults[yr - 1] || {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        }
+        return;
+      }
+      
+      // Calculer les résultats fiscaux uniquement si des dépenses existent
+      try {
+        if (yr === startYear) {
+          yearlyResults[yr] = calculateAllTaxRegimes(investmentData as Investment, yr);
+        } else {
+          yearlyResults[yr] = calculateAllTaxRegimes(investmentData as Investment, yr, yearlyResults[yr - 1]);
+        }
+      } catch (error) {
+        // En cas d'erreur, utiliser les résultats de l'année précédente ou des résultats vides
+        console.warn(`Erreur lors du calcul fiscal pour l'année ${yr}:`, error);
+        yearlyResults[yr] = yearlyResults[yr - 1] || {
+          'micro-foncier': { totalTax: 0 },
+          'reel-foncier': { totalTax: 0 },
+          'micro-bic': { totalTax: 0 },
+          'reel-bic': { totalTax: 0 }
+        } as Record<TaxRegime, any>;
+      }
+    });
+
+    // Calculer les valeurs cumulées jusqu'à l'année sélectionnée
+    let cumulativeCashFlowBeforeTax = 0;
+    let cumulativeTax = 0;
+    let cumulativeCashFlowNet = 0;
+
+    years.forEach((yr, i) => {
+      if (yr > year) return;
+      
+      const yearExpense = investmentData.expenses?.find((e: any) => e.year === yr);
+      if (!yearExpense) return;
+
+      // Calcul des revenus selon le régime
+      const rent = Number(yearExpense.rent || 0);
+      const furnishedRent = Number(yearExpense.furnishedRent || 0);
+      const tenantCharges = Number(yearExpense.tenantCharges || 0);
+      const taxBenefit = Number(yearExpense.taxBenefit || 0);
+      
+      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
+        ? furnishedRent + tenantCharges
+        : rent + taxBenefit + tenantCharges;
+
+      // Total des dépenses
+      const expenses = 
+        Number(yearExpense.propertyTax || 0) +
+        Number(yearExpense.condoFees || 0) +
+        Number(yearExpense.propertyInsurance || 0) +
+        Number(yearExpense.managementFees || 0) +
+        Number(yearExpense.unpaidRentInsurance || 0) +
+        Number(yearExpense.repairs || 0) +
+        Number(yearExpense.otherDeductible || 0) +
+        Number(yearExpense.otherNonDeductible || 0) +
+        Number(yearExpense.loanPayment || 0) +
+        Number(yearExpense.loanInsurance || 0);
+
+      // Cash flow SANS imposition
+      const annualCashFlowBeforeTax = revenues - expenses;
+      
+      // Imposition
+      const taxation = yearlyResults[yr]?.[regime]?.totalTax || 0;
+      cumulativeTax += taxation;
+      
+      // Cash flow NET (avec imposition)
+      const annualCashFlowNet = annualCashFlowBeforeTax - taxation;
+      
+      cumulativeCashFlowBeforeTax += annualCashFlowBeforeTax;
+      cumulativeCashFlowNet += annualCashFlowNet;
+    });
+
+    // Calculer le solde de revente pour l'année sélectionnée
+    const yearsSincePurchase = year - startYear;
+    const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+    const netSellingPrice = revaluedValue - Number(saleParams.agencyFees);
+
+    // Calculer le capital restant dû
+    const amortizationSchedule = generateAmortizationSchedule(
+      Number(investmentData.loanAmount),
+      Number(investmentData.interestRate),
+      Number(investmentData.loanDuration),
+      investmentData.deferralType,
+      Number(investmentData.deferredPeriod),
+      investmentData.startDate
+    );
+
+    const yearEndDate = new Date(year, 11, 31);
+    const lastPayment = amortizationSchedule.schedule
+      .filter(row => new Date(row.date) <= yearEndDate)
+      .pop();
+
+    const remainingBalance = lastPayment ? lastPayment.remainingBalance : Number(investmentData.loanAmount);
+    const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
+    const saleBalance = netSellingPrice - totalDebt;
+
+    // Calculer l'impôt sur la plus-value (simplifié - même logique que dans BalanceDisplay)
+    const purchasePrice = Number(investmentData.purchasePrice) || 0;
+    const acquisitionFees = (Number(investmentData.notaryFees) || 0) + (Number(investmentData.agencyFees) || 0);
+    const improvementWorks = Number(investmentData.improvementWorks) || 0;
+    const correctedPurchasePrice = purchasePrice + acquisitionFees + improvementWorks;
+    const grossCapitalGain = netSellingPrice - correctedPurchasePrice;
+    
+    let capitalGainTax = 0;
+    if (grossCapitalGain > 0) {
+      const holdingPeriodYears = year - startYear;
+      let irDiscount = 0;
+      if (holdingPeriodYears > 5) {
+        if (holdingPeriodYears <= 21) {
+          irDiscount = Math.min(1, (holdingPeriodYears - 5) * 0.06);
+        } else {
+          irDiscount = 1;
+        }
+      }
+      
+      let socialDiscount = 0;
+      if (holdingPeriodYears > 5) {
+        if (holdingPeriodYears <= 21) {
+          socialDiscount = (holdingPeriodYears - 5) * 0.0165;
+        } else if (holdingPeriodYears <= 30) {
+          socialDiscount = (16 * 0.0165) + 0.016 + Math.min(8, holdingPeriodYears - 22) * 0.09;
+        } else {
+          socialDiscount = 1;
+        }
+      }
+      
+      const taxableCapitalGainIR = grossCapitalGain * (1 - irDiscount);
+      const taxableCapitalGainSocial = grossCapitalGain * (1 - socialDiscount);
+      const incomeTax = taxableCapitalGainIR * 0.19;
+      const socialCharges = taxableCapitalGainSocial * 0.172;
+      capitalGainTax = incomeTax + socialCharges;
+      
+      // Traitement spécial pour LMNP
+      if (regime === 'micro-bic' || regime === 'reel-bic') {
+        const isLMP = investmentData.isLMP || false;
+        const businessTaxRate = Number(investmentData.taxParameters?.taxRate) || 30;
+        const accumulatedDepreciation = Number(investmentData.accumulatedDepreciation) || 0;
+        
+        if (isLMP) {
+          if (holdingPeriodYears <= 2) {
+            capitalGainTax = grossCapitalGain * (businessTaxRate / 100);
+          } else {
+            const shortTermGain = Math.min(accumulatedDepreciation, grossCapitalGain);
+            const longTermGain = Math.max(0, grossCapitalGain - shortTermGain);
+            capitalGainTax = shortTermGain * (businessTaxRate / 100) + longTermGain * 0.128 + longTermGain * 0.172;
+          }
+        } else if (regime === 'reel-bic' && accumulatedDepreciation > 0) {
+          const depreciationTaxable = Math.min(accumulatedDepreciation, grossCapitalGain);
+          const depreciationTax = depreciationTaxable * (businessTaxRate / 100);
+          capitalGainTax = incomeTax + socialCharges + depreciationTax;
+        }
+      }
+    }
+
+    // Gain total cumulé
+    const downPayment = Number(investmentData.downPayment) || 0;
+    const totalGain = cumulativeCashFlowNet + saleBalance - capitalGainTax - downPayment;
+
+    return {
+      year,
+      downPayment,
+      cumulativeCashFlowBeforeTax,
+      cumulativeTax,
+      saleBalance,
+      capitalGainTax,
+      totalGain
+    };
   };
 
   const renderSidebarContent = () => {
@@ -634,46 +869,110 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
         );
 
       case 'bilan':
+        const REGIME_LABELS: Record<TaxRegime, string> = {
+          'micro-foncier': 'Location nue - Micro-foncier',
+          'reel-foncier': 'Location nue - Frais réels',
+          'micro-bic': 'LMNP - Micro-BIC',
+          'reel-bic': 'LMNP - Frais réels'
+        };
+        
+        // Récupérer les années disponibles
+        const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+        const endYear = investmentData?.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
+        const availableYears = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+        
+        // Lire le régime actuel depuis localStorage (synchronisé avec l'onglet sélectionné)
+        const regimeForBalance = getSelectedRegime();
+        
+        // Calculer les valeurs pour l'année et le régime sélectionnés
+        const balanceData = calculateBalanceForYear(selectedSaleYear, regimeForBalance);
+        
         return (
           <div className="space-y-4">
-            {metrics && (
-              <div className="space-y-3">
+            {/* Sélecteur d'année de revente */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Année de revente souhaitée
+              </label>
+              <select
+                value={selectedSaleYear}
+                onChange={(e) => setSelectedSaleYear(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Affichage du régime fiscal (synchronisé avec l'onglet sélectionné) */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Régime fiscal
+              </label>
+              <div className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-gray-900">
+                {REGIME_LABELS[regimeForBalance] || regimeForBalance}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Sélectionné via l'onglet au-dessus du graphique
+              </p>
+            </div>
+
+            {/* Affichage des valeurs */}
+            {balanceData ? (
+              <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Cash flow annuel</span>
-                  <span className={`text-sm font-semibold ${
-                    (metrics.annualCashFlow || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  <span className="text-sm text-gray-600">Apport personnel</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(-balanceData.downPayment)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Cash flow cumulé</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(balanceData.cumulativeCashFlowBeforeTax)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Imposition cumulée</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(-balanceData.cumulativeTax)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Solde de revente</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(balanceData.saleBalance)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Impôt sur la plus-value</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(-balanceData.capitalGainTax)}
+                  </span>
+                </div>
+                <div className="border-t border-gray-200 pt-3 mt-3">
+                  <div className={`flex justify-between items-center py-3 rounded-md px-4 ${
+                    balanceData.totalGain >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
                   }`}>
-                    {metrics.annualCashFlow?.toLocaleString('fr-FR') || '0'} €
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">ROI</span>
-                  <span className="text-sm font-semibold text-blue-600">
-                    {metrics.roi?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">TRI</span>
-                  <span className="text-sm font-semibold text-purple-600">
-                    {metrics.irr?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="border-t border-gray-200 pt-3">
-                  <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
-                    (metrics.annualCashFlow || 0) >= 0 ? 'bg-green-50' : 'bg-red-50'
-                  }`}>
-                    <span className={`text-sm font-semibold ${
-                      (metrics.annualCashFlow || 0) >= 0 ? 'text-green-900' : 'text-red-900'
+                    <span className={`text-base font-semibold ${
+                      balanceData.totalGain >= 0 ? 'text-green-900' : 'text-red-900'
                     }`}>
-                      Rentabilité
+                      Gain total cumulé
                     </span>
-                    <span className={`text-lg font-bold ${
-                      (metrics.annualCashFlow || 0) >= 0 ? 'text-green-900' : 'text-red-900'
+                    <span className={`text-xl font-bold ${
+                      balanceData.totalGain >= 0 ? 'text-green-900' : 'text-red-900'
                     }`}>
-                      {(metrics.annualCashFlow || 0) >= 0 ? 'Positive' : 'Négative'}
+                      {formatCurrency(balanceData.totalGain)}
                     </span>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 py-4">
+                Impossible de calculer les valeurs pour cette année.
               </div>
             )}
           </div>

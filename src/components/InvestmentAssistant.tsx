@@ -133,7 +133,7 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
           <MessageSquare className="w-6 h-6" />
         </button>
       ) : (
-        <div className={`bg-white rounded-lg shadow-xl ${isMinimized ? 'w-64' : 'w-96'} h-[600px] flex flex-col`}>
+        <div className={`bg-white rounded-lg shadow-xl ${isMinimized ? 'w-64' : 'w-110'} h-[600px] flex flex-col`}>
           <div className="flex items-center justify-between p-4 border-b">
             <h3 className="font-semibold">Assistant d'investissement</h3>
             <div className="flex items-center">

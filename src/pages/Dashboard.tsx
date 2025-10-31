@@ -451,7 +451,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-100">
       <div className="flex">
         {/* Sidebar avec la liste des biens */}
-        <div className="w-80 min-h-screen bg-white border-r border-gray-200">
+        <div className="w-110 min-h-screen bg-white border-r border-gray-200">
           <div className="p-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Mes biens immobiliers</h2>
           </div>

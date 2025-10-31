@@ -21,21 +21,22 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Investment, TaxRegime, TaxResults } from '../types/investment';
+import { Investment, TaxRegime, TaxResults, CapitalGainResults } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
 import { Line } from 'react-chartjs-2';
+import { Chart as ReactChart } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
 } from 'chart.js';
-import GeneralInfoSummary from './GeneralInfoSummary';
 
 // Configuration de Chart.js pour le graphique
 ChartJS.register(
@@ -43,6 +44,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
@@ -62,9 +64,12 @@ interface BalanceData {
 
 // Interface pour les résultats annuels de balance
 interface BalanceYearResult {
-  annualCashFlow: number;
-  cumulativeCashFlow: number;
-  saleBalance: number;
+  annualCashFlow: number; // Cash flow net annuel (avec imposition)
+  cumulativeCashFlow: number; // Cash flow cumulé NET (avec imposition)
+  cumulativeCashFlowBeforeTax: number; // Cash flow cumulé SANS imposition (comme dans CashFlowDisplay)
+  cumulativeTax: number;
+  saleBalance: number; // Solde de revente AVANT impôt sur plus-value
+  capitalGainTax: number; // Impôt sur la plus-value
   totalGain: number;
 }
 
@@ -75,6 +80,110 @@ const REGIME_LABELS: Record<TaxRegime, string> = {
   'micro-bic': 'LMNP - Micro-BIC',
   'reel-bic': 'LMNP - Frais réels'
 };
+
+/**
+ * Calcule l'impôt sur la plus-value pour une année de vente donnée
+ */
+function calculateCapitalGainTaxForYear(
+  investment: Investment,
+  sellingYear: number,
+  sellingPrice: number,
+  regime: TaxRegime
+): number {
+  // Prix d'achat initial ajusté
+  const purchasePrice = Number(investment.purchasePrice) || 0;
+  const acquisitionFees = (Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0);
+  const improvementWorks = Number(investment.improvementWorks) || 0;
+  
+  // Date d'achat et de vente
+  const purchaseDate = new Date(investment.projectStartDate);
+  
+  // Durée de détention en années jusqu'à l'année de vente
+  const holdingPeriodYears = sellingYear - purchaseDate.getFullYear();
+  
+  // Prix d'acquisition corrigé
+  const correctedPurchasePrice = purchasePrice + acquisitionFees + improvementWorks;
+  
+  // Plus-value brute
+  const grossCapitalGain = sellingPrice - correctedPurchasePrice;
+  
+  if (grossCapitalGain <= 0) {
+    return 0;
+  }
+  
+  // Calcul des abattements pour durée de détention (IR)
+  let irDiscount = 0;
+  if (holdingPeriodYears > 5) {
+    if (holdingPeriodYears <= 21) {
+      irDiscount = Math.min(1, (holdingPeriodYears - 5) * 0.06);
+    } else {
+      irDiscount = 1; // Exonération totale après 22 ans
+    }
+  }
+  
+  // Calcul des abattements pour durée de détention (prélèvements sociaux)
+  let socialDiscount = 0;
+  if (holdingPeriodYears > 5) {
+    if (holdingPeriodYears <= 21) {
+      socialDiscount = (holdingPeriodYears - 5) * 0.0165;
+    } else if (holdingPeriodYears <= 30) {
+      socialDiscount = (16 * 0.0165) + 0.016 + Math.min(8, holdingPeriodYears - 22) * 0.09;
+    } else {
+      socialDiscount = 1; // Exonération totale après 30 ans
+    }
+  }
+  
+  // Plus-values imposables
+  const taxableCapitalGainIR = grossCapitalGain * (1 - irDiscount);
+  const taxableCapitalGainSocial = grossCapitalGain * (1 - socialDiscount);
+  
+  // Calcul des impositions
+  let incomeTax = taxableCapitalGainIR * 0.19; // 19% d'IR pour location nue
+  let socialCharges = taxableCapitalGainSocial * 0.172; // 17.2% de prélèvements sociaux
+  
+  // Pour les régimes LMNP (meublé), traitement spécial
+  if (regime === 'micro-bic' || regime === 'reel-bic') {
+    const isLMP = investment.isLMP || false;
+    const businessTaxRate = Number(investment.taxParameters?.taxRate) || 30;
+    const accumulatedDepreciation = Number(investment.accumulatedDepreciation) || 0;
+    
+    if (isLMP) {
+      // LMP - Plus-values professionnelles
+      if (holdingPeriodYears <= 2) {
+        // Court terme - Taux marginal sur toute la plus-value
+        return grossCapitalGain * (businessTaxRate / 100);
+      } else {
+        // Calcul du cumul d'amortissement (utiliser la valeur de l'investment)
+        // Court terme - Correspond aux amortissements pratiqués (dans la limite de la plus-value)
+        const shortTermGain = Math.min(accumulatedDepreciation, grossCapitalGain);
+        // Long terme - Le reste de la plus-value
+        const longTermGain = Math.max(0, grossCapitalGain - shortTermGain);
+        
+        // Court terme - Taux marginal
+        const shortTermTax = shortTermGain * (businessTaxRate / 100);
+        // Long terme - 12.8% (PFU) + 17.2% de prélèvements sociaux
+        const longTermIncomeTax = longTermGain * 0.128;
+        const longTermSocialCharges = longTermGain * 0.172;
+        
+        return shortTermTax + longTermIncomeTax + longTermSocialCharges;
+      }
+    } else {
+      // LMNP (non-professionnel) - Règles des plus-values immobilières classiques
+      // Pour reel-bic, ajout de la taxation des amortissements
+      if (regime === 'reel-bic' && accumulatedDepreciation > 0) {
+        // Les amortissements sont réintégrés et taxés au barème progressif de l'IR
+        const depreciationTaxable = Math.min(accumulatedDepreciation, grossCapitalGain);
+        const depreciationTax = depreciationTaxable * (businessTaxRate / 100);
+        
+        // Impôt standard sur la plus-value immobilière + impôt sur amortissements
+        return incomeTax + socialCharges + depreciationTax;
+      }
+      // Pour micro-bic ou reel-bic sans amortissements: règles classiques
+    }
+  }
+  
+  return incomeTax + socialCharges;
+}
 
 const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
   // Identifiant unique pour le stockage local
@@ -134,18 +243,29 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
 
     // Calculer pour chaque régime
     (Object.keys(REGIME_LABELS) as TaxRegime[]).forEach((regime) => {
-      let cumulativeCashFlow = 0;
+      let cumulativeCashFlowBeforeTax = 0; // Cash flow cumulé SANS imposition (comme dans CashFlowDisplay)
+      let cumulativeTax = 0;
+      let cumulativeCashFlowNet = 0; // Cash flow cumulé NET (avec imposition)
       
       years.forEach((year) => {
         // Récupérer les dépenses de l'année
         const yearExpense = investment.expenses.find(e => e.year === year);
         
-        // Calculer le cash flow annuel comme dans la page Cash Flow
-        let annualCashFlow = 0;
+        // Calculer le cash flow annuel comme dans la page Cash Flow (Rentabilité/Cashflow)
+        let annualCashFlowBeforeTax = 0;
+        let annualCashFlowNet = 0;
         if (yearExpense) {
-          const revenues = Number(yearExpense.rent || 0) + 
-                         Number(yearExpense.tenantCharges || 0) + 
-                         Number(yearExpense.taxBenefit || 0);
+          // Calcul des revenus selon le régime (identique à CashFlowDisplay)
+          const rent = Number(yearExpense.rent || 0);
+          const furnishedRent = Number(yearExpense.furnishedRent || 0);
+          const tenantCharges = Number(yearExpense.tenantCharges || 0);
+          const taxBenefit = Number(yearExpense.taxBenefit || 0);
+          
+          const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
+            ? furnishedRent + tenantCharges // Total meublé
+            : rent + taxBenefit + tenantCharges; // Total nu
+
+          // Total des dépenses (identique à CashFlowDisplay)
           const expenses = 
             Number(yearExpense.propertyTax || 0) +
             Number(yearExpense.condoFees || 0) +
@@ -158,12 +278,18 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
             Number(yearExpense.loanPayment || 0) +
             Number(yearExpense.loanInsurance || 0);
 
-          // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
-          const taxation = yearlyResults[year][regime].totalTax;
+          // Cash flow SANS imposition (comme dans CashFlowDisplay tableau "CASH FLOW NET")
+          annualCashFlowBeforeTax = revenues - expenses;
           
-          annualCashFlow = revenues - expenses - taxation;
+          // Imposition
+          const taxation = yearlyResults[year][regime].totalTax;
+          cumulativeTax += taxation;
+          
+          // Cash flow NET (avec imposition) pour le cumul
+          annualCashFlowNet = annualCashFlowBeforeTax - taxation;
         }
-        cumulativeCashFlow += annualCashFlow;
+        cumulativeCashFlowBeforeTax += annualCashFlowBeforeTax;
+        cumulativeCashFlowNet += annualCashFlowNet;
 
         // Calculer le solde de revente pour chaque année
         // Récupérer les paramètres de vente du localStorage
@@ -199,15 +325,29 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
         const remainingBalance = lastPayment ? lastPayment.remainingBalance : Number(investment.loanAmount);
         const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
 
+        // Solde de revente AVANT impôt sur la plus-value
         const saleBalance = netSellingPrice - totalDebt;
 
-        // Calculer le gain total
-        const totalGain = cumulativeCashFlow + saleBalance;
+        // Calculer l'impôt sur la plus-value pour cette année de vente
+        const capitalGainTax = calculateCapitalGainTaxForYear(
+          investment,
+          year,
+          netSellingPrice,
+          regime
+        );
+
+        // Calculer le gain total (cumulativeCashFlowNet inclut déjà l'imposition sur revenus)
+        // Le gain total inclut maintenant aussi l'impôt sur la plus-value et l'apport personnel
+        const downPayment = Number(investment.downPayment) || 0;
+        const totalGain = cumulativeCashFlowNet + saleBalance - capitalGainTax - downPayment;
 
         data[regime].push({
           saleBalance,
-          cumulativeCashFlow,
-          annualCashFlow,
+          capitalGainTax,
+          cumulativeCashFlow: cumulativeCashFlowNet,
+          cumulativeCashFlowBeforeTax,
+          cumulativeTax,
+          annualCashFlow: annualCashFlowNet,
           totalGain
         });
       });
@@ -405,137 +545,135 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
 
   return (
     <div className="space-y-6">
-      {/* Bloc synthèse + projection déplacé ici en tête de Statistiques */}
-      <GeneralInfoSummary investment={investment} />
-
-      {/* Section de synthèse avec le meilleur scénario */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold text-gray-900">Solde en fin d'opération</h2>
-        
-        {(() => {
-          // Trouver le meilleur rendement parmi tous les régimes et années (après la 2ème année)
-          let bestReturn = -Infinity;
-          let bestYear = 0;
-          let bestRegime: TaxRegime = 'micro-foncier';
-          let bestSaleBalance = 0;
-          let bestCashFlow = 0;
-          let bestNumberOfYears = 0;
-
-          Object.entries(balanceData.data).forEach(([regime, data]) => {
-            data.forEach((yearData, index) => {
-              const year = balanceData.years[index];
-              const startYear = new Date(investment.projectStartDate).getFullYear();
-              const numberOfYears = year - startYear + 1;
-              
-              if (numberOfYears > 2) { // Ignorer les 2 premières années
-                const cashFlow = yearData.cumulativeCashFlow;
-                const saleBalance = yearData.saleBalance;
-                const downPayment = Number(investment.downPayment) || 0;
-                const revenues = saleBalance + cashFlow;
-                const effort = cashFlow < 0 ? downPayment - cashFlow : downPayment;
-                
-                // Utiliser notre fonction personnalisée pour le calcul du rendement annuel
-                const annualReturn = calculateAnnualReturn(revenues, effort, numberOfYears);
-                
-                if (annualReturn > bestReturn) {
-                  bestReturn = annualReturn;
-                  bestYear = year;
-                  bestRegime = regime as TaxRegime;
-                  bestSaleBalance = saleBalance;
-                  bestCashFlow = cashFlow;
-                  bestNumberOfYears = numberOfYears;
-                }
-              }
-            });
-          });
-
-          const monthlyCashFlow = bestCashFlow / bestNumberOfYears / 12;
-
-          return (
-            <p className="mt-4 text-gray-600 text-lg">
-              Le projet apportera un rendement optimal avec une revente en <span className="font-bold">{bestYear}</span>. 
-              Il générera un solde de <span className="font-bold">{formatCurrency(bestSaleBalance)}</span>, 
-              pour un cash flow mensuel moyen de <span className="font-bold">{formatCurrency(monthlyCashFlow)}</span> et 
-              un rendement de <span className="font-bold">{formatPercent(bestReturn)}</span> avec le régime {REGIME_LABELS[bestRegime]}.
-            </p>
-          );
-        })()}
-
-        <p className="mt-1 text-sm text-gray-500">
-          Analyse du gain total (revente + cash flow) selon l'année de sortie et le régime fiscal
-        </p>
-      </div>
-
-      {/* Graphique d'évolution du rendement annuel */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="h-96">
-          <Line data={chartData} options={chartOptions} />
+      {/* Onglets de sélection du régime fiscal */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8 px-4">
+            {(Object.entries(REGIME_LABELS) as [TaxRegime, string][]).map(([regime, label]) => (
+              <button
+                key={regime}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSelectedRegimeLocal(regime);
+                }}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                  ${selectedRegimeLocal === regime
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
 
-      {/* Graphiques d'évolution des revenus et de l'effort */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Graphique des revenus */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Évolution des revenus</h3>
-          <div className="h-80">
-            <Line 
-              data={{
-                labels: balanceData.years,
-                datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
-                  const colors = [
-                    'rgba(59, 130, 246, 1)', // blue
-                    'rgba(16, 185, 129, 1)', // green
-                    'rgba(139, 92, 246, 1)', // purple
-                    'rgba(245, 158, 11, 1)'  // yellow
-                  ];
-                  
-                  return {
-                    label,
-                    data: balanceData.years.map((year, yearIndex) => {
-                      const cashFlow = balanceData.data[regime as TaxRegime]?.[yearIndex]?.cumulativeCashFlow || 0;
-                      const saleBalance = balanceData.data[regime as TaxRegime]?.[yearIndex]?.saleBalance || 0;
-                      return saleBalance + cashFlow;
-                    }),
-                    borderColor: colors[index],
-                    backgroundColor: colors[index],
-                    tension: 0.4,
-                    fill: false
-                  };
-                })
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top' as const,
-                  },
-                  title: {
-                    display: false
+      {/* Graphique cumulatif: CF, Impôts, Solde revente + courbe total */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Valeur cumulée du projet</h3>
+        <div className="h-[28rem]">
+          <ReactChart
+            type="bar"
+            data={{
+              labels: balanceData.years,
+              datasets: [
+                {
+                  type: 'bar' as const,
+                  label: 'Apport personnel',
+                  data: balanceData.years.map(() => -(Number(investment.downPayment) || 0)),
+                  backgroundColor: 'rgba(107, 114, 128, 0.7)',
+                  borderColor: 'rgba(107, 114, 128, 1)'
+                },
+                {
+                  type: 'bar' as const,
+                  label: 'Cash flow cumulé',
+                  data: balanceData.years.map((_, i) => {
+                    const d = balanceData.data[selectedRegimeLocal]?.[i];
+                    if (!d) return 0;
+                    // Cash flow cumulé SANS imposition (comme dans CashFlowDisplay)
+                    return d.cumulativeCashFlowBeforeTax || 0;
+                  }),
+                  backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                  borderColor: 'rgba(245, 158, 11, 1)'
+                },
+                {
+                  type: 'bar' as const,
+                  label: 'Imposition cumulée',
+                  data: balanceData.years.map((_, i) => -(balanceData.data[selectedRegimeLocal]?.[i]?.cumulativeTax || 0)),
+                  backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                  borderColor: 'rgba(239, 68, 68, 1)'
+                },
+                {
+                  type: 'bar' as const,
+                  label: 'Solde de revente',
+                  data: balanceData.years.map((_, i) => balanceData.data[selectedRegimeLocal]?.[i]?.saleBalance || 0),
+                  backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                  borderColor: 'rgba(59, 130, 246, 1)'
+                },
+                {
+                  type: 'bar' as const,
+                  label: 'Impôt sur la plus-value',
+                  data: balanceData.years.map((_, i) => -(balanceData.data[selectedRegimeLocal]?.[i]?.capitalGainTax || 0)),
+                  backgroundColor: 'rgba(168, 85, 247, 0.7)',
+                  borderColor: 'rgba(168, 85, 247, 1)'
+                },
+                {
+                  type: 'line' as const,
+                  label: 'Gain total cumulé',
+                  data: balanceData.years.map((_, i) => {
+                    const d = balanceData.data[selectedRegimeLocal]?.[i];
+                    if (!d) return 0;
+                    const downPayment = Number(investment.downPayment) || 0;
+                    // Gain total = Cash flow net + Solde revente - Impôt plus-value - Apport
+                    return d.cumulativeCashFlow + d.saleBalance - d.capitalGainTax - downPayment;
+                  }),
+                  borderColor: 'rgba(34, 197, 94, 1)',
+                  backgroundColor: 'rgba(34, 197, 94, 1)',
+                  tension: 0.3,
+                  yAxisID: 'y'
+                }
+              ]
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'top' as const },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx: any) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
                   }
                 },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      callback: (value: any) => formatCurrency(value)
-                    }
-                  }
+                title: {
+                  display: false
                 }
-              }}
-            />
-          </div>
+              },
+              scales: {
+                x: { stacked: true },
+                y: {
+                  stacked: true,
+                  ticks: { callback: (v: any) => formatCurrency(v) },
+                  title: { display: true, text: 'Euros (€)' }
+                }
+              }
+            }}
+          />
         </div>
+        <p className="mt-2 text-sm text-gray-500">Barres empilées: apport personnel (en négatif), cash flow cumulé, impôts cumulés (en négatif), solde de revente et impôt sur la plus-value (en négatif). Courbe: gain total cumulé net (après tous les coûts et impôts).</p>
+      </div>
 
-        {/* Graphique de l'effort */}
+      {/* Graphiques d'analyse du gain total par régime */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Graphique 1: Gain total cumulé par régime fiscal */}
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Évolution de l'effort</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Gain total cumulé par régime fiscal</h3>
           <div className="h-80">
             <Line 
               data={{
                 labels: balanceData.years,
-                datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
+                datasets: (Object.keys(REGIME_LABELS) as TaxRegime[]).map((regime, index) => {
                   const colors = [
                     'rgba(59, 130, 246, 1)', // blue
                     'rgba(16, 185, 129, 1)', // green
@@ -543,24 +681,14 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
                     'rgba(245, 158, 11, 1)'  // yellow
                   ];
                   
+                  const downPayment = Number(investment.downPayment) || 0;
+                  
                   return {
-                    label,
-                    data: balanceData.years.map((year, yearIndex) => {
-                      const downPayment = Number(investment.downPayment) || 0;
-                      
-                      // Calcul de l'effort basé sur le minimum de cash flow cumulé jusqu'à l'année en cours
-                      let minCumulativeCashFlow = 0;
-                      for (let i = 0; i <= yearIndex; i++) {
-                        const yearCashFlow = balanceData.data[regime as TaxRegime]?.[i]?.cumulativeCashFlow || 0;
-                        if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
-                          minCumulativeCashFlow = yearCashFlow;
-                        }
-                      }
-                      
-                      // Si le minimum de cash flow est négatif, ajuster l'effort
-                      return minCumulativeCashFlow < 0 
-                        ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
-                        : downPayment;
+                    label: REGIME_LABELS[regime],
+                    data: balanceData.years.map((_, i) => {
+                      const d = balanceData.data[regime]?.[i];
+                      if (!d) return 0;
+                      return d.cumulativeCashFlow + d.saleBalance - d.capitalGainTax - downPayment;
                     }),
                     borderColor: colors[index],
                     backgroundColor: colors[index],
@@ -581,23 +709,18 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
                   },
                   tooltip: {
                     callbacks: {
-                      label: function(context: any) {
-                        return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
-                      }
+                      label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.raw)}`
                     }
                   }
                 },
                 scales: {
                   y: {
-                    beginAtZero: true,
                     ticks: {
-                      callback: function(value: any) {
-                        return formatCurrency(value);
-                      }
+                      callback: (value: any) => formatCurrency(value)
                     },
                     title: {
                       display: true,
-                      text: 'Effort total (€)'
+                      text: 'Gain total cumulé (€)'
                     }
                   },
                   x: {
@@ -611,32 +734,152 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
             />
           </div>
         </div>
+
+        {/* Graphique 2: Dérivée du gain total (variation annuelle) */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Variation annuelle du gain total (dérivée)</h3>
+          <div className="h-80">
+            <Line 
+              data={{
+                labels: balanceData.years.slice(1), // Commence à l'année 1 car on calcule la différence
+                datasets: (Object.keys(REGIME_LABELS) as TaxRegime[]).map((regime, index) => {
+                  const colors = [
+                    'rgba(59, 130, 246, 1)', // blue
+                    'rgba(16, 185, 129, 1)', // green
+                    'rgba(139, 92, 246, 1)', // purple
+                    'rgba(245, 158, 11, 1)'  // yellow
+                  ];
+                  
+                  const downPayment = Number(investment.downPayment) || 0;
+                  
+                  // Calculer la dérivée (variation annuelle) et trouver les maxima
+                  const derivativeData: number[] = [];
+                  const maxPointIndices: Set<number> = new Set();
+                  
+                  let previousGain = 0;
+                  
+                  balanceData.years.forEach((year, i) => {
+                    const d = balanceData.data[regime]?.[i];
+                    if (d) {
+                      const currentGain = d.cumulativeCashFlow + d.saleBalance - d.capitalGainTax - downPayment;
+                      
+                      if (i > 0) {
+                        // Dérivée = différence entre l'année actuelle et l'année précédente
+                        const derivative = currentGain - previousGain;
+                        derivativeData.push(derivative);
+                      }
+                      
+                      previousGain = currentGain;
+                    }
+                  });
+                  
+                  // Trouver les maxima : points où la dérivée passe de croissante à décroissante
+                  // Le maximum de rentabilité correspond au maximum de la dérivée
+                  for (let i = 1; i < derivativeData.length; i++) {
+                    const prevDerivative = derivativeData[i - 1];
+                    const currDerivative = derivativeData[i];
+                    const nextDerivative = derivativeData[i + 1];
+                    
+                    // Maximum local : dérivée croissante puis décroissante
+                    if (currDerivative > prevDerivative && (nextDerivative === undefined || currDerivative > nextDerivative)) {
+                      maxPointIndices.add(i);
+                    }
+                    // Cas spécial : si on est au dernier point et que c'est plus grand que le précédent
+                    else if (nextDerivative === undefined && currDerivative > prevDerivative) {
+                      maxPointIndices.add(i);
+                    }
+                  }
+                  
+                  // Si aucun maximum local trouvé, prendre le maximum global
+                  if (maxPointIndices.size === 0 && derivativeData.length > 0) {
+                    let maxIndex = 0;
+                    let maxValue = derivativeData[0];
+                    derivativeData.forEach((value, index) => {
+                      if (value > maxValue) {
+                        maxValue = value;
+                        maxIndex = index;
+                      }
+                    });
+                    maxPointIndices.add(maxIndex);
+                  }
+                  
+                  return {
+                    label: REGIME_LABELS[regime],
+                    data: derivativeData,
+                    borderColor: colors[index],
+                    backgroundColor: colors[index],
+                    tension: 0.4,
+                    fill: false,
+                    maxPointIndices: maxPointIndices, // Stocker les indices pour le tooltip
+                    pointRadius: (context: any) => {
+                      // Mettre en évidence les points maximaux
+                      return maxPointIndices.has(context.dataIndex) ? 8 : 3;
+                    },
+                    pointBackgroundColor: (context: any) => {
+                      return maxPointIndices.has(context.dataIndex) ? 'rgba(239, 68, 68, 1)' : colors[index];
+                    },
+                    pointBorderColor: (context: any) => {
+                      return maxPointIndices.has(context.dataIndex) ? 'rgba(239, 68, 68, 1)' : colors[index];
+                    },
+                    pointBorderWidth: (context: any) => {
+                      return maxPointIndices.has(context.dataIndex) ? 3 : 1;
+                    }
+                  };
+                })
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top' as const,
+                  },
+                  title: {
+                    display: false
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (context: any) => {
+                        const value = context.raw;
+                        // Vérifier si c'est un point maximum en utilisant maxPointIndices stocké dans le dataset
+                        const dataset = context.dataset as any;
+                        const isMax = dataset.maxPointIndices?.has(context.dataIndex) || false;
+                        const maxText = isMax ? ' (Maximum)' : '';
+                        return `${context.dataset.label}: ${formatCurrency(value)}${maxText}`;
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  y: {
+                    ticks: {
+                      callback: (value: any) => formatCurrency(value)
+                    },
+                    title: {
+                      display: true,
+                      text: 'Variation annuelle (€)'
+                    }
+                  },
+                  x: {
+                    title: {
+                      display: true,
+                      text: 'Année'
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+          <p className="mt-2 text-sm text-gray-500">Les points rouges indiquent les maxima de rentabilité (dérivée maximale).</p>
+        </div>
       </div>
 
-      {/* Tableau de données */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {(Object.entries(REGIME_LABELS) as [TaxRegime, string][]).map(([regime, label]) => (
-              <button
-                key={regime}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setSelectedRegimeLocal(regime);
-                }}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                  ${selectedRegimeLocal === regime
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                `}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        </div>
+      {/* (Cartes "Solde en fin d'opération" et graphique rendement annuel supprimés) */}
 
+      {/* (Cartes projection et graphiques revenus/effort supprimés à la demande) */}
+
+      {/* Tableau de données - reprend les valeurs du graphique */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
         {/* Tableau des résultats */}
         <div className="mt-6 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -645,104 +888,77 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Année
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Apport
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Effort
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cash Flow annuel
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bilan annuel
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bilan
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  % de gain
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  % annuel
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apport</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cash flow cumulé</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imposition cumulée</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solde de revente</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impôt plus-value</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gain total cumulé</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {balanceData.years.map((year, index) => {
+              {(() => {
+                // Trouver la première année où le gain total cumulé devient positif
                 const downPayment = Number(investment.downPayment) || 0;
-                const cashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeCashFlow || 0;
-                const annualCashFlow = balanceData.data[selectedRegimeLocal]?.[index]?.annualCashFlow || 0;
-                const saleBalance = balanceData.data[selectedRegimeLocal]?.[index]?.saleBalance || 0;
-                // Toujours ajouter le cashFlow au saleBalance, peu importe son signe
-                const revenues = saleBalance + cashFlow;
+                let firstPositiveYearIndex = -1;
                 
-                // Calcul de l'effort basé sur le minimum de cash flow cumulé jusqu'à l'année en cours
-                let minCumulativeCashFlow = 0;
-                for (let i = 0; i <= index; i++) {
-                  const yearCashFlow = balanceData.data[selectedRegimeLocal]?.[i]?.cumulativeCashFlow || 0;
-                  if (i === 0 || yearCashFlow < minCumulativeCashFlow) {
-                    minCumulativeCashFlow = yearCashFlow;
+                for (let i = 0; i < balanceData.years.length; i++) {
+                  const d = balanceData.data[selectedRegimeLocal]?.[i];
+                  if (d) {
+                    const cashFlowNetCumulative = d.cumulativeCashFlow || 0;
+                    const totalGain = cashFlowNetCumulative + d.saleBalance - d.capitalGainTax - downPayment;
+                    if (totalGain >= 0 && firstPositiveYearIndex === -1) {
+                      firstPositiveYearIndex = i;
+                      break;
+                    }
                   }
                 }
                 
-                // Si le minimum de cash flow est négatif, ajuster l'effort
-                const effort = minCumulativeCashFlow < 0 
-                  ? downPayment - minCumulativeCashFlow // Addition car minCumulativeCashFlow est négatif
-                  : downPayment;
-                
-                const gainPercent = effort !== 0 ? revenues / effort : 0;
-                
-                // Calcul du bilan annuel (différence entre le bilan de l'année courante et le bilan de l'année précédente)
-                let annualBilan = null;
-                if (index > 0) {
-                  // Utiliser la même logique pour le bilan précédent: toujours ajouter le cash flow
-                  const previousCashFlow = balanceData.data[selectedRegimeLocal]?.[index-1]?.cumulativeCashFlow || 0;
-                  const previousSaleBalance = balanceData.data[selectedRegimeLocal]?.[index-1]?.saleBalance || 0;
-                  const previousRevenues = previousSaleBalance + previousCashFlow;
+                return balanceData.years.map((year, index) => {
+                  const cfBeforeTax = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeCashFlowBeforeTax || 0;
+                  const cumulativeTax = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeTax || 0;
+                  const saleBalance = balanceData.data[selectedRegimeLocal]?.[index]?.saleBalance || 0;
+                  const capitalGainTax = balanceData.data[selectedRegimeLocal]?.[index]?.capitalGainTax || 0;
+                  const cashFlowNetCumulative = balanceData.data[selectedRegimeLocal]?.[index]?.cumulativeCashFlow || 0;
+                  const totalGain = cashFlowNetCumulative + saleBalance - capitalGainTax - downPayment;
                   
-                  annualBilan = revenues - previousRevenues;
-                }
-                
-                // Calcul du taux de rendement annuel composé
-                const startYear = new Date(investment.projectStartDate).getFullYear();
-                const numberOfYears = year - startYear + 1;
-                
-                // Calculer le rendement annuel avec la formule correcte en utilisant notre utilitaire
-                const annualReturn = calculateAnnualReturn(revenues, effort, numberOfYears);
-                
-                return (
-                  <tr key={year} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {year}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(downPayment)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(effort)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(annualCashFlow)}
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${annualBilan === null ? 'text-gray-500' : (annualBilan < 0 ? 'text-red-600' : 'text-emerald-600')}`}>
-                      {annualBilan === null ? "-" : formatCurrency(annualBilan)}
-                    </td>
-                    <td className={`px-6 py-4 text-sm font-medium ${revenues < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      <div className="font-medium">{formatCurrency(revenues)}</div>
-                      <div className="text-xs text-gray-400 whitespace-nowrap">
-                        CF: {formatCurrency(cashFlow)} + Revente: {formatCurrency(saleBalance)}
-                      </div>
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${gainPercent < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {formatPercent(gainPercent)}
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${annualReturn < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {formatPercent(annualReturn)}
-                    </td>
-                  </tr>
-                );
-              })}
+                  // Mettre en évidence la première année où le gain total est positif
+                  const isFirstPositiveYear = index === firstPositiveYearIndex;
+                  
+                  return (
+                    <tr 
+                      key={year} 
+                      className={`${
+                        isFirstPositiveYear 
+                          ? 'bg-green-100 border-l-4 border-green-500' 
+                          : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {year}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(downPayment)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(cfBeforeTax)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(-cumulativeTax)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(saleBalance)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(-capitalGainTax)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {formatCurrency(totalGain)}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         </div>

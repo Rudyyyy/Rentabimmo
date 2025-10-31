@@ -716,7 +716,7 @@ export default function PropertyForm() {
 
         <div className="flex gap-6 items-start">
           {/* Sidebar avec informations contextuelles uniquement */}
-        <aside className="hidden lg:block w-96 shrink-0">
+        <aside className="hidden lg:block w-110 shrink-0">
           <div className="sticky top-4">
             {currentMainTab === 'location' ? (
               <LocationForm
