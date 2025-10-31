@@ -9,6 +9,7 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
@@ -16,17 +17,19 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Database } from '../types/supabase';
-import { Investment } from '../types/investment';
+import { Investment, TaxRegime } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
+import { generateAmortizationSchedule } from '../utils/calculations';
 import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
-import CashFlowGoal from '../components/CashFlowGoal';
+import TotalGainGoal from '../components/TotalGainGoal';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
@@ -55,8 +58,8 @@ export default function Dashboard() {
     return savedOrder ? JSON.parse(savedOrder) : [];
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
-  const [cashFlowGoal, setCashFlowGoal] = useState<number>(() => {
-    const savedGoal = localStorage.getItem('cashFlowGoal');
+  const [totalGainGoal, setTotalGainGoal] = useState<number>(() => {
+    const savedGoal = localStorage.getItem('totalGainGoal');
     return savedGoal ? parseFloat(savedGoal) : 0;
   });
   const navigate = useNavigate();
@@ -75,8 +78,8 @@ export default function Dashboard() {
 
   // Ajouter un useEffect pour sauvegarder l'objectif
   useEffect(() => {
-    localStorage.setItem('cashFlowGoal', cashFlowGoal.toString());
-  }, [cashFlowGoal]);
+    localStorage.setItem('totalGainGoal', totalGainGoal.toString());
+  }, [totalGainGoal]);
 
   useEffect(() => {
     // Load properties on mount and navigation
@@ -103,6 +106,27 @@ export default function Dashboard() {
   useEffect(() => {
     calculateCashFlowData();
   }, [properties, showInDashboard]);
+
+  // Calculer les années disponibles depuis tous les biens inclus
+  // Utilise targetSaleYear si défini, sinon projectEndDate
+  const getAllYears = (): number[] => {
+    const allYears = new Set<number>();
+    properties.forEach(property => {
+      if (!showInDashboard[property.id]) return;
+      const investment = property.investment_data as unknown as Investment;
+      if (!investment || typeof investment !== 'object') return;
+      
+      const startYear = new Date(investment.projectStartDate).getFullYear();
+      // Utiliser targetSaleYear si défini, sinon projectEndDate
+      const endYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+      
+      for (let year = startYear; year <= endYear; year++) {
+        allYears.add(year);
+      }
+    });
+    
+    return Array.from(allYears).sort();
+  };
 
   async function loadProperties() {
     try {
@@ -232,64 +256,59 @@ export default function Dashboard() {
     .filter(d => d.year === currentYear + 1)
     .reduce((sum, d) => sum + d.cashFlow, 0);
 
-  // Préparation des données du graphique
-  const years = [...new Set(cashFlowData.map(d => d.year))].sort();
+  // Préparation des données du graphique - Barres empilées par bien et courbe total
+  const years = getAllYears();
+  const includedProperties = properties.filter(property => showInDashboard[property.id]);
+  
+  // Couleurs pour chaque bien
+  const propertyColors = [
+    { bar: 'rgba(59, 130, 246, 0.7)', border: 'rgba(59, 130, 246, 1)' },   // blue
+    { bar: 'rgba(16, 185, 129, 0.7)', border: 'rgba(16, 185, 129, 1)' },   // green
+    { bar: 'rgba(239, 68, 68, 0.7)', border: 'rgba(239, 68, 68, 1)' },   // red
+    { bar: 'rgba(245, 158, 11, 0.7)', border: 'rgba(245, 158, 11, 1)' }, // yellow
+    { bar: 'rgba(168, 85, 247, 0.7)', border: 'rgba(168, 85, 247, 1)' }   // purple
+  ];
   
   const chartData = {
-    labels: years,
+    labels: years.map(y => y.toString()),
     datasets: [
-      // Données par bien
-      ...properties
-        .filter(property => showInDashboard[property.id])
-        .map((property, index) => ({
+      // Barres empilées pour chaque bien - Gain total cumulé
+      ...includedProperties.map((property, index) => {
+        const colors = propertyColors[index % propertyColors.length];
+        return {
+          type: 'bar' as const,
         label: property.name,
-        data: years.map(year => 
-          cashFlowData
-            .filter(d => d.propertyName === property.name && d.year === year)
-            .reduce((sum, d) => sum + d.cashFlow, 0)
-        ),
-        borderColor: [
-          'rgb(59, 130, 246)', // blue
-          'rgb(16, 185, 129)', // green
-          'rgb(239, 68, 68)',  // red
-          'rgb(245, 158, 11)', // yellow
-          'rgb(168, 85, 247)'  // purple
-        ][index % 5],
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.1)',
-          'rgba(16, 185, 129, 0.1)',
-          'rgba(239, 68, 68, 0.1)',
-          'rgba(245, 158, 11, 0.1)',
-          'rgba(168, 85, 247, 0.1)'
-        ][index % 5],
-        tension: 0.1,
-        fill: true
-      })),
-      // Ligne de total
+          data: years.map(year => {
+            const comps = calculateTotalGainComponentsForYear(property, year);
+            return comps.totalGain;
+          }),
+          backgroundColor: colors.bar,
+          borderColor: colors.border,
+          borderWidth: 1,
+          stack: 'stack1',
+          order: 2
+        };
+      }),
+      // Courbe pour le total cumulé (tous les biens)
       {
+        type: 'line' as const,
         label: 'Total',
         data: years.map(year =>
-          cashFlowData
-            .filter(d => d.year === year)
-            .reduce((sum, d) => sum + d.cashFlow, 0)
+          includedProperties.reduce((sum, property) => {
+            const comps = calculateTotalGainComponentsForYear(property, year);
+            return sum + comps.totalGain;
+          }, 0)
         ),
-        borderColor: 'rgb(0, 0, 0)',
-        backgroundColor: 'rgba(0, 0, 0, 0.1)',
-        borderWidth: 2,
-        tension: 0.1,
-        fill: false
-      },
-      // Ligne d'objectif
-      ...(cashFlowGoal > 0 ? [{
-        label: 'Objectif',
-        data: years.map(() => cashFlowGoal * 12),
-        borderColor: 'rgb(59, 130, 246)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        tension: 0,
+        borderColor: 'rgb(37, 99, 235)', // blue-600
+        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
         fill: false,
-        pointRadius: 0
-      }] : [])
+        tension: 0.1,
+        yAxisID: 'y',
+        order: 1
+      }
     ]
   };
 
@@ -299,12 +318,18 @@ export default function Dashboard() {
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          boxWidth: 12,
+          padding: 8
+        }
       },
       title: {
         display: true,
-        text: 'Évolution du cash-flow par bien'
+        text: 'Gain total cumulé par bien'
       },
       tooltip: {
+        mode: 'index' as const,
+        intersect: false,
         callbacks: {
           label: function(context: any) {
             return `${context.dataset.label}: ${new Intl.NumberFormat('fr-FR', { 
@@ -317,7 +342,8 @@ export default function Dashboard() {
     },
     scales: {
       y: {
-        beginAtZero: true,
+        beginAtZero: false,
+        stacked: true, // Stacking pour les barres empilées
         ticks: {
           callback: function(value: any) {
             return new Intl.NumberFormat('fr-FR', { 
@@ -326,10 +352,376 @@ export default function Dashboard() {
               maximumFractionDigits: 0
             }).format(value);
           }
+        },
+        title: {
+          display: true,
+          text: 'Euros (€)'
+        }
+      },
+      x: {
+        stacked: true,
+        title: {
+          display: true,
+          text: 'Année'
+        }
+      }
+    },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false
+    }
+  };
+
+  // Fonction pour calculer l'impôt sur la plus-value pour une année de vente donnée
+  function calculateCapitalGainTaxForYear(
+    investment: Investment,
+    sellingYear: number,
+    sellingPrice: number,
+    regime: TaxRegime
+  ): number {
+    const purchasePrice = Number(investment.purchasePrice) || 0;
+    const acquisitionFees = (Number(investment.notaryFees) || 0) + (Number(investment.agencyFees) || 0);
+    const improvementWorks = Number(investment.improvementWorks) || 0;
+    
+    const purchaseDate = new Date(investment.projectStartDate);
+    const holdingPeriodYears = sellingYear - purchaseDate.getFullYear();
+    
+    const correctedPurchasePrice = purchasePrice + acquisitionFees + improvementWorks;
+    const grossCapitalGain = sellingPrice - correctedPurchasePrice;
+    
+    if (grossCapitalGain <= 0) {
+      return 0;
+    }
+    
+    // Calcul des abattements pour durée de détention (IR)
+    let irDiscount = 0;
+    if (holdingPeriodYears > 5) {
+      if (holdingPeriodYears <= 21) {
+        irDiscount = Math.min(1, (holdingPeriodYears - 5) * 0.06);
+      } else {
+        irDiscount = 1;
+      }
+    }
+    
+    // Calcul des abattements pour durée de détention (prélèvements sociaux)
+    let socialDiscount = 0;
+    if (holdingPeriodYears > 5) {
+      if (holdingPeriodYears <= 21) {
+        socialDiscount = (holdingPeriodYears - 5) * 0.0165;
+      } else if (holdingPeriodYears <= 30) {
+        socialDiscount = (16 * 0.0165) + 0.016 + Math.min(8, holdingPeriodYears - 22) * 0.09;
+      } else {
+        socialDiscount = 1;
+      }
+    }
+    
+    const taxableCapitalGainIR = grossCapitalGain * (1 - irDiscount);
+    const taxableCapitalGainSocial = grossCapitalGain * (1 - socialDiscount);
+    
+    let incomeTax = taxableCapitalGainIR * 0.19;
+    let socialCharges = taxableCapitalGainSocial * 0.172;
+    
+    // Pour les régimes LMNP (meublé), traitement spécial
+    if (regime === 'micro-bic' || regime === 'reel-bic') {
+      const isLMP = investment.isLMP || false;
+      const businessTaxRate = Number(investment.taxParameters?.taxRate) || 30;
+      const accumulatedDepreciation = Number(investment.accumulatedDepreciation) || 0;
+      
+      if (isLMP) {
+        if (holdingPeriodYears <= 2) {
+          return grossCapitalGain * (businessTaxRate / 100);
+        } else {
+          const shortTermGain = Math.min(accumulatedDepreciation, grossCapitalGain);
+          const longTermGain = Math.max(0, grossCapitalGain - shortTermGain);
+          const shortTermTax = shortTermGain * (businessTaxRate / 100);
+          const longTermIncomeTax = longTermGain * 0.128;
+          const longTermSocialCharges = longTermGain * 0.172;
+          return shortTermTax + longTermIncomeTax + longTermSocialCharges;
+        }
+      } else {
+        if (regime === 'reel-bic' && accumulatedDepreciation > 0) {
+          const depreciationTaxable = Math.min(accumulatedDepreciation, grossCapitalGain);
+          const depreciationTax = depreciationTaxable * (businessTaxRate / 100);
+          return incomeTax + socialCharges + depreciationTax;
         }
       }
     }
-  };
+    
+    return incomeTax + socialCharges;
+  }
+
+  // Fonction pour calculer les composants du gain total cumulé pour un bien et une année donnée
+  function calculateTotalGainComponentsForYear(property: Property, year: number): {
+    downPayment: number;
+    cumulativeCashFlowBeforeTax: number;
+    cumulativeTax: number;
+    saleBalance: number;
+    capitalGainTax: number;
+    totalGain: number;
+  } {
+    const investment = property.investment_data as unknown as Investment;
+    if (!investment || typeof investment !== 'object') {
+      return {
+        downPayment: 0,
+        cumulativeCashFlowBeforeTax: 0,
+        cumulativeTax: 0,
+        saleBalance: 0,
+        capitalGainTax: 0,
+        totalGain: 0
+      };
+    }
+    
+    const startYear = new Date(investment.projectStartDate).getFullYear();
+    // Utiliser targetSaleYear si défini, sinon projectEndDate
+    const endYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+    
+    if (year < startYear || year > endYear) {
+      return {
+        downPayment: 0,
+        cumulativeCashFlowBeforeTax: 0,
+        cumulativeTax: 0,
+        saleBalance: 0,
+        capitalGainTax: 0,
+        totalGain: 0
+      };
+    }
+    
+    const regime = investment.selectedRegime || 'micro-foncier';
+    
+    // Calculer les résultats fiscaux pour toutes les années jusqu'à l'année sélectionnée
+    const yearlyResults: Record<number, Record<TaxRegime, any>> = {};
+    for (let yr = startYear; yr <= year; yr++) {
+      const yearExpense = investment.expenses?.find(e => e.year === yr);
+      if (!yearExpense) {
+        if (yr === startYear) {
+          yearlyResults[yr] = {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        } else {
+          yearlyResults[yr] = yearlyResults[yr - 1] || {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        }
+        continue;
+      }
+      
+      if (yr === startYear) {
+        yearlyResults[yr] = calculateAllTaxRegimes(investment, yr);
+      } else {
+        yearlyResults[yr] = calculateAllTaxRegimes(investment, yr, yearlyResults[yr - 1]);
+      }
+    }
+    
+    // Calculer le cash flow cumulé avant taxe et le cumul d'impôts
+    let cumulativeCashFlowBeforeTax = 0;
+    let cumulativeTax = 0;
+    let cumulativeCashFlowNet = 0;
+    
+    for (let yr = startYear; yr <= year; yr++) {
+      const yearExpense = investment.expenses?.find(e => e.year === yr);
+      if (!yearExpense) continue;
+      
+      const rent = Number(yearExpense.rent || 0);
+      const furnishedRent = Number(yearExpense.furnishedRent || 0);
+      const tenantCharges = Number(yearExpense.tenantCharges || 0);
+      const taxBenefit = Number(yearExpense.taxBenefit || 0);
+      
+      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
+        ? furnishedRent + tenantCharges
+        : rent + taxBenefit + tenantCharges;
+      
+      const expenses = 
+        Number(yearExpense.propertyTax || 0) +
+        Number(yearExpense.condoFees || 0) +
+        Number(yearExpense.propertyInsurance || 0) +
+        Number(yearExpense.managementFees || 0) +
+        Number(yearExpense.unpaidRentInsurance || 0) +
+        Number(yearExpense.repairs || 0) +
+        Number(yearExpense.otherDeductible || 0) +
+        Number(yearExpense.otherNonDeductible || 0) +
+        Number(yearExpense.loanPayment || 0) +
+        Number(yearExpense.loanInsurance || 0);
+      
+      const annualCashFlowBeforeTax = revenues - expenses;
+      const taxation = yearlyResults[yr]?.[regime]?.totalTax || 0;
+      cumulativeTax += taxation;
+      const annualCashFlowNet = annualCashFlowBeforeTax - taxation;
+      
+      cumulativeCashFlowBeforeTax += annualCashFlowBeforeTax;
+      cumulativeCashFlowNet += annualCashFlowNet;
+    }
+    
+    // Calculer le solde de revente pour l'année sélectionnée
+    const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
+    const storedParams = localStorage.getItem(`saleParameters_${investmentId}`);
+    const saleParams = storedParams ? JSON.parse(storedParams) : {
+      annualIncrease: 2,
+      agencyFees: 0,
+      earlyRepaymentFees: 0
+    };
+    
+    const yearsSincePurchase = year - startYear;
+    const revaluedValue = Number(investment.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+    const netSellingPrice = revaluedValue - Number(saleParams.agencyFees);
+    
+    const amortizationSchedule = generateAmortizationSchedule(
+      Number(investment.loanAmount),
+      Number(investment.interestRate),
+      Number(investment.loanDuration),
+      investment.deferralType,
+      Number(investment.deferredPeriod),
+      investment.startDate
+    );
+    
+    const yearEndDate = new Date(year, 11, 31);
+    const lastPayment = amortizationSchedule.schedule
+      .filter(row => new Date(row.date) <= yearEndDate)
+      .pop();
+    
+    const remainingBalance = lastPayment ? lastPayment.remainingBalance : Number(investment.loanAmount);
+    const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
+    const saleBalance = netSellingPrice - totalDebt;
+    
+    // Calculer l'impôt sur la plus-value
+    const capitalGainTax = calculateCapitalGainTaxForYear(investment, year, netSellingPrice, regime);
+    
+    // Calculer le gain total cumulé
+    const downPayment = Number(investment.downPayment) || 0;
+    const totalGain = cumulativeCashFlowNet + saleBalance - capitalGainTax - downPayment;
+    
+    return {
+      downPayment: -downPayment, // Négatif pour l'affichage
+      cumulativeCashFlowBeforeTax,
+      cumulativeTax: -cumulativeTax, // Négatif pour l'affichage
+      saleBalance,
+      capitalGainTax: -capitalGainTax, // Négatif pour l'affichage
+      totalGain
+    };
+  }
+
+  // Fonction pour calculer le gain total cumulé pour un bien et une année donnée
+  function calculateTotalGainForYear(property: Property, year: number): number {
+    const investment = property.investment_data as unknown as Investment;
+    if (!investment || typeof investment !== 'object') return 0;
+    
+    const startYear = new Date(investment.projectStartDate).getFullYear();
+    // Utiliser targetSaleYear si défini, sinon projectEndDate
+    const endYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+    
+    if (year < startYear || year > endYear) return 0;
+    
+    const regime = investment.selectedRegime || 'micro-foncier';
+    
+    // Calculer les résultats fiscaux pour toutes les années jusqu'à l'année sélectionnée
+    const yearlyResults: Record<number, Record<TaxRegime, any>> = {};
+    for (let yr = startYear; yr <= year; yr++) {
+      const yearExpense = investment.expenses?.find(e => e.year === yr);
+      if (!yearExpense) {
+        if (yr === startYear) {
+          yearlyResults[yr] = {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        } else {
+          yearlyResults[yr] = yearlyResults[yr - 1] || {
+            'micro-foncier': { totalTax: 0 },
+            'reel-foncier': { totalTax: 0 },
+            'micro-bic': { totalTax: 0 },
+            'reel-bic': { totalTax: 0 }
+          } as Record<TaxRegime, any>;
+        }
+        continue;
+      }
+      
+      if (yr === startYear) {
+        yearlyResults[yr] = calculateAllTaxRegimes(investment, yr);
+      } else {
+        yearlyResults[yr] = calculateAllTaxRegimes(investment, yr, yearlyResults[yr - 1]);
+      }
+    }
+    
+    // Calculer le cash flow cumulé net jusqu'à l'année sélectionnée
+    let cumulativeCashFlowNet = 0;
+    
+    for (let yr = startYear; yr <= year; yr++) {
+      const yearExpense = investment.expenses?.find(e => e.year === yr);
+      if (!yearExpense) continue;
+      
+      const rent = Number(yearExpense.rent || 0);
+      const furnishedRent = Number(yearExpense.furnishedRent || 0);
+      const tenantCharges = Number(yearExpense.tenantCharges || 0);
+      const taxBenefit = Number(yearExpense.taxBenefit || 0);
+      
+      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
+        ? furnishedRent + tenantCharges
+        : rent + taxBenefit + tenantCharges;
+      
+      const expenses = 
+        Number(yearExpense.propertyTax || 0) +
+        Number(yearExpense.condoFees || 0) +
+        Number(yearExpense.propertyInsurance || 0) +
+        Number(yearExpense.managementFees || 0) +
+        Number(yearExpense.unpaidRentInsurance || 0) +
+        Number(yearExpense.repairs || 0) +
+        Number(yearExpense.otherDeductible || 0) +
+        Number(yearExpense.otherNonDeductible || 0) +
+        Number(yearExpense.loanPayment || 0) +
+        Number(yearExpense.loanInsurance || 0);
+      
+      const annualCashFlowBeforeTax = revenues - expenses;
+      const taxation = yearlyResults[yr]?.[regime]?.totalTax || 0;
+      const annualCashFlowNet = annualCashFlowBeforeTax - taxation;
+      cumulativeCashFlowNet += annualCashFlowNet;
+    }
+    
+    // Calculer le solde de revente pour l'année sélectionnée
+    const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
+    const storedParams = localStorage.getItem(`saleParameters_${investmentId}`);
+    const saleParams = storedParams ? JSON.parse(storedParams) : {
+      annualIncrease: 2,
+      agencyFees: 0,
+      earlyRepaymentFees: 0
+    };
+    
+    const yearsSincePurchase = year - startYear;
+    const revaluedValue = Number(investment.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+    const netSellingPrice = revaluedValue - Number(saleParams.agencyFees);
+    
+    const amortizationSchedule = generateAmortizationSchedule(
+      Number(investment.loanAmount),
+      Number(investment.interestRate),
+      Number(investment.loanDuration),
+      investment.deferralType,
+      Number(investment.deferredPeriod),
+      investment.startDate
+    );
+    
+    const yearEndDate = new Date(year, 11, 31);
+    const lastPayment = amortizationSchedule.schedule
+      .filter(row => new Date(row.date) <= yearEndDate)
+      .pop();
+    
+    const remainingBalance = lastPayment ? lastPayment.remainingBalance : Number(investment.loanAmount);
+    const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
+    const saleBalance = netSellingPrice - totalDebt;
+    
+    // Calculer l'impôt sur la plus-value
+    const capitalGainTax = calculateCapitalGainTaxForYear(investment, year, netSellingPrice, regime);
+    
+    // Calculer le gain total cumulé
+    const downPayment = Number(investment.downPayment) || 0;
+    const totalGain = cumulativeCashFlowNet + saleBalance - capitalGainTax - downPayment;
+    
+    return totalGain;
+  }
 
   // Fonction pour calculer le cash flow annuel pour un bien donné
   function calculateAnnualCashFlow(property: Property, year: number) {
@@ -602,18 +994,190 @@ export default function Dashboard() {
                   <div className="h-[500px]">
                     <Line data={chartData} options={chartOptions} />
                   </div>
+                  <p className="text-sm text-gray-500 mt-4">
+                    Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Courbe: solde global (total de tous les biens).
+                  </p>
                 </div>
 
-                {/* Cash Flow Goal */}
-                <CashFlowGoal 
-                  cashFlowData={years.map(year => ({
+                {/* Affichage du gain total cumulé à l'année de revente souhaitée pour chaque bien */}
+                {includedProperties.length > 0 && (
+                  <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h3 className="text-lg font-semibold mb-4">Gain total cumulé à l'année de revente souhaitée</h3>
+                    <div className="space-y-3">
+                      {includedProperties.map(property => {
+                        const investment = property.investment_data as unknown as Investment;
+                        const targetYear = investment.targetSaleYear;
+                        if (!targetYear) return null;
+                        
+                        const comps = calculateTotalGainComponentsForYear(property, targetYear);
+                        const regime = investment.selectedRegime || 'micro-foncier';
+                        
+                        return (
+                          <div key={property.id} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-medium text-gray-900">{property.name}</h4>
+                                <p className="text-sm text-gray-600">
+                                  Année de revente souhaitée: {targetYear}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Régime fiscal: {getRegimeLabel(regime)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-gray-500">Gain total cumulé</p>
+                                <p className={`text-2xl font-bold ${comps.totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {formatCurrency(comps.totalGain)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <span className="text-gray-500">Cash flow cumulé:</span>
+                                <span className="ml-2 font-medium">{formatCurrency(comps.cumulativeCashFlowBeforeTax)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Impôts cumulés:</span>
+                                <span className="ml-2 font-medium text-red-600">{formatCurrency(-comps.cumulativeTax)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Solde de revente:</span>
+                                <span className="ml-2 font-medium">{formatCurrency(comps.saleBalance)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Impôt sur plus-value:</span>
+                                <span className="ml-2 font-medium text-red-600">{formatCurrency(-comps.capitalGainTax)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {includedProperties.every(p => {
+                        const inv = p.investment_data as unknown as Investment;
+                        return !inv.targetSaleYear;
+                      }) && (
+                        <p className="text-sm text-gray-500 italic">
+                          Aucune année de revente souhaitée définie. Définissez-la dans la section Rentabilité → Revente pour chaque bien.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Total Gain Goal */}
+                <TotalGainGoal 
+                  totalGainData={years.map(year => ({
                     year,
-                    total: cashFlowData
-                      .filter(d => d.year === year)
-                      .reduce((sum, d) => sum + d.cashFlow, 0)
+                    totalGain: includedProperties.reduce((sum, property) => {
+                      const comps = calculateTotalGainComponentsForYear(property, year);
+                      return sum + comps.totalGain;
+                    }, 0)
                   }))}
-                  onGoalChange={setCashFlowGoal}
+                  onGoalChange={setTotalGainGoal}
                 />
+
+                {/* Tableau de revente */}
+                {includedProperties.length > 0 && (() => {
+                  // Préparer les données de revente pour chaque bien
+                  const saleData = includedProperties.map(property => {
+                    const investment = property.investment_data as unknown as Investment;
+                    if (!investment || typeof investment !== 'object') return null;
+                    
+                    // Utiliser targetSaleYear si disponible, sinon projectEndDate
+                    const saleYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+                    const saleDate = investment.targetSaleYear 
+                      ? new Date(saleYear, 11, 31).toISOString().split('T')[0]
+                      : investment.projectEndDate;
+                    
+                    // Calculer le gain total au moment de la vente
+                    const comps = calculateTotalGainComponentsForYear(property, saleYear);
+                    
+                    return {
+                      propertyId: property.id,
+                      propertyName: property.name,
+                      saleDate: saleDate,
+                      saleYear: saleYear,
+                      totalGain: comps.totalGain
+                    };
+                  }).filter((item): item is NonNullable<typeof item> => item !== null);
+                  
+                  // Trier par date de revente (chronologique)
+                  saleData.sort((a, b) => {
+                    const dateA = new Date(a.saleDate).getTime();
+                    const dateB = new Date(b.saleDate).getTime();
+                    return dateA - dateB;
+                  });
+                  
+                  // Calculer la somme cumulative
+                  let cumulativeTotal = 0;
+                  const saleDataWithCumulative = saleData.map(item => {
+                    cumulativeTotal += item.totalGain;
+                    return {
+                      ...item,
+                      cumulativeTotal
+                    };
+                  });
+                  
+                  return (
+                    <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+                      <h3 className="text-lg font-semibold mb-4">Tableau de revente</h3>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Bien
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date de revente
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Gain total estimé au moment de la vente
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Somme cumulative
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {saleDataWithCumulative.length > 0 ? (
+                              saleDataWithCumulative.map((item, index) => (
+                                <tr key={`${item.propertyId}-${index}`} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {item.propertyName}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    {new Date(item.saleDate).toLocaleDateString('fr-FR', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })}
+                                  </td>
+                                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                                    item.totalGain >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}>
+                                    {formatCurrency(item.totalGain)}
+                                  </td>
+                                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                                    item.cumulativeTotal >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}>
+                                    {formatCurrency(item.cumulativeTotal)}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                                  Aucune date de revente définie pour les biens sélectionnés
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </main>

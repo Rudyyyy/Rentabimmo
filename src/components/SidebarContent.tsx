@@ -11,6 +11,10 @@ import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime, Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
+import { Brain, X } from 'lucide-react';
+import { processUserMessageWithMistral } from '../services/mistral';
+import { processUserMessage } from '../services/openai';
+import { saveTargetSaleYear } from '../lib/api';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -20,6 +24,7 @@ interface SidebarContentProps {
   investmentData?: any;
   metrics?: any;
   onInvestmentUpdate?: (field: any, value: any) => void;
+  propertyId?: string;
 }
 
 const tabConfigs = [
@@ -30,7 +35,7 @@ const tabConfigs = [
   { id: 'bilan' as MainTab, label: 'Bilan', icon: FaChartBar },
 ];
 
-export default function SidebarContent({ currentMainTab, currentSubTab, investmentData, metrics, onInvestmentUpdate }: SidebarContentProps) {
+export default function SidebarContent({ currentMainTab, currentSubTab, investmentData, metrics, onInvestmentUpdate, propertyId }: SidebarContentProps) {
   const currentConfig = tabConfigs.find(tab => tab.id === currentMainTab);
 
   if (!currentConfig) return null;
@@ -86,11 +91,32 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
     return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
   });
   const [targetSaleYear, setTargetSaleYear] = useState<number>(() => {
+    // Priorité 1: investment_data.targetSaleYear (base de données)
+    if (investmentData?.targetSaleYear) {
+      return investmentData.targetSaleYear;
+    }
+    // Priorité 2: localStorage
     const stored = typeof window !== 'undefined' ? localStorage.getItem(`targetSaleYear_${investmentId}`) : null;
     if (stored) return Number(stored);
+    // Priorité 3: dernière année disponible ou année courante
     return saleYears[saleYears.length - 1] || new Date().getFullYear();
   });
+
+  // Synchroniser avec investment_data.targetSaleYear quand il change
+  useEffect(() => {
+    if (investmentData?.targetSaleYear && investmentData.targetSaleYear !== targetSaleYear) {
+      setTargetSaleYear(investmentData.targetSaleYear);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`targetSaleYear_${investmentId}`, String(investmentData.targetSaleYear));
+      }
+    }
+  }, [investmentData?.targetSaleYear, investmentId, targetSaleYear]);
   const [targetBalance, setTargetBalance] = useState<number>(0);
+
+  // États pour la popup d'analyse IA
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Effets de synchronisation (écoute des mises à jour depuis la page centrale)
   useEffect(() => {
@@ -367,6 +393,129 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
       capitalGainTax,
       totalGain
     };
+  };
+
+  // Fonction pour générer le prompt IA avec les données du bilan
+  const generateBalanceAnalysisPrompt = () => {
+    if (!investmentData) return '';
+
+    const regimeForBalance = getSelectedRegime();
+    const balanceData = calculateBalanceForYear(selectedSaleYear, regimeForBalance);
+    
+    // Récupérer les données de location de la première année
+    const firstYear = investmentData.expenses?.[0];
+    const isFurnished = regimeForBalance === 'micro-bic' || regimeForBalance === 'reel-bic';
+    
+    const REGIME_LABELS: Record<TaxRegime, string> = {
+      'micro-foncier': 'Location nue - Micro-foncier',
+      'reel-foncier': 'Location nue - Frais réels',
+      'micro-bic': 'LMNP - Micro-BIC',
+      'reel-bic': 'LMNP - Frais réels'
+    };
+
+    const prompt = `Tu es un expert en investissement immobilier en France. Analyse ce bilan d'investissement et donne ton avis détaillé.
+
+**Informations sur le bien :**
+- Nom : ${investmentData.name || 'Non renseigné'}
+- Type : ${investmentData.propertyType === 'new' ? 'Neuf' : 'Ancien'}
+- Prix d'achat : ${formatCurrency(Number(investmentData.purchasePrice) || 0)}
+- Frais de notaire : ${formatCurrency(Number(investmentData.notaryFees) || 0)}
+- Frais d'agence : ${formatCurrency(Number(investmentData.agencyFees) || 0)}
+- Coûts de rénovation : ${formatCurrency(Number(investmentData.improvementWorks) || 0)}
+
+**Financement :**
+- Apport personnel : ${formatCurrency(Number(investmentData.downPayment) || 0)}
+- Montant emprunté : ${formatCurrency(Number(investmentData.loanAmount) || 0)}
+- Durée du prêt : ${investmentData.loanDuration} ans
+- Taux d'intérêt : ${investmentData.interestRate}%
+- Taux d'assurance : ${investmentData.insuranceRate}%
+
+${firstYear ? `
+**Exploitation (année de référence) :**
+- Revenus locatifs annuels : ${formatCurrency(isFurnished ? Number(firstYear.furnishedRent || 0) : Number(firstYear.rent || 0))}
+- Charges locatives : ${formatCurrency(Number(firstYear.tenantCharges || 0))}
+- Taxe foncière : ${formatCurrency(Number(firstYear.propertyTax || 0))}
+- Charges de copropriété : ${formatCurrency(Number(firstYear.condoFees || 0))}
+- Assurance PNO : ${formatCurrency(Number(firstYear.propertyInsurance || 0))}
+- Frais de gestion : ${formatCurrency(Number(firstYear.managementFees || 0))}
+- Assurance impayés : ${formatCurrency(Number(firstYear.unpaidRentInsurance || 0))}
+- Réparations/maintenance : ${formatCurrency(Number(firstYear.repairs || 0))}
+- Mensualité de crédit : ${formatCurrency(Number(firstYear.loanPayment || 0))}
+- Coût total annuel : ${formatCurrency(
+  Number(firstYear.propertyTax || 0) +
+  Number(firstYear.condoFees || 0) +
+  Number(firstYear.propertyInsurance || 0) +
+  Number(firstYear.managementFees || 0) +
+  Number(firstYear.unpaidRentInsurance || 0) +
+  Number(firstYear.repairs || 0) +
+  Number(firstYear.loanPayment || 0) +
+  Number(firstYear.loanInsurance || 0)
+)}
+` : ''}
+
+**Régime fiscal :** ${REGIME_LABELS[regimeForBalance]}
+**Année de revente analysée :** ${selectedSaleYear}
+
+${balanceData ? `
+**Bilan financier cumulé (année ${selectedSaleYear}) :**
+- Apport personnel investi : ${formatCurrency(-balanceData.downPayment)}
+- Cash flow cumulé avant impôt : ${formatCurrency(balanceData.cumulativeCashFlowBeforeTax)}
+- Impôts cumulés payés : ${formatCurrency(-balanceData.cumulativeTax)}
+- Solde de revente après frais : ${formatCurrency(balanceData.saleBalance)}
+- Impôt sur la plus-value : ${formatCurrency(-balanceData.capitalGainTax)}
+- **GAIN TOTAL NET : ${formatCurrency(balanceData.totalGain)}**
+
+**Durée de détention :** ${selectedSaleYear - new Date(investmentData.projectStartDate).getFullYear()} ans
+**Rendement brut du gain total :** ${balanceData.totalGain > 0 ? ((balanceData.totalGain / Number(investmentData.downPayment || 1)) * 100).toFixed(2) : 'Négatif'}%
+**Rendement annualisé :** ${balanceData.totalGain > 0 ? ((balanceData.totalGain / Number(investmentData.downPayment || 1) / (selectedSaleYear - new Date(investmentData.projectStartDate).getFullYear())) * 100).toFixed(2) : 'Négatif'}% par an
+` : 'Données de bilan non disponibles'}
+
+**Demande :** En tant qu'expert en investissement immobilier, analyse cet investissement et donne ton avis détaillé :
+1. Évaluation générale de la rentabilité (rentabilité brute/nette, TRI, cash flow)
+2. Points forts et points faibles de cet investissement
+3. Risques identifiés (liquidity, risque locatif, inflation, etc.)
+4. Recommandations d'optimisation (réduction de charges, optimisation fiscale, etc.)
+5. Recommandation finale claire : à retenir, à améliorer, ou à éviter
+
+Réponds de manière professionnelle, concise et structurée avec des références chiffrées spécifiques.`;
+
+    return prompt;
+  };
+
+  // Fonction pour lancer l'analyse IA
+  const handleRunAIAnalysis = async () => {
+    console.log('Démarrage de l\'analyse IA...');
+    setIsAnalyzing(true);
+    setShowAIModal(true);
+    setAiAnalysis('');
+
+    try {
+      const prompt = generateBalanceAnalysisPrompt();
+      console.log('Prompt généré:', prompt.substring(0, 200) + '...');
+      
+      // Déterminer l'environnement (dev = Mistral, prod = OpenAI)
+      const isDevelopment = import.meta.env.DEV;
+      console.log('Environnement:', isDevelopment ? 'DEV (Mistral)' : 'PROD (OpenAI)');
+      
+      const response = isDevelopment
+        ? await processUserMessageWithMistral(prompt, {
+            previousMessages: [],
+            currentInvestment: investmentData
+          })
+        : await processUserMessage(prompt, {
+            previousMessages: [],
+            currentInvestment: investmentData
+          });
+
+      console.log('Réponse IA reçue:', response.response.substring(0, 100) + '...');
+      setAiAnalysis(response.response);
+    } catch (error: any) {
+      console.error('Erreur lors de l\'analyse IA:', error);
+      setAiAnalysis(`Erreur lors de l'analyse : ${error?.message || 'Erreur inconnue'}\n\nVérifiez que Ollama est démarré avec le modèle 'mixtral' installé si vous êtes en développement.`);
+    } finally {
+      console.log('Fin de l\'analyse IA');
+      setIsAnalyzing(false);
+    }
   };
 
   const renderSidebarContent = () => {
@@ -673,11 +822,19 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
                   <span className="text-sm text-gray-600">Année objectif revente</span>
                   <select
                     value={targetSaleYear}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const y = Number(e.target.value);
                       setTargetSaleYear(y);
                       localStorage.setItem(`targetSaleYear_${investmentId}`, String(y));
                       updateTargetBalance(y);
+                      // Sauvegarder dans la base de données si propertyId est disponible
+                      if (propertyId) {
+                        await saveTargetSaleYear(propertyId, y);
+                      }
+                      // Notifier le composant parent de la mise à jour
+                      if (onInvestmentUpdate) {
+                        onInvestmentUpdate('targetSaleYear', y);
+                      }
                     }}
                     className="ml-3 w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
@@ -975,6 +1132,21 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
                 Impossible de calculer les valeurs pour cette année.
               </div>
             )}
+
+            {/* Bouton d'analyse IA */}
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                onClick={handleRunAIAnalysis}
+                disabled={!balanceData || isAnalyzing}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+              >
+                <Brain className="h-5 w-5" />
+                {isAnalyzing ? 'Analyse en cours...' : 'Analyser avec l\'IA'}
+              </button>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Obtenez une analyse détaillée de votre investissement
+              </p>
+            </div>
           </div>
         );
 
@@ -990,20 +1162,69 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6 space-y-6">
-      <div className="flex items-center space-x-2">
-        {isCashflowView ? (
-          <FaMoneyBillWave className="h-5 w-5 text-blue-600" />
-        ) : isReventeView ? (
-          <FaHome className="h-5 w-5 text-blue-600" />
-        ) : (
-          <currentConfig.icon className="h-5 w-5 text-blue-600" />
-        )}
-        <h3 className="text-lg font-semibold text-gray-900">{isCashflowView ? 'Cashflow' : isReventeView ? 'Revente' : currentConfig.label}</h3>
+    <>
+      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6 space-y-6">
+        <div className="flex items-center space-x-2">
+          {isCashflowView ? (
+            <FaMoneyBillWave className="h-5 w-5 text-blue-600" />
+          ) : isReventeView ? (
+            <FaHome className="h-5 w-5 text-blue-600" />
+          ) : (
+            <currentConfig.icon className="h-5 w-5 text-blue-600" />
+          )}
+          <h3 className="text-lg font-semibold text-gray-900">{isCashflowView ? 'Cashflow' : isReventeView ? 'Revente' : currentConfig.label}</h3>
+        </div>
+        <div className="border-t border-gray-100 pt-4">
+          {renderSidebarContent()}
+        </div>
       </div>
-      <div className="border-t border-gray-100 pt-4">
-        {renderSidebarContent()}
-      </div>
-    </div>
+
+      {/* Modal d'analyse IA */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            {/* En-tête de la modal */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
+                    <Brain className="h-6 w-6 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-gray-900">Analyse IA</h2>
+                </div>
+                <button
+                  onClick={() => setShowAIModal(false)}
+                  className="text-gray-400 hover:text-gray-500 transition-colors"
+                >
+                  <span className="sr-only">Fermer</span>
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Contenu de l'analyse */}
+            <div className="overflow-auto flex-1 p-6">
+              {isAnalyzing ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mb-4"></div>
+                  <p className="text-gray-600 text-lg">Analyse en cours...</p>
+                  <p className="text-gray-500 text-sm mt-2">L'IA analyse votre investissement</p>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="prose prose-sm max-w-none">
+                  <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                    {aiAnalysis}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  Aucune analyse disponible
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

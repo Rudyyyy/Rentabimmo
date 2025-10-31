@@ -142,4 +142,63 @@ export async function getAmortizationSchedule(
     console.error('Erreur lors de la récupération du tableau d\'amortissement:', error);
     return null;
   }
+}
+
+/**
+ * Enregistre l'année de revente souhaitée dans la base de données
+ * @param propertyId L'identifiant de la propriété
+ * @param targetSaleYear L'année de revente souhaitée
+ * @returns {Promise<boolean>} True si l'enregistrement a réussi, false sinon
+ */
+export async function saveTargetSaleYear(
+  propertyId: string,
+  targetSaleYear: number
+): Promise<boolean> {
+  try {
+    if (!propertyId) {
+      console.error('❌ ID de propriété invalide ou manquant');
+      return false;
+    }
+
+    // Lire la propriété complète depuis la base de données
+    const { data: property, error: readError } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('id', propertyId)
+      .single();
+
+    if (readError) {
+      console.error('❌ Erreur lors de la lecture de la propriété:', readError);
+      return false;
+    }
+
+    if (!property) {
+      console.error('❌ Propriété non trouvée avec l\'ID:', propertyId);
+      return false;
+    }
+
+    // Mettre à jour les données d'investissement
+    const currentInvestmentData = property.investment_data || {};
+    const updatedInvestmentData = JSON.parse(JSON.stringify(currentInvestmentData));
+    updatedInvestmentData.targetSaleYear = targetSaleYear;
+
+    // Mise à jour dans la base de données
+    const { error: writeError } = await supabase
+      .from('properties')
+      .update({
+        investment_data: updatedInvestmentData
+      })
+      .eq('id', propertyId);
+
+    if (writeError) {
+      console.error('❌ Erreur lors de l\'écriture des données:', writeError);
+      return false;
+    }
+
+    console.log(`✅ Année de revente souhaitée enregistrée: ${targetSaleYear}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Exception critique:', error);
+    return false;
+  }
 } 

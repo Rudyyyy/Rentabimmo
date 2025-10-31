@@ -55,6 +55,10 @@ export async function processUserMessageWithMistral(
       { role: 'user', content: message }
     ];
 
+    // Créer un AbortController pour le timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes
+
     const response = await fetch(`${OLLAMA_API_URL}/chat`, {
       method: 'POST',
       headers: {
@@ -65,7 +69,10 @@ export async function processUserMessageWithMistral(
         messages: messages,
         stream: false,
       }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -89,8 +96,19 @@ export async function processUserMessageWithMistral(
       response: responseText,
       suggestion,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in processUserMessageWithMistral:', error);
+    
+    // Gérer les erreurs de timeout
+    if (error.name === 'AbortError') {
+      throw new Error('Timeout: Ollama ne répond pas. Vérifiez que Ollama est démarré et que le modèle \'mixtral\' est installé.');
+    }
+    
+    // Gérer les erreurs de connexion
+    if (error.message && error.message.includes('fetch')) {
+      throw new Error('Impossible de se connecter à Ollama. Vérifiez que Ollama est démarré sur http://localhost:11434');
+    }
+    
     throw error;
   }
 } 

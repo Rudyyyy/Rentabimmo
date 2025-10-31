@@ -734,6 +734,7 @@ export default function PropertyForm() {
                 investmentData={investmentData}
                 metrics={metrics}
                 onInvestmentUpdate={handleFieldUpdate}
+                propertyId={id || undefined}
               />
             )}
           </div>

@@ -223,6 +223,9 @@ export interface Investment {
   grossYield: number;
   netYield: number;
   cashOnCashReturn: number;
+  
+  // Année de revente souhaitée (pour le dashboard)
+  targetSaleYear?: number;
 }
 
 export const defaultTaxParameters: TaxParameters = {
