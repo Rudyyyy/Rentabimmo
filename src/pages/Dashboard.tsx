@@ -961,34 +961,6 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Cash flow cards */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <h3 className="text-sm text-gray-500">Cash-flow mois en cours</h3>
-                    <p className={`text-xl font-semibold ${currentMonthCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(currentMonthCashFlow)}
-                    </p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <h3 className="text-sm text-gray-500">Cash-flow mois prochain</h3>
-                    <p className={`text-xl font-semibold ${nextMonthCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(nextMonthCashFlow)}
-                    </p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <h3 className="text-sm text-gray-500">Cash-flow année en cours</h3>
-                    <p className={`text-xl font-semibold ${currentYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(currentYearCashFlow)}
-                    </p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <h3 className="text-sm text-gray-500">Cash-flow année prochaine</h3>
-                    <p className={`text-xl font-semibold ${nextYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(nextYearCashFlow)}
-                    </p>
-                  </div>
-                </div>
-
                 {/* Chart */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="h-[500px]">
@@ -998,71 +970,6 @@ export default function Dashboard() {
                     Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Courbe: solde global (total de tous les biens).
                   </p>
                 </div>
-
-                {/* Affichage du gain total cumulé à l'année de revente souhaitée pour chaque bien */}
-                {includedProperties.length > 0 && (
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h3 className="text-lg font-semibold mb-4">Gain total cumulé à l'année de revente souhaitée</h3>
-                    <div className="space-y-3">
-                      {includedProperties.map(property => {
-                        const investment = property.investment_data as unknown as Investment;
-                        const targetYear = investment.targetSaleYear;
-                        if (!targetYear) return null;
-                        
-                        const comps = calculateTotalGainComponentsForYear(property, targetYear);
-                        const regime = investment.selectedRegime || 'micro-foncier';
-                        
-                        return (
-                          <div key={property.id} className="border border-gray-200 rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h4 className="font-medium text-gray-900">{property.name}</h4>
-                                <p className="text-sm text-gray-600">
-                                  Année de revente souhaitée: {targetYear}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                  Régime fiscal: {getRegimeLabel(regime)}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-gray-500">Gain total cumulé</p>
-                                <p className={`text-2xl font-bold ${comps.totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {formatCurrency(comps.totalGain)}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <span className="text-gray-500">Cash flow cumulé:</span>
-                                <span className="ml-2 font-medium">{formatCurrency(comps.cumulativeCashFlowBeforeTax)}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Impôts cumulés:</span>
-                                <span className="ml-2 font-medium text-red-600">{formatCurrency(-comps.cumulativeTax)}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Solde de revente:</span>
-                                <span className="ml-2 font-medium">{formatCurrency(comps.saleBalance)}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Impôt sur plus-value:</span>
-                                <span className="ml-2 font-medium text-red-600">{formatCurrency(-comps.capitalGainTax)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {includedProperties.every(p => {
-                        const inv = p.investment_data as unknown as Investment;
-                        return !inv.targetSaleYear;
-                      }) && (
-                        <p className="text-sm text-gray-500 italic">
-                          Aucune année de revente souhaitée définie. Définissez-la dans la section Rentabilité → Revente pour chaque bien.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Total Gain Goal */}
                 <TotalGainGoal 
