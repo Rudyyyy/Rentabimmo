@@ -82,9 +82,10 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
     };
   });
 
-  // Sauvegarde du régime sélectionné dans le localStorage
+  // Sauvegarde du régime sélectionné et notification
   useEffect(() => {
     localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
+    window.dispatchEvent(new CustomEvent('selectedRegimeUpdated', { detail: { investmentId, selectedRegime } }));
   }, [selectedRegime, investmentId]);
 
   // Calculer les résultats de plus-value à chaque modification des paramètres pertinents
@@ -109,6 +110,34 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
   useEffect(() => {
     localStorage.setItem(`saleParameters_${investmentId}`, JSON.stringify(saleParams));
   }, [saleParams, investmentId]);
+
+  // Synchroniser les paramètres si la sidebar les met à jour (événement personnalisé)
+  useEffect(() => {
+    const handleParamsUpdated = (e: any) => {
+      const changedId = e?.detail?.investmentId;
+      if (changedId === investmentId) {
+        const stored = localStorage.getItem(`saleParameters_${investmentId}`);
+        if (stored) {
+          setSaleParams(JSON.parse(stored));
+        }
+      }
+    };
+    window.addEventListener('saleParametersUpdated', handleParamsUpdated as EventListener);
+    return () => window.removeEventListener('saleParametersUpdated', handleParamsUpdated as EventListener);
+  }, [investmentId]);
+
+  // Synchroniser via l'événement storage (multi-onglets)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === `saleParameters_${investmentId}` && e.newValue) {
+        try {
+          setSaleParams(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [investmentId]);
 
   // Fonctions utilitaires pour le formatage des valeurs
   const formatCurrency = (value: number) => 
@@ -166,6 +195,19 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
   };
 
   const saleTable = calculateSaleTable();
+
+  // Publier les années et soldes par année pour le régime courant
+  useEffect(() => {
+    try {
+      const balances: Record<number, number> = {};
+      saleTable.years.forEach((year, idx) => {
+        balances[year] = calculateBalance(idx, selectedRegime);
+      });
+      localStorage.setItem(`saleYears_${investmentId}`, JSON.stringify(saleTable.years));
+      localStorage.setItem(`balances_${investmentId}_${selectedRegime}`, JSON.stringify(balances));
+      window.dispatchEvent(new CustomEvent('balancesUpdated', { detail: { investmentId, selectedRegime } }));
+    } catch {}
+  }, [investmentId, selectedRegime, saleParams, saleTable.years, saleTable.yearlyBalances, saleTable.revaluedValues]);
   
   // Calculer le cumul des amortissements effectivement utilisés jusqu'à une année donnée
   const calculateUsedAmortizationTotal = (targetYear: number) => {
@@ -617,81 +659,69 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Formulaire des paramètres */}
+      {/* Formulaire des paramètres retiré: la sidebar pilote ces valeurs */}
+
+      {/* Graphique d'évolution du solde */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h3 className="text-lg font-semibold mb-4">Paramètres de revente</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              % augmentation annuelle
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <input
-                type="number"
-                value={saleParams.annualIncrease}
-                onChange={(e) => handleParamChange('annualIncrease', Number(e.target.value))}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                step="0.1"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">%</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Frais d'agence
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <input
-                type="number"
-                value={saleParams.agencyFees}
-                onChange={(e) => handleParamChange('agencyFees', Number(e.target.value))}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Frais de remboursements anticipés
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <input
-                type="number"
-                value={saleParams.earlyRepaymentFees}
-                onChange={(e) => handleParamChange('earlyRepaymentFees', Number(e.target.value))}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Travaux d'amélioration non déduits
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <input
-                type="number"
-                value={investment.improvementWorks || 0}
-                onChange={(e) => {
-                  // Cette modification nécessite une mise à jour de l'investissement parent
-                  // À implémenter avec une fonction de callback appropriée
-                }}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">€</span>
-              </div>
-            </div>
-          </div>
+        <h3 className="text-lg font-semibold mb-4">Évolution du solde après revente selon le régime fiscal</h3>
+        <div className="h-96">
+          <Line 
+            data={{
+              labels: saleTable.years,
+              datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
+                const colors = [
+                  'rgba(59, 130, 246, 0.7)', // blue
+                  'rgba(16, 185, 129, 0.7)', // green
+                  'rgba(139, 92, 246, 0.7)', // purple
+                  'rgba(245, 158, 11, 0.7)'  // yellow
+                ];
+                return {
+                  label,
+                  data: saleTable.years.map((year, yearIndex) => {
+                    return calculateBalance(yearIndex, regime as TaxRegime);
+                  }),
+                  borderColor: colors[index],
+                  backgroundColor: colors[index].replace('0.7', '0.1'),
+                  borderWidth: 2,
+                  fill: true,
+                  tension: 0.4
+                };
+              })
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top' as const,
+                },
+                title: {
+                  display: true,
+                  text: 'Évolution du solde après revente'
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(context: any) {
+                      return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: false,
+                  ticks: {
+                    callback: function(value: any) {
+                      return formatCurrency(value);
+                    }
+                  }
+                }
+              }
+            }}
+          />
+        </div>
+        <div className="mt-4 p-4 bg-blue-50 rounded-md text-sm">
+          <p><strong>Note :</strong> Ce graphique montre le solde que vous obtiendriez après la revente pour chaque année, en tenant compte des frais de vente, des impôts sur la plus-value et du capital restant dû. Il permet de comparer l'impact fiscal des différents régimes sur le solde net.</p>
         </div>
       </div>
 
@@ -915,71 +945,6 @@ export default function SaleDisplay({ investment, onUpdate }: Props) {
           </div>
         </div>
       </div>
-      
-      {/* Graphique d'évolution du solde */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h3 className="text-lg font-semibold mb-4">Évolution du solde après revente selon le régime fiscal</h3>
-        <div className="h-96">
-          <Line 
-            data={{
-              labels: saleTable.years,
-              datasets: Object.entries(REGIME_LABELS).map(([regime, label], index) => {
-                const colors = [
-                  'rgba(59, 130, 246, 0.7)', // blue
-                  'rgba(16, 185, 129, 0.7)', // green
-                  'rgba(139, 92, 246, 0.7)', // purple
-                  'rgba(245, 158, 11, 0.7)'  // yellow
-                ];
-                return {
-                  label,
-                  data: saleTable.years.map((year, yearIndex) => {
-                    return calculateBalance(yearIndex, regime as TaxRegime);
-                  }),
-                  borderColor: colors[index],
-                  backgroundColor: colors[index].replace('0.7', '0.1'),
-                  borderWidth: 2,
-                  fill: true,
-                  tension: 0.4
-                };
-              })
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: 'top' as const,
-                },
-                title: {
-                  display: true,
-                  text: 'Évolution du solde après revente'
-                },
-                tooltip: {
-                  callbacks: {
-                    label: function(context: any) {
-                      return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
-                    }
-                  }
-                }
-              },
-              scales: {
-                y: {
-                  beginAtZero: false,
-                  ticks: {
-                    callback: function(value: any) {
-                      return formatCurrency(value);
-                    }
-                  }
-                }
-              }
-            }}
-          />
-        </div>
-        <div className="mt-4 p-4 bg-blue-50 rounded-md text-sm">
-          <p><strong>Note :</strong> Ce graphique montre le solde que vous obtiendriez après la revente pour chaque année, en tenant compte des frais de vente, des impôts sur la plus-value et du capital restant dû. Il permet de comparer l'impact fiscal des différents régimes sur le solde net.</p>
-        </div>
-      </div>
-      
       {/* Section du calcul de plus-value avec explication */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">Calcul de la plus-value immobilière</h3>

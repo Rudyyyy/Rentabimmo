@@ -9,7 +9,7 @@
  * - Affichage des graphiques d'évolution de la rentabilité (brute et nette)
  * - Tableau détaillé des résultats par année
  * - Comparaison des différents régimes fiscaux
- * - Calcul et affichage des métriques clés (rendement brut, net, charges, imposition)
+ * - Calcul et affichage des métriques clés (rendement brut, hors impôts, charges)
  * - Persistance de la sélection du régime fiscal dans le localStorage
  * 
  * Le composant utilise Chart.js pour les visualisations et fournit une interface
@@ -127,19 +127,7 @@ export default function ResultsDisplay({ investment }: Props) {
       (_, i) => startYear + i
     );
 
-    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
-    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
-
-    // Calcul des résultats fiscaux de manière séquentielle
-    years.forEach(year => {
-      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
-      if (year === startYear) {
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
-      } else {
-        // Pour les années suivantes, on passe les résultats de l'année précédente
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
-      }
-    });
+    // Plus de calculs liés à l'imposition pour ce tableau
 
     return (
       <div className="overflow-x-auto">
@@ -156,16 +144,13 @@ export default function ResultsDisplay({ investment }: Props) {
                 Charges
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Imposition
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Coût total
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Rentabilité brute
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Rentabilité nette
+                Rentabilité hors impôts
               </th>
             </tr>
           </thead>
@@ -173,8 +158,6 @@ export default function ResultsDisplay({ investment }: Props) {
             {years.map(year => {
               const yearExpense = investment.expenses.find(e => e.year === year);
               
-              // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
-              const yearResults = yearlyResults[year];
               const rent = Number(yearExpense?.rent || 0);
               const furnishedRent = Number(yearExpense?.furnishedRent || 0);
               const taxBenefit = Number(yearExpense?.taxBenefit || 0);
@@ -182,15 +165,9 @@ export default function ResultsDisplay({ investment }: Props) {
                 ? furnishedRent 
                 : rent + taxBenefit;
               const totalCharges = calculateTotalCharges(yearExpense);
-
-              // Récupérer les composants fiscaux spécifiques au régime
-              const regimeResults = yearResults[regime];
-              const tax = regimeResults?.tax || 0;
-              const socialCharges = regimeResults?.socialCharges || 0;
-              const totalTax = regimeResults?.totalTax || 0;
               
               const grossYield = (grossRevenue / totalCost) * 100;
-              const netYield = ((grossRevenue - totalCharges - totalTax) / totalCost) * 100;
+              const netYield = ((grossRevenue - totalCharges) / totalCost) * 100;
 
               return (
                 <tr key={year}>
@@ -202,18 +179,6 @@ export default function ResultsDisplay({ investment }: Props) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(totalCharges)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {totalTax > 0 ? (
-                      <div>
-                        <div className="text-sm font-medium">{formatCurrency(totalTax)}</div>
-                        <div className="text-xs text-gray-400">
-                          IR: {formatCurrency(tax)} + PS: {formatCurrency(socialCharges)}
-                        </div>
-                      </div>
-                    ) : (
-                      formatCurrency(0)
-                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(totalCost)}
@@ -253,26 +218,13 @@ export default function ResultsDisplay({ investment }: Props) {
                      Number(investment.mandatoryDiagnostics || 0) +
                      Number(investment.renovationCosts || 0);
 
-    // On va maintenir les résultats fiscaux de chaque année pour chaque régime
-    const yearlyResults: Record<number, Record<TaxRegime, TaxResults>> = {};
-
-    // Calcul des résultats fiscaux de manière séquentielle
-    years.forEach(year => {
-      // Pour la première année, on calcule les résultats fiscaux sans données antérieures
-      if (year === startYear) {
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year);
-      } else {
-        // Pour les années suivantes, on passe les résultats de l'année précédente
-        yearlyResults[year] = calculateAllTaxRegimes(investment, year, yearlyResults[year - 1]);
-      }
-    });
+    // Plus de calculs fiscaux nécessaires pour les graphiques hors impôts
+    // Plus de résultats fiscaux requis pour le calcul hors impôts
 
     const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
       const data = years.map(year => {
         const yearExpense = investment.expenses.find(e => e.year === year);
         
-        // Utiliser les résultats fiscaux précalculés avec le bon report de déficit
-        const yearResults = yearlyResults[year];
         const rent = Number(yearExpense?.rent || 0);
         const furnishedRent = Number(yearExpense?.furnishedRent || 0);
         const taxBenefit = Number(yearExpense?.taxBenefit || 0);
@@ -280,14 +232,9 @@ export default function ResultsDisplay({ investment }: Props) {
           ? furnishedRent 
           : rent + taxBenefit;
         const totalCharges = calculateTotalCharges(yearExpense);
-
-        // Récupérer les composants fiscaux spécifiques au régime
-        const regimeResults = yearResults[regime];
-        const totalTax = regimeResults?.totalTax || 0;
-
         return {
           grossYield: (grossRevenue / totalCost) * 100,
-          netYield: ((grossRevenue - totalCharges - totalTax) / totalCost) * 100
+          netYield: ((grossRevenue - totalCharges) / totalCost) * 100
         };
       });
 
@@ -379,7 +326,7 @@ export default function ResultsDisplay({ investment }: Props) {
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-4">Évolution de la rentabilité nette</h3>
+          <h3 className="text-lg font-semibold mb-4">Évolution de la rentabilité hors impôts</h3>
           <div className="h-80">
             <Line 
               data={{
@@ -395,7 +342,7 @@ export default function ResultsDisplay({ investment }: Props) {
                   ...chartOptions.plugins,
                   title: {
                     ...chartOptions.plugins.title,
-                    text: 'Évolution de la rentabilité nette'
+                    text: 'Évolution de la rentabilité hors impôts'
                   }
                 }
               }}
@@ -461,17 +408,6 @@ export default function ResultsDisplay({ investment }: Props) {
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-900">Imposition</h4>
-                <p className="text-sm text-gray-600">
-                  Calculée selon le régime {REGIME_LABELS[selectedRegime]} :
-                  <ul className="list-disc ml-6 mt-2">
-                    <li>Impôt sur le revenu</li>
-                    <li>Prélèvements sociaux (17.2%)</li>
-                  </ul>
-                </p>
-              </div>
-
-              <div>
                 <h4 className="font-medium text-gray-900">Coût total</h4>
                 <p className="text-sm text-gray-600">
                   Somme des coûts d'acquisition :
@@ -495,9 +431,9 @@ export default function ResultsDisplay({ investment }: Props) {
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-900">Rentabilité nette</h4>
+                <h4 className="font-medium text-gray-900">Rentabilité hors impôts</h4>
                 <p className="text-sm text-gray-600">
-                  ((Revenus bruts - Charges - Imposition) / Coût total) × 100
+                  ((Revenus bruts - Charges) / Coût total) × 100
                 </p>
               </div>
             </div>

@@ -12,6 +12,7 @@ import {
   FaMoneyBillWave,
   FaChartPie
 } from 'react-icons/fa';
+import { Investment } from '../types/investment';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -77,7 +78,7 @@ const tabConfigs: MainTabConfig[] = [
     icon: FaChartLine,
     description: 'Analyse de la rentabilité de l\'investissement',
     subTabs: [
-      { id: 'rentabilite-brute-nette', label: 'Rentabilité brute et nette', icon: FaChartBar, description: 'Métriques de rentabilité' },
+      { id: 'rentabilite-brute-nette', label: 'Rentabilité', icon: FaChartBar, description: 'Métriques de rentabilité' },
       { id: 'cashflow', label: 'Cashflow', icon: FaMoneyBillWave, description: 'Flux de trésorerie' },
       { id: 'revente', label: 'Revente', icon: FaHome, description: 'Estimation de revente' }
     ],
@@ -348,38 +349,84 @@ function SidebarContent({
         );
 
       case 'rentabilite':
+        const currentYear = new Date().getFullYear();
+        
+        // Calculer les rentabilités pour micro-foncier et micro-bic (identiques au tableau ResultsDisplay)
+        let grossYieldNu = 0;
+        let netYieldNu = 0;
+        let grossYieldMeuble = 0;
+        let netYieldMeuble = 0;
+
+        if (investmentData) {
+          const investment = investmentData as Investment;
+          const yearExpenses = investment.expenses?.find(e => e.year === currentYear);
+          
+          if (yearExpenses) {
+            // Coût total identique au tableau
+            const totalCost = Number(investment.purchasePrice || 0) +
+                              Number(investment.agencyFees || 0) +
+                              Number(investment.notaryFees || 0) +
+                              Number(investment.bankFees || 0) +
+                              Number(investment.bankGuaranteeFees || 0) +
+                              Number(investment.mandatoryDiagnostics || 0) +
+                              Number(investment.renovationCosts || 0);
+
+            // Revenus bruts par régime
+            const rent = Number(yearExpenses?.rent || 0);
+            const furnishedRent = Number(yearExpenses?.furnishedRent || 0);
+            const taxBenefit = Number(yearExpenses?.taxBenefit || 0);
+            const grossRevenueNu = rent + taxBenefit;
+            const grossRevenueMeuble = furnishedRent;
+
+            // Charges identiques au tableau
+            const totalCharges =
+              Number(yearExpenses?.propertyTax || 0) +
+              Number(yearExpenses?.condoFees || 0) +
+              Number(yearExpenses?.propertyInsurance || 0) +
+              Number(yearExpenses?.managementFees || 0) +
+              Number(yearExpenses?.unpaidRentInsurance || 0) +
+              Number(yearExpenses?.repairs || 0) +
+              Number(yearExpenses?.otherDeductible || 0) +
+              Number(yearExpenses?.otherNonDeductible || 0) -
+              Number(yearExpenses?.tenantCharges || 0);
+
+            if (totalCost > 0) {
+              grossYieldNu = (grossRevenueNu / totalCost) * 100;
+              grossYieldMeuble = (grossRevenueMeuble / totalCost) * 100;
+              netYieldNu = ((grossRevenueNu - totalCharges) / totalCost) * 100;
+              netYieldMeuble = ((grossRevenueMeuble - totalCharges) / totalCost) * 100;
+            }
+          }
+        }
+
         return (
           <div className="space-y-4">
-            {metrics && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Rentabilité brute</span>
-                  <span className="text-sm font-semibold text-green-600">
-                    {metrics.grossYield?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Rentabilité nette</span>
-                  <span className="text-sm font-semibold text-blue-600">
-                    {metrics.netYield?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">TRI</span>
-                  <span className="text-sm font-semibold text-purple-600">
-                    {metrics.irr?.toFixed(2) || '0.00'}%
-                  </span>
-                </div>
-                <div className="border-t border-gray-200 pt-3">
-                  <div className="flex justify-between items-center py-2 bg-gradient-to-r from-blue-50 to-green-50 rounded-md px-3">
-                    <span className="text-sm font-semibold text-gray-900">ROI</span>
-                    <span className="text-lg font-bold text-blue-900">
-                      {metrics.roi?.toFixed(2) || '0.00'}%
-                    </span>
-                  </div>
-                </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Rentabilité brute location nue</span>
+                <span className="text-sm font-semibold text-green-600">
+                  {grossYieldNu.toFixed(2)}%
+                </span>
               </div>
-            )}
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Rentabilité hors impôts location nue</span>
+                <span className="text-sm font-semibold text-blue-600">
+                  {netYieldNu.toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-t border-gray-200 pt-2">
+                <span className="text-sm text-gray-600">Rentabilité brute location meublée</span>
+                <span className="text-sm font-semibold text-green-600">
+                  {grossYieldMeuble.toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Rentabilité hors impôts location meublée</span>
+                <span className="text-sm font-semibold text-blue-600">
+                  {netYieldMeuble.toFixed(2)}%
+                </span>
+              </div>
+            </div>
           </div>
         );
 

@@ -25,7 +25,7 @@ const subTabConfigs: Record<MainTab, { id: string; label: string }[]> = {
   ],
   imposition: [],
   rentabilite: [
-    { id: 'rentabilite-brute-nette', label: 'Rentabilité brute et nette' },
+    { id: 'rentabilite-brute-nette', label: 'Rentabilité' },
     { id: 'cashflow', label: 'Cashflow' },
     { id: 'revente', label: 'Revente' }
   ],
