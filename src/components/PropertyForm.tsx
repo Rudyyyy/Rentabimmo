@@ -70,6 +70,11 @@ export default function PropertyForm() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [objectiveType, setObjectiveType] = useState<'revente' | 'cashflow'>('revente');
   const [objectiveYear, setObjectiveYear] = useState<number>(() => {
+    // Priorité 1: investment_data.targetSaleYear (base de données)
+    if (investmentData?.targetSaleYear) {
+      return investmentData.targetSaleYear;
+    }
+    // Priorité 2: valeur par défaut
     if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
     const startYear = new Date(investmentData.projectStartDate).getFullYear();
     return startYear + 10;
@@ -86,6 +91,13 @@ export default function PropertyForm() {
       setValue('description', investmentData.description);
     }
   }, [investmentData.name, investmentData.description, setValue]);
+
+  // Synchroniser objectiveYear avec investment_data.targetSaleYear quand il change
+  useEffect(() => {
+    if (investmentData?.targetSaleYear !== undefined) {
+      setObjectiveYear(investmentData.targetSaleYear);
+    }
+  }, [investmentData?.targetSaleYear]);
 
   // Synchronisation avec les paramètres d'URL
   useEffect(() => {

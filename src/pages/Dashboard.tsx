@@ -269,16 +269,46 @@ export default function Dashboard() {
     { bar: 'rgba(168, 85, 247, 0.7)', border: 'rgba(168, 85, 247, 1)' }   // purple
   ];
   
+  // Calculer les données de vente cumulative pour chaque année (basé sur le tableau de revente)
+  const cumulativeSalesData = years.map(year => {
+    let cumulativeSales = 0;
+    
+    // Pour chaque propriété vendue à cette année ou avant, calculer le gain total
+    includedProperties.forEach(property => {
+      const investment = property.investment_data as unknown as Investment;
+      if (!investment || typeof investment !== 'object') return;
+      
+      const saleYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+      
+      // Si l'année est >= à l'année de vente, le bien est déjà vendu
+      if (year >= saleYear) {
+        // Calculer le gain total cumulé pour ce bien à l'année de vente
+        // Utiliser saleYear pour garder le gain total au moment de la vente
+        const comps = calculateTotalGainComponentsForYear(property, saleYear);
+        cumulativeSales += comps.totalGain;
+      }
+    });
+    
+    return cumulativeSales;
+  });
+  
   const chartData = {
     labels: years.map(y => y.toString()),
     datasets: [
-      // Barres empilées pour chaque bien - Gain total cumulé
+      // Barres empilées pour chaque bien - Gain total cumulé (seulement si pas encore vendu)
       ...includedProperties.map((property, index) => {
         const colors = propertyColors[index % propertyColors.length];
+        const investment = property.investment_data as unknown as Investment;
+        const saleYear = investment && typeof investment === 'object' 
+          ? investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear()
+          : Infinity;
+        
         return {
           type: 'bar' as const,
-        label: property.name,
+          label: property.name,
           data: years.map(year => {
+            // Si l'année est >= à l'année de vente, ne pas afficher la barre (0)
+            if (year >= saleYear) return 0;
             const comps = calculateTotalGainComponentsForYear(property, year);
             return comps.totalGain;
           }),
@@ -289,16 +319,44 @@ export default function Dashboard() {
           order: 2
         };
       }),
-      // Courbe pour le total cumulé (tous les biens)
+      // Barre pour la somme cumulative des ventes
+      {
+        type: 'bar' as const,
+        label: 'Somme cumulative des ventes',
+        data: cumulativeSalesData,
+        backgroundColor: 'rgba(147, 51, 234, 0.8)', // violet-600
+        borderColor: 'rgba(147, 51, 234, 1)',
+        borderWidth: 2,
+        stack: 'stack1', // Même stack que les autres barres
+        order: 3
+      },
+      // Courbe pour le total cumulé (tous les biens + ventes)
       {
         type: 'line' as const,
         label: 'Total',
-        data: years.map(year =>
-          includedProperties.reduce((sum, property) => {
-            const comps = calculateTotalGainComponentsForYear(property, year);
-            return sum + comps.totalGain;
-          }, 0)
-        ),
+        data: years.map(year => {
+          let total = 0;
+          
+          // Ajouter les gains des biens non vendus
+          includedProperties.forEach(property => {
+            const investment = property.investment_data as unknown as Investment;
+            if (!investment || typeof investment !== 'object') return;
+            
+            const saleYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+            
+            // Si le bien n'est pas encore vendu à cette année
+            if (year < saleYear) {
+              const comps = calculateTotalGainComponentsForYear(property, year);
+              total += comps.totalGain;
+            }
+          });
+          
+          // Ajouter la somme cumulative des ventes pour cette année
+          const yearIndex = years.indexOf(year);
+          total += cumulativeSalesData[yearIndex];
+          
+          return total;
+        }),
         borderColor: 'rgb(37, 99, 235)', // blue-600
         backgroundColor: 'rgba(37, 99, 235, 0.1)',
         borderWidth: 3,
@@ -841,115 +899,123 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Bannière unifiée */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="flex items-center justify-between px-8 py-4">
+          <div className="flex-1">
+            <img
+              src="/logo.png"
+              alt="Rentab'immo"
+              className="h-8 w-auto"
+            />
+          </div>
+          <h1 className="text-xl font-semibold text-gray-900 flex-1 text-center">Dashboard</h1>
+          <div className="flex items-center space-x-4 flex-1 justify-end">
+            <span className="text-sm text-gray-600">{user?.email}</span>
+            <button
+              onClick={() => signOut()}
+              className="text-sm text-gray-600 hover:text-gray-900"
+            >
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      </header>
+
       <div className="flex">
         {/* Sidebar avec la liste des biens */}
-        <div className="w-110 min-h-screen bg-white border-r border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">Mes biens immobiliers</h2>
-          </div>
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="properties">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="divide-y divide-gray-200"
-                >
-                  {sortedProperties.map((property, index) => {
-                    const investment = property.investment_data as unknown as Investment;
-                    if (!investment || typeof investment !== 'object') return null;
-                    
-                    const currentYearCashFlow = calculateAnnualCashFlow(property, currentYear);
-                    
-                    return (
-                      <Draggable key={property.id} draggableId={property.id} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            className={`p-4 group hover:bg-gray-50 relative ${
-                              snapshot.isDragging ? 'bg-blue-50 shadow-lg' : ''
-                            }`}
-                          >
-                            {/* Drag handle */}
-                            <div
-                              {...provided.dragHandleProps}
-                              className="absolute left-0 top-0 bottom-0 w-8 cursor-move flex items-center justify-center"
-                            >
-                              <div className="w-1 h-10 bg-gray-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                            </div>
+        <aside className="w-110 min-h-screen bg-gray-100 p-4">
+          <div className="sticky top-4">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Mes biens immobiliers</h2>
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="properties">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-3"
+                    >
+                      {sortedProperties.map((property, index) => {
+                        const investment = property.investment_data as unknown as Investment;
+                        if (!investment || typeof investment !== 'object') return null;
+                        
+                        return (
+                          <Draggable key={property.id} draggableId={property.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative ${
+                                  snapshot.isDragging ? 'bg-blue-50 shadow-lg border-blue-300' : ''
+                                }`}
+                              >
+                                {/* Drag handle */}
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 cursor-move flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <div className="w-1 h-8 bg-gray-300 rounded-full"></div>
+                                </div>
 
-                            {/* Bouton de modification */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/property/${property.id}`);
-                              }}
-                              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Modifier le bien"
-                            >
-                              <Pencil className="h-4 w-4 text-gray-500" />
-                            </button>
-
-                            {/* Contenu principal */}
-                            <div className="pl-8 pr-12">
-                              <div className="flex justify-between items-start mb-2">
-                                <h3 className="text-base font-medium text-gray-900">{property.name}</h3>
+                                {/* Bouton de modification */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                                    navigate(`/property/${property.id}`);
                                   }}
-                                  className={`text-xs px-2 py-0.5 rounded ${
-                                    showInDashboard[property.id] 
-                                      ? 'bg-green-50 text-green-700' 
-                                      : 'bg-gray-100 text-gray-700'
-                                  }`}
+                                  className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Modifier le bien"
                                 >
-                                  {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                                  <Pencil className="h-4 w-4 text-gray-500" />
                                 </button>
+
+                                {/* Contenu principal */}
+                                <div className="pl-6 pr-10">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                                      }}
+                                      className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                                        showInDashboard[property.id] 
+                                          ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                                    </button>
+                                  </div>
+                                  {investment.description && (
+                                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                                      {investment.description}
+                                    </p>
+                                  )}
+                                  <div className="text-sm">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-gray-600">Régime</span>
+                                      <span className="font-medium text-gray-900">{getRegimeLabel(investment.selectedRegime)}</span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                              {investment.description && (
-                                <p className="text-sm text-gray-500 mb-2 line-clamp-2">
-                                  {investment.description}
-                                </p>
-                              )}
-                              <div className="text-sm text-gray-600">
-                                <p>Régime : {getRegimeLabel(investment.selectedRegime)}</p>
-                                <p className={`font-medium ${currentYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  Cash flow {currentYear} : {formatCurrency(currentYearCashFlow)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
-        </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            </div>
+          </div>
+        </aside>
 
         {/* Contenu principal */}
         <div className="flex-1 min-h-screen">
-          <header className="bg-white shadow-sm">
-            <div className="flex justify-between items-center px-8 py-4">
-              <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-600">{user?.email}</span>
-                <button
-                  onClick={() => signOut()}
-                  className="text-sm text-gray-600 hover:text-gray-900"
-                >
-                  Déconnexion
-                </button>
-              </div>
-            </div>
-          </header>
-
           <main className="p-8">
             {loading ? (
               <div className="flex justify-center items-center h-64">
@@ -967,19 +1033,37 @@ export default function Dashboard() {
                     <Line data={chartData} options={chartOptions} />
                   </div>
                   <p className="text-sm text-gray-500 mt-4">
-                    Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Courbe: solde global (total de tous les biens).
+                    Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Barre violette: somme cumulative des ventes. Courbe: solde global (total de tous les biens + ventes).
                   </p>
                 </div>
 
                 {/* Total Gain Goal */}
                 <TotalGainGoal 
-                  totalGainData={years.map(year => ({
-                    year,
-                    totalGain: includedProperties.reduce((sum, property) => {
-                      const comps = calculateTotalGainComponentsForYear(property, year);
-                      return sum + comps.totalGain;
-                    }, 0)
-                  }))}
+                  totalGainData={years.map((year, yearIndex) => {
+                    let total = 0;
+                    
+                    // Ajouter les gains des biens non vendus (comme dans le graphique)
+                    includedProperties.forEach(property => {
+                      const investment = property.investment_data as unknown as Investment;
+                      if (!investment || typeof investment !== 'object') return;
+                      
+                      const saleYear = investment.targetSaleYear || new Date(investment.projectEndDate).getFullYear();
+                      
+                      // Si le bien n'est pas encore vendu à cette année
+                      if (year < saleYear) {
+                        const comps = calculateTotalGainComponentsForYear(property, year);
+                        total += comps.totalGain;
+                      }
+                    });
+                    
+                    // Ajouter la somme cumulative des ventes pour cette année
+                    total += cumulativeSalesData[yearIndex];
+                    
+                    return {
+                      year,
+                      totalGain: total
+                    };
+                  })}
                   onGoalChange={setTotalGainGoal}
                 />
 

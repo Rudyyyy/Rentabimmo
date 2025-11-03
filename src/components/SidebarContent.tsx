@@ -64,6 +64,15 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
   // États pour le formulaire Objectif (utiliser les props si fournies, sinon état local)
   const [localObjectiveType, setLocalObjectiveType] = useState<'revente' | 'cashflow'>('revente');
   const [localObjectiveYear, setLocalObjectiveYear] = useState<number>(() => {
+    // Priorité 1: investment_data.targetSaleYear (base de données)
+    if (investmentData?.targetSaleYear) {
+      return investmentData.targetSaleYear;
+    }
+    // Priorité 2: localStorage
+    const investmentId = `${investmentData?.startDate || ''}`;
+    const stored = typeof window !== 'undefined' ? localStorage.getItem(`targetSaleYear_${investmentId}`) : null;
+    if (stored) return Number(stored);
+    // Priorité 3: valeur par défaut
     if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
     const startYear = new Date(investmentData.projectStartDate).getFullYear();
     return startYear + 10;
@@ -72,19 +81,40 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
   const objectiveType = externalObjectiveType !== undefined ? externalObjectiveType : localObjectiveType;
   const objectiveYear = externalObjectiveYear !== undefined ? externalObjectiveYear : localObjectiveYear;
 
-  const handleObjectiveTypeChange = (type: 'revente' | 'cashflow') => {
+  // Synchroniser localObjectiveYear avec investment_data.targetSaleYear quand il change
+  useEffect(() => {
+    if (investmentData?.targetSaleYear !== undefined) {
+      setLocalObjectiveYear(investmentData.targetSaleYear);
+      const investmentId = `${investmentData?.startDate || ''}`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`targetSaleYear_${investmentId}`, String(investmentData.targetSaleYear));
+      }
+    }
+  }, [investmentData?.targetSaleYear, investmentData?.startDate]);
+
+  const handleObjectiveTypeChange = async (type: 'revente' | 'cashflow') => {
     if (onObjectiveTypeChange) {
       onObjectiveTypeChange(type);
     } else {
       setLocalObjectiveType(type);
     }
+    
+    // Si on passe en mode "revente", sauvegarder l'année dans la base de données
+    if (type === 'revente' && propertyId) {
+      await saveTargetSaleYear(propertyId, objectiveYear);
+    }
   };
 
-  const handleObjectiveYearChange = (year: number) => {
+  const handleObjectiveYearChange = async (year: number) => {
     if (onObjectiveYearChange) {
       onObjectiveYearChange(year);
     } else {
       setLocalObjectiveYear(year);
+    }
+    
+    // Si on est dans le mode "revente", sauvegarder l'année dans la base de données
+    if (objectiveType === 'revente' && propertyId) {
+      await saveTargetSaleYear(propertyId, year);
     }
   };
   // Récupérer le régime depuis localStorage (synchronisé avec les onglets de BalanceDisplay)
@@ -137,13 +167,13 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
 
   // Synchroniser avec investment_data.targetSaleYear quand il change
   useEffect(() => {
-    if (investmentData?.targetSaleYear && investmentData.targetSaleYear !== targetSaleYear) {
+    if (investmentData?.targetSaleYear !== undefined && investmentData.targetSaleYear !== targetSaleYear) {
       setTargetSaleYear(investmentData.targetSaleYear);
       if (typeof window !== 'undefined') {
         localStorage.setItem(`targetSaleYear_${investmentId}`, String(investmentData.targetSaleYear));
       }
     }
-  }, [investmentData?.targetSaleYear, investmentId, targetSaleYear]);
+  }, [investmentData?.targetSaleYear, investmentId]);
   const [targetBalance, setTargetBalance] = useState<number>(0);
 
   // États pour la popup d'analyse IA
