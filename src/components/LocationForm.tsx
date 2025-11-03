@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Investment, YearlyExpenses, ExpenseProjection } from '../types/investment';
 import { HelpCircle, Calendar, TrendingUp } from 'lucide-react';
+import { FaChartPie, FaMoneyBillWave } from 'react-icons/fa';
 
 interface Props {
   investment: Investment;
@@ -22,9 +23,10 @@ interface Props {
   currentSubTab: string;
   onManualEdit?: (isEditing: boolean) => void;
   isManualEdit?: boolean;
+  onSubTabChange?: (subTab: 'revenus' | 'frais') => void;
 }
 
-export default function LocationForm({ investment, onUpdate, currentSubTab, onManualEdit, isManualEdit: externalIsManualEdit }: Props) {
+export default function LocationForm({ investment, onUpdate, currentSubTab, onManualEdit, isManualEdit: externalIsManualEdit, onSubTabChange }: Props) {
   const [referenceYear, setReferenceYear] = useState(2025);
   const [hoveredField, setHoveredField] = useState<string | null>(null);
   const [autoCalculateHistorical, setAutoCalculateHistorical] = useState(true);
@@ -1302,11 +1304,42 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
     </div>
   );
 
+  const subTabs = [
+    { id: 'revenus', label: 'Revenus', icon: FaChartPie },
+    { id: 'frais', label: 'Frais', icon: FaMoneyBillWave }
+  ];
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-6">
-        {currentSubTab === 'frais' ? 'Configuration des frais' : 'Configuration des revenus'}
-      </h3>
+      {/* Onglets Revenus/Frais dans la sidebar */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex">
+          {subTabs.map((subTab) => {
+            const isSelected = subTab.id === currentSubTab;
+            return (
+              <button
+                key={subTab.id}
+                type="button"
+                onClick={() => {
+                  if (onSubTabChange) {
+                    onSubTabChange(subTab.id as 'revenus' | 'frais');
+                  }
+                }}
+                className={`
+                  flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm cursor-pointer
+                  transition-colors duration-200 flex items-center justify-center gap-2
+                  ${isSelected
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                <subTab.icon className="h-4 w-4" />
+                {subTab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
       
       <div className="space-y-3">
         {currentSubTab === 'frais' ? renderExpensesForm() : renderRevenuesForm()}

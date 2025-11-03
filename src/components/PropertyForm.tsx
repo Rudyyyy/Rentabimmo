@@ -43,6 +43,7 @@ import MobileNavigation from './MobileNavigation';
 import SidebarContent from './SidebarContent';
 import Notification from './Notification';
 import GeneralInfoSummary from './GeneralInfoSummary';
+import ObjectiveDetailsDisplay from './ObjectiveDetailsDisplay';
 
 type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr' | 'analysis';
 
@@ -67,6 +68,12 @@ export default function PropertyForm() {
   const [currentMainTab, setCurrentMainTab] = useState<MainTab>('acquisition');
   const [currentSubTab, setCurrentSubTab] = useState<string | undefined>(undefined);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [objectiveType, setObjectiveType] = useState<'revente' | 'cashflow'>('revente');
+  const [objectiveYear, setObjectiveYear] = useState<number>(() => {
+    if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    return startYear + 10;
+  });
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string, description?: string }>();
   const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
   
@@ -89,6 +96,9 @@ export default function PropertyForm() {
       setCurrentMainTab(mainTab);
       if (subTab) {
         setCurrentSubTab(subTab);
+      } else if (mainTab === 'acquisition') {
+        // Valeur par défaut pour acquisition/projet
+        setCurrentSubTab('acquisition');
       }
     }
   }, [searchParams]);
@@ -429,6 +439,18 @@ export default function PropertyForm() {
 
     switch (currentMainTab) {
       case 'acquisition':
+        // Gérer les sous-onglets acquisition et objectif
+        if (currentSubTab === 'objectif') {
+          // Afficher le détail par régime fiscal dans la zone principale
+          return (
+            <ObjectiveDetailsDisplay 
+              investment={investmentData}
+              objectiveType={objectiveType}
+              objectiveYear={objectiveYear}
+            />
+          );
+        }
+        // Sous-onglet acquisition (par défaut)
         return (
           <AcquisitionForm
             onSubmit={handleCalculate}
@@ -726,6 +748,9 @@ export default function PropertyForm() {
                 onManualEdit={(isEditing) => {
                   // Cette fonction sera gérée par LocationForm
                 }}
+                onSubTabChange={(subTab) => {
+                  handleTabChange('location', subTab);
+                }}
               />
             ) : (
               <SidebarContent 
@@ -735,6 +760,11 @@ export default function PropertyForm() {
                 metrics={metrics}
                 onInvestmentUpdate={handleFieldUpdate}
                 propertyId={id || undefined}
+                onTabChange={handleTabChange}
+                objectiveType={currentSubTab === 'objectif' ? objectiveType : undefined}
+                objectiveYear={currentSubTab === 'objectif' ? objectiveYear : undefined}
+                onObjectiveTypeChange={currentSubTab === 'objectif' ? setObjectiveType : undefined}
+                onObjectiveYearChange={currentSubTab === 'objectif' ? setObjectiveYear : undefined}
               />
             )}
           </div>

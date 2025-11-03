@@ -45,9 +45,13 @@ interface HierarchicalNavigationProps {
 const tabConfigs: MainTabConfig[] = [
   {
     id: 'acquisition',
-    label: 'Acquisition',
+    label: 'Projet',
     icon: FaHome,
-    description: 'Détails de l\'acquisition du bien',
+    description: 'Détails du projet d\'investissement',
+    subTabs: [
+      { id: 'acquisition', label: 'Acquisition', icon: FaHome, description: 'Détails de l\'acquisition du bien' },
+      { id: 'objectif', label: 'Objectif', icon: FaChartPie, description: 'Objectifs du projet' }
+    ],
     sidebarContent: 'acquisition'
   },
   {
@@ -107,6 +111,7 @@ export default function HierarchicalNavigation({
 }: HierarchicalNavigationProps) {
   const [selectedMainTab, setSelectedMainTab] = useState<MainTab>(initialMainTab);
   const [selectedSubTabs, setSelectedSubTabs] = useState<Record<string, string>>({
+    acquisition: initialSubTab || 'acquisition',
     location: 'revenus',
     imposition: initialSubTab || 'annee-courante',
     rentabilite: 'rentabilite-brute-nette',
@@ -186,8 +191,8 @@ export default function HierarchicalNavigation({
         </Tab.List>
       </Tab.Group>
 
-      {/* Sous-navigation (désactivée pour Imposition car contenu fusionné sur la page) */}
-      {selectedMainTab !== 'imposition' && currentConfig?.subTabs && currentConfig.subTabs.length > 0 && (
+      {/* Sous-navigation (désactivée pour Imposition car contenu fusionné sur la page, pour Acquisition, Location, Rentabilité et Bilan car les onglets sont dans la sidebar) */}
+      {selectedMainTab !== 'imposition' && selectedMainTab !== 'acquisition' && selectedMainTab !== 'location' && selectedMainTab !== 'rentabilite' && selectedMainTab !== 'bilan' && currentConfig?.subTabs && currentConfig.subTabs.length > 0 && (
         <div className="animate-fadeIn">
           <Tab.Group 
             selectedIndex={getSelectedSubTabIndex(selectedMainTab)} 

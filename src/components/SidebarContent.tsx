@@ -4,7 +4,8 @@ import {
   FaCalculator, 
   FaChartLine, 
   FaChartBar,
-  FaMoneyBillWave 
+  FaMoneyBillWave,
+  FaChartPie
 } from 'react-icons/fa';
 import { useEffect, useState } from 'react';
 import AcquisitionDetails from './AcquisitionDetails';
@@ -25,17 +26,22 @@ interface SidebarContentProps {
   metrics?: any;
   onInvestmentUpdate?: (field: any, value: any) => void;
   propertyId?: string;
+  onTabChange?: (mainTab: MainTab, subTab?: string) => void;
+  objectiveType?: 'revente' | 'cashflow';
+  objectiveYear?: number;
+  onObjectiveTypeChange?: (type: 'revente' | 'cashflow') => void;
+  onObjectiveYearChange?: (year: number) => void;
 }
 
 const tabConfigs = [
-  { id: 'acquisition' as MainTab, label: 'Acquisition', icon: FaHome },
+  { id: 'acquisition' as MainTab, label: 'Projet', icon: FaHome },
   { id: 'location' as MainTab, label: 'Location', icon: FaKey },
   { id: 'imposition' as MainTab, label: 'Imposition', icon: FaCalculator },
   { id: 'rentabilite' as MainTab, label: 'Rentabilité', icon: FaChartLine },
   { id: 'bilan' as MainTab, label: 'Bilan', icon: FaChartBar },
 ];
 
-export default function SidebarContent({ currentMainTab, currentSubTab, investmentData, metrics, onInvestmentUpdate, propertyId }: SidebarContentProps) {
+export default function SidebarContent({ currentMainTab, currentSubTab, investmentData, metrics, onInvestmentUpdate, propertyId, onTabChange, objectiveType: externalObjectiveType, objectiveYear: externalObjectiveYear, onObjectiveTypeChange, onObjectiveYearChange }: SidebarContentProps) {
   const currentConfig = tabConfigs.find(tab => tab.id === currentMainTab);
 
   if (!currentConfig) return null;
@@ -54,6 +60,33 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
     const stored = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
     return stored ? JSON.parse(stored) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
   });
+
+  // États pour le formulaire Objectif (utiliser les props si fournies, sinon état local)
+  const [localObjectiveType, setLocalObjectiveType] = useState<'revente' | 'cashflow'>('revente');
+  const [localObjectiveYear, setLocalObjectiveYear] = useState<number>(() => {
+    if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    return startYear + 10;
+  });
+
+  const objectiveType = externalObjectiveType !== undefined ? externalObjectiveType : localObjectiveType;
+  const objectiveYear = externalObjectiveYear !== undefined ? externalObjectiveYear : localObjectiveYear;
+
+  const handleObjectiveTypeChange = (type: 'revente' | 'cashflow') => {
+    if (onObjectiveTypeChange) {
+      onObjectiveTypeChange(type);
+    } else {
+      setLocalObjectiveType(type);
+    }
+  };
+
+  const handleObjectiveYearChange = (year: number) => {
+    if (onObjectiveYearChange) {
+      onObjectiveYearChange(year);
+    } else {
+      setLocalObjectiveYear(year);
+    }
+  };
   // Récupérer le régime depuis localStorage (synchronisé avec les onglets de BalanceDisplay)
   // On lit directement depuis localStorage à chaque rendu pour éviter les décalages
   const getSelectedRegime = (): TaxRegime => {
@@ -521,6 +554,264 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
   const renderSidebarContent = () => {
     switch (currentMainTab) {
       case 'acquisition':
+        // Gérer les sous-onglets acquisition et objectif
+        if (currentSubTab === 'objectif') {
+          // Calculer les années disponibles
+          const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+          const endYear = investmentData?.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
+          const availableYears = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+          // Fonction pour calculer le cashflow net avec imposition pour un régime donné
+          // On calcule cumulativement jusqu'à l'année donnée pour tenir compte des déficits reportés
+          const calculateCashFlowForRegime = (year: number, regime: TaxRegime): number => {
+            if (!investmentData?.expenses) return 0;
+            
+            const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+            const years = Array.from({ length: year - startYear + 1 }, (_, i) => startYear + i);
+            
+            // Calculer les résultats fiscaux pour toutes les années jusqu'à l'année sélectionnée
+            const yearlyResults: Record<number, Record<TaxRegime, any>> = {};
+            years.forEach(yr => {
+              const yearExpense = investmentData.expenses?.find((e: any) => e.year === yr);
+              
+              if (!yearExpense && yr === startYear) {
+                yearlyResults[yr] = {
+                  'micro-foncier': { totalTax: 0 },
+                  'reel-foncier': { totalTax: 0 },
+                  'micro-bic': { totalTax: 0 },
+                  'reel-bic': { totalTax: 0 }
+                } as Record<TaxRegime, any>;
+              } else if (yearExpense) {
+                try {
+                  if (yr === startYear) {
+                    yearlyResults[yr] = calculateAllTaxRegimes(investmentData as Investment, yr);
+                  } else {
+                    yearlyResults[yr] = calculateAllTaxRegimes(investmentData as Investment, yr, yearlyResults[yr - 1]);
+                  }
+                } catch (error) {
+                  yearlyResults[yr] = yearlyResults[yr - 1] || {
+                    'micro-foncier': { totalTax: 0 },
+                    'reel-foncier': { totalTax: 0 },
+                    'micro-bic': { totalTax: 0 },
+                    'reel-bic': { totalTax: 0 }
+                  } as Record<TaxRegime, any>;
+                }
+              } else {
+                yearlyResults[yr] = yearlyResults[yr - 1] || {
+                  'micro-foncier': { totalTax: 0 },
+                  'reel-foncier': { totalTax: 0 },
+                  'micro-bic': { totalTax: 0 },
+                  'reel-bic': { totalTax: 0 }
+                } as Record<TaxRegime, any>;
+              }
+            });
+
+            // Pour l'objectif cashflow, on veut le cashflow annuel NET (pas cumulé) pour l'année donnée
+            const expense = investmentData.expenses.find((e: any) => e.year === year);
+            if (!expense) return 0;
+
+            // Calcul des revenus selon le régime
+            const rent = Number(expense.rent || 0);
+            const furnishedRent = Number(expense.furnishedRent || 0);
+            const tenantCharges = Number(expense.tenantCharges || 0);
+            const taxBenefit = Number(expense.taxBenefit || 0);
+
+            const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
+              ? furnishedRent + tenantCharges
+              : rent + taxBenefit + tenantCharges;
+
+            // Total des dépenses
+            const expenses = 
+              Number(expense.propertyTax || 0) +
+              Number(expense.condoFees || 0) +
+              Number(expense.propertyInsurance || 0) +
+              Number(expense.managementFees || 0) +
+              Number(expense.unpaidRentInsurance || 0) +
+              Number(expense.repairs || 0) +
+              Number(expense.otherDeductible || 0) +
+              Number(expense.otherNonDeductible || 0) +
+              Number(expense.loanPayment || 0) +
+              Number(expense.loanInsurance || 0);
+
+            // Cash flow SANS imposition pour cette année
+            const cashFlowBeforeTax = revenues - expenses;
+
+            // Calculer l'imposition pour cette année et ce régime (avec prise en compte des années précédentes)
+            const taxation = yearlyResults[year]?.[regime]?.totalTax || 0;
+
+            // Cash flow NET (avec imposition) pour cette année
+            return cashFlowBeforeTax - taxation;
+          };
+
+          // Récupérer le gain total cumulé pour l'année de revente (pour tous les régimes)
+          const REGIME_LABELS: Record<TaxRegime, string> = {
+            'micro-foncier': 'Location nue - Micro-foncier',
+            'reel-foncier': 'Location nue - Frais réels',
+            'micro-bic': 'LMNP - Micro-BIC',
+            'reel-bic': 'LMNP - Frais réels'
+          };
+
+          // Pour la revente et cashflow, utiliser le régime fiscal défini pour le bien
+          const investmentRegime: TaxRegime = investmentData?.selectedRegime || investmentData?.taxRegime || 'micro-foncier';
+          
+          // Vérifier si les données sont suffisamment renseignées pour les calculs
+          const hasMinimumData = () => {
+            if (!investmentData) return false;
+            // Vérifier les données essentielles pour les calculs
+            const hasAcquisitionData = investmentData.purchasePrice && investmentData.purchasePrice > 0;
+            if (!hasAcquisitionData) return false;
+            
+            const hasExpenseData = investmentData.expenses && investmentData.expenses.length > 0;
+            if (!hasExpenseData) return false;
+            
+            // Vérifier qu'il existe des données pour l'année sélectionnée ou pour des années précédentes
+            const startYear = investmentData.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+            
+            // Pour la revente, on a besoin des données jusqu'à l'année sélectionnée
+            // Pour le cashflow, on a besoin des données pour l'année exacte
+            if (objectiveType === 'cashflow') {
+              return investmentData.expenses.some((e: any) => e.year === objectiveYear);
+            } else {
+              // Pour la revente, on doit avoir des données pour au moins une année dans la plage
+              return investmentData.expenses.some((e: any) => {
+                const expenseYear = e.year;
+                return expenseYear >= startYear && expenseYear <= objectiveYear;
+              });
+            }
+          };
+
+          const canCalculate = hasMinimumData();
+          
+          const balanceDataForRevente = objectiveType === 'revente' && canCalculate
+            ? calculateBalanceForYear(objectiveYear, investmentRegime)
+            : null;
+          
+          const cashFlowForInvestmentRegime = objectiveType === 'cashflow' && canCalculate
+            ? calculateCashFlowForRegime(objectiveYear, investmentRegime)
+            : null;
+
+          return (
+            <div className="space-y-4">
+              {/* Sélection du type d'objectif */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Type d'objectif</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleObjectiveTypeChange('revente')}
+                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-200 ${
+                      objectiveType === 'revente'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Revente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleObjectiveTypeChange('cashflow')}
+                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-200 ${
+                      objectiveType === 'cashflow'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Cashflow
+                  </button>
+                </div>
+              </div>
+
+              {/* Sélection de l'année */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Année souhaitée
+                </label>
+                <select
+                  value={objectiveYear}
+                  onChange={(e) => handleObjectiveYearChange(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Affichage selon le type d'objectif */}
+              {!canCalculate && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-yellow-800">
+                          Calculs non disponibles
+                        </h3>
+                        <div className="mt-2 text-sm text-yellow-700">
+                          <p>
+                            Les calculs ne peuvent pas être réalisés tant que les données nécessaires ne sont pas suffisamment renseignées.
+                          </p>
+                          <p className="mt-2">
+                            Veuillez compléter au minimum :
+                          </p>
+                          <ul className="mt-1 list-disc list-inside space-y-1">
+                            <li>Les informations d'acquisition (prix d'achat, frais...)</li>
+                            <li>Les données de location pour l'année {objectiveYear} (revenus et frais)</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {objectiveType === 'revente' && canCalculate && balanceDataForRevente && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                  <div className={`flex justify-between items-center py-3 rounded-md px-4 ${
+                    balanceDataForRevente.totalGain >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                  }`}>
+                    <span className={`text-base font-semibold ${
+                      balanceDataForRevente.totalGain >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      Gain total cumulé ({REGIME_LABELS[investmentRegime]})
+                    </span>
+                    <span className={`text-xl font-bold ${
+                      balanceDataForRevente.totalGain >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      {formatCurrency(balanceDataForRevente.totalGain)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {objectiveType === 'cashflow' && canCalculate && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                  <div className={`flex justify-between items-center py-3 rounded-md px-4 ${
+                    cashFlowForInvestmentRegime && cashFlowForInvestmentRegime >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                  }`}>
+                    <span className={`text-base font-semibold ${
+                      cashFlowForInvestmentRegime && cashFlowForInvestmentRegime >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      Cashflow ({REGIME_LABELS[investmentRegime]})
+                    </span>
+                    <span className={`text-xl font-bold ${
+                      cashFlowForInvestmentRegime && cashFlowForInvestmentRegime >= 0 ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      {formatCurrency(cashFlowForInvestmentRegime || 0)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+        // Sous-onglet acquisition (par défaut)
         return onInvestmentUpdate ? (
           <AcquisitionDetails 
             investment={investmentData} 
@@ -1161,20 +1452,109 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
     }
   };
 
+  // Configuration des sous-onglets pour acquisition/projet (si applicable)
+  const acquisitionSubTabs = currentMainTab === 'acquisition' ? [
+    { id: 'acquisition', label: 'Acquisition', icon: FaHome },
+    { id: 'objectif', label: 'Objectif', icon: FaChartPie }
+  ] : [];
+
+  // Configuration des sous-onglets pour rentabilité (si applicable)
+  const rentabiliteSubTabs = currentMainTab === 'rentabilite' ? [
+    { id: 'rentabilite-brute-nette', label: 'Rentabilité', icon: FaChartBar },
+    { id: 'cashflow', label: 'Cashflow', icon: FaMoneyBillWave },
+    { id: 'revente', label: 'Revente', icon: FaHome }
+  ] : [];
+
+  // Rendu des onglets pour acquisition/projet
+  const renderAcquisitionTabs = () => {
+    if (currentMainTab !== 'acquisition' || acquisitionSubTabs.length === 0) return null;
+    
+    return (
+      <div className="border-b border-gray-200 mb-6 -mx-6 px-6">
+        <nav className="-mb-px flex">
+          {acquisitionSubTabs.map((subTab) => {
+            const isSelected = subTab.id === currentSubTab;
+            return (
+              <button
+                key={subTab.id}
+                type="button"
+                onClick={() => {
+                  if (onTabChange) {
+                    onTabChange('acquisition', subTab.id);
+                  }
+                }}
+                className={`
+                  flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm cursor-pointer
+                  transition-colors duration-200 flex items-center justify-center gap-2
+                  ${isSelected
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                <subTab.icon className="h-4 w-4" />
+                {subTab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    );
+  };
+
+  // Rendu des onglets pour rentabilité
+  const renderRentabiliteTabs = () => {
+    if (currentMainTab !== 'rentabilite' || rentabiliteSubTabs.length === 0) return null;
+    
+    return (
+      <div className="border-b border-gray-200 mb-6 -mx-6 px-6">
+        <nav className="-mb-px flex">
+          {rentabiliteSubTabs.map((subTab) => {
+            const isSelected = subTab.id === currentSubTab;
+            return (
+              <button
+                key={subTab.id}
+                type="button"
+                onClick={() => {
+                  if (onTabChange) {
+                    onTabChange('rentabilite', subTab.id);
+                  }
+                }}
+                className={`
+                  flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm cursor-pointer
+                  transition-colors duration-200 flex items-center justify-center gap-2
+                  ${isSelected
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                <subTab.icon className="h-4 w-4" />
+                {subTab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6 space-y-6">
-        <div className="flex items-center space-x-2">
-          {isCashflowView ? (
-            <FaMoneyBillWave className="h-5 w-5 text-blue-600" />
-          ) : isReventeView ? (
-            <FaHome className="h-5 w-5 text-blue-600" />
-          ) : (
-            <currentConfig.icon className="h-5 w-5 text-blue-600" />
-          )}
-          <h3 className="text-lg font-semibold text-gray-900">{isCashflowView ? 'Cashflow' : isReventeView ? 'Revente' : currentConfig.label}</h3>
-        </div>
-        <div className="border-t border-gray-100 pt-4">
+        {renderAcquisitionTabs()}
+        {renderRentabiliteTabs()}
+        {currentMainTab !== 'rentabilite' && currentMainTab !== 'acquisition' && (
+          <div className="flex items-center space-x-2">
+            {isCashflowView ? (
+              <FaMoneyBillWave className="h-5 w-5 text-blue-600" />
+            ) : isReventeView ? (
+              <FaHome className="h-5 w-5 text-blue-600" />
+            ) : (
+              <currentConfig.icon className="h-5 w-5 text-blue-600" />
+            )}
+            <h3 className="text-lg font-semibold text-gray-900">{isCashflowView ? 'Cashflow' : isReventeView ? 'Revente' : currentConfig.label}</h3>
+          </div>
+        )}
+        <div className={currentMainTab === 'rentabilite' || currentMainTab === 'acquisition' ? '' : 'border-t border-gray-100 pt-4'}>
           {renderSidebarContent()}
         </div>
       </div>
