@@ -1009,7 +1009,7 @@ export default function Dashboard() {
 
         {/* Contenu principal */}
         <div className="flex-1 min-h-screen">
-          <main className="p-8">
+          <main className="pt-4 px-8 pb-8">
             {loading ? (
               <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
