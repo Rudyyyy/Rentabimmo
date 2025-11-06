@@ -79,6 +79,30 @@ export default function PropertyForm() {
     const startYear = new Date(investmentData.projectStartDate).getFullYear();
     return startYear + 10;
   });
+  const [objectiveTargetGain, setObjectiveTargetGain] = useState<number>(() => {
+    // Priorité 1: investment_data.targetGain (base de données)
+    if (investmentData?.targetGain !== undefined) {
+      return investmentData.targetGain;
+    }
+    // Priorité 2: localStorage
+    const investmentId = `${investmentData?.startDate || ''}`;
+    const stored = typeof window !== 'undefined' ? localStorage.getItem(`targetGain_${investmentId}`) : null;
+    if (stored) return Number(stored);
+    // Priorité 3: valeur par défaut
+    return 50000;
+  });
+  const [objectiveTargetCashflow, setObjectiveTargetCashflow] = useState<number>(() => {
+    // Priorité 1: investment_data.targetCashflow (base de données)
+    if (investmentData?.targetCashflow !== undefined) {
+      return investmentData.targetCashflow;
+    }
+    // Priorité 2: localStorage
+    const investmentId = `${investmentData?.startDate || ''}`;
+    const stored = typeof window !== 'undefined' ? localStorage.getItem(`targetCashflow_${investmentId}`) : null;
+    if (stored) return Number(stored);
+    // Priorité 3: valeur par défaut
+    return 10000;
+  });
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string, description?: string }>();
   const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
   
@@ -99,6 +123,44 @@ export default function PropertyForm() {
     }
   }, [investmentData?.targetSaleYear]);
 
+  // Synchroniser objectiveTargetGain avec investment_data.targetGain quand il change
+  useEffect(() => {
+    if (investmentData?.targetGain !== undefined) {
+      setObjectiveTargetGain(investmentData.targetGain);
+      const investmentId = `${investmentData?.startDate || ''}`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`targetGain_${investmentId}`, String(investmentData.targetGain));
+      }
+    }
+  }, [investmentData?.targetGain, investmentData?.startDate]);
+
+  // Sauvegarder objectiveTargetGain dans localStorage quand il change
+  useEffect(() => {
+    const investmentId = `${investmentData?.startDate || ''}`;
+    if (typeof window !== 'undefined' && investmentId) {
+      localStorage.setItem(`targetGain_${investmentId}`, String(objectiveTargetGain));
+    }
+  }, [objectiveTargetGain, investmentData?.startDate]);
+
+  // Synchroniser objectiveTargetCashflow avec investment_data.targetCashflow quand il change
+  useEffect(() => {
+    if (investmentData?.targetCashflow !== undefined) {
+      setObjectiveTargetCashflow(investmentData.targetCashflow);
+      const investmentId = `${investmentData?.startDate || ''}`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`targetCashflow_${investmentId}`, String(investmentData.targetCashflow));
+      }
+    }
+  }, [investmentData?.targetCashflow, investmentData?.startDate]);
+
+  // Sauvegarder objectiveTargetCashflow dans localStorage quand il change
+  useEffect(() => {
+    const investmentId = `${investmentData?.startDate || ''}`;
+    if (typeof window !== 'undefined' && investmentId) {
+      localStorage.setItem(`targetCashflow_${investmentId}`, String(objectiveTargetCashflow));
+    }
+  }, [objectiveTargetCashflow, investmentData?.startDate]);
+
   // Synchronisation avec les paramètres d'URL
   useEffect(() => {
     const mainTab = searchParams.get('tab') as MainTab;
@@ -111,6 +173,9 @@ export default function PropertyForm() {
       } else if (mainTab === 'acquisition') {
         // Valeur par défaut pour acquisition/projet
         setCurrentSubTab('acquisition');
+      } else if (mainTab === 'bilan') {
+        // Valeur par défaut pour bilan
+        setCurrentSubTab('bilan');
       }
     }
   }, [searchParams]);
@@ -288,7 +353,9 @@ export default function PropertyForm() {
       const updatedInvestment = {
         ...investmentData,
         name: formData.name.trim(),
-        description: formData.description?.trim() || ''
+        description: formData.description?.trim() || '',
+        targetGain: objectiveTargetGain,
+        targetCashflow: objectiveTargetCashflow
       };
 
       // Vérification détaillée du tableau d'amortissement
@@ -451,17 +518,6 @@ export default function PropertyForm() {
 
     switch (currentMainTab) {
       case 'acquisition':
-        // Gérer les sous-onglets acquisition et objectif
-        if (currentSubTab === 'objectif') {
-          // Afficher le détail par régime fiscal dans la zone principale
-          return (
-            <ObjectiveDetailsDisplay 
-              investment={investmentData}
-              objectiveType={objectiveType}
-              objectiveYear={objectiveYear}
-            />
-          );
-        }
         // Sous-onglet acquisition (par défaut)
         return (
           <AcquisitionForm
@@ -521,7 +577,18 @@ export default function PropertyForm() {
         break;
 
       case 'bilan':
-        if (currentSubTab === 'statistiques' || currentSubTab === 'analyse-ia') {
+        if (currentSubTab === 'objectif') {
+          // Afficher le détail par régime fiscal dans la zone principale
+          return (
+            <ObjectiveDetailsDisplay 
+              investment={investmentData}
+              objectiveType={objectiveType}
+              objectiveYear={objectiveYear}
+              objectiveTargetGain={objectiveTargetGain}
+              objectiveTargetCashflow={objectiveTargetCashflow}
+            />
+          );
+        } else if (currentSubTab === 'bilan' || currentSubTab === 'statistiques' || currentSubTab === 'analyse-ia' || !currentSubTab) {
           return (
             <BalanceDisplay
               investment={investmentData}
@@ -773,10 +840,14 @@ export default function PropertyForm() {
                 onInvestmentUpdate={handleFieldUpdate}
                 propertyId={id || undefined}
                 onTabChange={handleTabChange}
-                objectiveType={currentSubTab === 'objectif' ? objectiveType : undefined}
-                objectiveYear={currentSubTab === 'objectif' ? objectiveYear : undefined}
-                onObjectiveTypeChange={currentSubTab === 'objectif' ? setObjectiveType : undefined}
-                onObjectiveYearChange={currentSubTab === 'objectif' ? setObjectiveYear : undefined}
+                objectiveType={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? objectiveType : undefined}
+                objectiveYear={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? objectiveYear : undefined}
+                objectiveTargetGain={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? objectiveTargetGain : undefined}
+                objectiveTargetCashflow={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? objectiveTargetCashflow : undefined}
+                onObjectiveTypeChange={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? setObjectiveType : undefined}
+                onObjectiveYearChange={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? setObjectiveYear : undefined}
+                onObjectiveTargetGainChange={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? setObjectiveTargetGain : undefined}
+                onObjectiveTargetCashflowChange={currentMainTab === 'bilan' && currentSubTab === 'objectif' ? setObjectiveTargetCashflow : undefined}
               />
             )}
           </div>

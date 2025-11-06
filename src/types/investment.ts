@@ -226,6 +226,12 @@ export interface Investment {
   
   // Année de revente souhaitée (pour le dashboard)
   targetSaleYear?: number;
+  
+  // Gain total souhaité (pour l'objectif de revente)
+  targetGain?: number;
+  
+  // Cashflow cumulé souhaité (pour l'objectif de cashflow)
+  targetCashflow?: number;
 }
 
 export const defaultTaxParameters: TaxParameters = {

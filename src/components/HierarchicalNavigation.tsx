@@ -49,8 +49,7 @@ const tabConfigs: MainTabConfig[] = [
     icon: FaHome,
     description: 'Détails du projet d\'investissement',
     subTabs: [
-      { id: 'acquisition', label: 'Acquisition', icon: FaHome, description: 'Détails de l\'acquisition du bien' },
-      { id: 'objectif', label: 'Objectif', icon: FaChartPie, description: 'Objectifs du projet' }
+      { id: 'acquisition', label: 'Acquisition', icon: FaHome, description: 'Détails de l\'acquisition du bien' }
     ],
     sidebarContent: 'acquisition'
   },
@@ -115,7 +114,7 @@ export default function HierarchicalNavigation({
     location: 'revenus',
     imposition: initialSubTab || 'annee-courante',
     rentabilite: 'rentabilite-brute-nette',
-    bilan: 'statistiques'
+    bilan: initialSubTab || 'bilan'
   });
 
   // Synchronisation avec l'état initial

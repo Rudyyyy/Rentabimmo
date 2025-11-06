@@ -201,4 +201,122 @@ export async function saveTargetSaleYear(
     console.error('❌ Exception critique:', error);
     return false;
   }
+}
+
+/**
+ * Enregistre le gain total souhaité dans la base de données
+ * @param propertyId L'identifiant de la propriété
+ * @param targetGain Le gain total souhaité
+ * @returns {Promise<boolean>} True si l'enregistrement a réussi, false sinon
+ */
+export async function saveTargetGain(
+  propertyId: string,
+  targetGain: number
+): Promise<boolean> {
+  try {
+    if (!propertyId) {
+      console.error('❌ ID de propriété invalide ou manquant');
+      return false;
+    }
+
+    // Lire la propriété complète depuis la base de données
+    const { data: property, error: readError } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('id', propertyId)
+      .single();
+
+    if (readError) {
+      console.error('❌ Erreur lors de la lecture de la propriété:', readError);
+      return false;
+    }
+
+    if (!property) {
+      console.error('❌ Propriété non trouvée avec l\'ID:', propertyId);
+      return false;
+    }
+
+    // Mettre à jour les données d'investissement
+    const currentInvestmentData = property.investment_data || {};
+    const updatedInvestmentData = JSON.parse(JSON.stringify(currentInvestmentData));
+    updatedInvestmentData.targetGain = targetGain;
+
+    // Mise à jour dans la base de données
+    const { error: writeError } = await supabase
+      .from('properties')
+      .update({
+        investment_data: updatedInvestmentData
+      })
+      .eq('id', propertyId);
+
+    if (writeError) {
+      console.error('❌ Erreur lors de l\'écriture des données:', writeError);
+      return false;
+    }
+
+    console.log(`✅ Gain total souhaité enregistré: ${targetGain}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Exception critique:', error);
+    return false;
+  }
+}
+
+/**
+ * Enregistre le cashflow cumulé souhaité dans la base de données
+ * @param propertyId L'identifiant de la propriété
+ * @param targetCashflow Le cashflow cumulé souhaité
+ * @returns {Promise<boolean>} True si l'enregistrement a réussi, false sinon
+ */
+export async function saveTargetCashflow(
+  propertyId: string,
+  targetCashflow: number
+): Promise<boolean> {
+  try {
+    if (!propertyId) {
+      console.error('❌ ID de propriété invalide ou manquant');
+      return false;
+    }
+
+    // Lire la propriété complète depuis la base de données
+    const { data: property, error: readError } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('id', propertyId)
+      .single();
+
+    if (readError) {
+      console.error('❌ Erreur lors de la lecture de la propriété:', readError);
+      return false;
+    }
+
+    if (!property) {
+      console.error('❌ Propriété non trouvée avec l\'ID:', propertyId);
+      return false;
+    }
+
+    // Mettre à jour les données d'investissement
+    const currentInvestmentData = property.investment_data || {};
+    const updatedInvestmentData = JSON.parse(JSON.stringify(currentInvestmentData));
+    updatedInvestmentData.targetCashflow = targetCashflow;
+
+    // Mise à jour dans la base de données
+    const { error: writeError } = await supabase
+      .from('properties')
+      .update({
+        investment_data: updatedInvestmentData
+      })
+      .eq('id', propertyId);
+
+    if (writeError) {
+      console.error('❌ Erreur lors de l\'écriture des données:', writeError);
+      return false;
+    }
+
+    console.log(`✅ Cashflow cumulé souhaité enregistré: ${targetCashflow}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Exception critique:', error);
+    return false;
+  }
 } 
