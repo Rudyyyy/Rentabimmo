@@ -780,191 +780,233 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
         };
 
         return (
-          <div className="space-y-6">
-            {/* Régime fiscal: libellé + saisie sur une ligne */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Régime fiscal</span>
-                <select
-                  value={currentRegime}
-                  onChange={(e) => handleRegimeChange(e.target.value as TaxRegime)}
-                  className="ml-3 w-56 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                >
-                  {(Object.keys(regimeLabels) as TaxRegime[]).map((regime) => (
-                    <option key={regime} value={regime}>{regimeLabels[regime]}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="space-y-3">
+            {/* Régime fiscal */}
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                Régime fiscal
+              </label>
+              <select
+                value={currentRegime}
+                onChange={(e) => handleRegimeChange(e.target.value as TaxRegime)}
+                className="max-w-48 flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {(Object.keys(regimeLabels) as TaxRegime[]).map((regime) => (
+                  <option key={regime} value={regime}>{regimeLabels[regime]}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Paramètres fiscaux communs: libellé + saisie sur une ligne */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Paramètres fiscaux communs</h4>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Taux marginal d'imposition (%)</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investmentData?.taxParameters?.taxRate ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    taxRate: Number(e.target.value)
-                  })}
-                  className="ml-3 w-28 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+            {/* Paramètres fiscaux communs */}
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <FaCalculator className="h-5 w-5 text-blue-600" />
+                <h4 className="text-md font-semibold text-gray-900">Paramètres fiscaux communs</h4>
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Taux des prélèvements sociaux (%)</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={investmentData?.taxParameters?.socialChargesRate ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    socialChargesRate: Number(e.target.value)
-                  })}
-                  className="ml-3 w-28 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Taux marginal d'imposition (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={investmentData?.taxParameters?.taxRate ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      taxRate: Number(e.target.value)
+                    })}
+                    className="w-24 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Taux des prélèvements sociaux (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={investmentData?.taxParameters?.socialChargesRate ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      socialChargesRate: Number(e.target.value)
+                    })}
+                    className="w-24 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Paramètres LMNP */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Paramètres LMNP</h4>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Valeur du bien (hors terrain)</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.buildingValue ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    buildingValue: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <FaCalculator className="h-5 w-5 text-blue-600" />
+                <h4 className="text-md font-semibold text-gray-900">Paramètres LMNP</h4>
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Durée d'amortissement du bien (années)</span>
-                <input
-                  type="number"
-                  step="1"
-                  value={investmentData?.taxParameters?.buildingAmortizationYears ?? 25}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    buildingAmortizationYears: Number(e.target.value)
-                  })}
-                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Valeur du mobilier</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.furnitureValue ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    furnitureValue: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Durée d'amortissement du mobilier (années)</span>
-                <input
-                  type="number"
-                  step="1"
-                  value={investmentData?.taxParameters?.furnitureAmortizationYears ?? 10}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    furnitureAmortizationYears: Number(e.target.value)
-                  })}
-                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Valeur des travaux</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.worksValue ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    worksValue: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Durée d'amortissement des travaux (années)</span>
-                <input
-                  type="number"
-                  step="1"
-                  value={investmentData?.taxParameters?.worksAmortizationYears ?? 10}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    worksAmortizationYears: Number(e.target.value)
-                  })}
-                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Valeur des autres éléments</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.otherValue ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    otherValue: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Durée d'amortissement autres éléments (années)</span>
-                <input
-                  type="number"
-                  step="1"
-                  value={investmentData?.taxParameters?.otherAmortizationYears ?? 5}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    otherAmortizationYears: Number(e.target.value)
-                  })}
-                  className="ml-3 w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Valeur du bien (hors terrain)
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.buildingValue ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      buildingValue: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Durée d'amortissement du bien (années)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={investmentData?.taxParameters?.buildingAmortizationYears ?? 25}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      buildingAmortizationYears: Number(e.target.value)
+                    })}
+                    className="w-20 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Valeur du mobilier
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.furnitureValue ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      furnitureValue: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Durée d'amortissement du mobilier (années)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={investmentData?.taxParameters?.furnitureAmortizationYears ?? 10}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      furnitureAmortizationYears: Number(e.target.value)
+                    })}
+                    className="w-20 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Valeur des travaux
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.worksValue ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      worksValue: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Durée d'amortissement des travaux (années)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={investmentData?.taxParameters?.worksAmortizationYears ?? 10}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      worksAmortizationYears: Number(e.target.value)
+                    })}
+                    className="w-20 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Valeur des autres éléments
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.otherValue ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      otherValue: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Durée d'amortissement autres éléments (années)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={investmentData?.taxParameters?.otherAmortizationYears ?? 5}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      otherAmortizationYears: Number(e.target.value)
+                    })}
+                    className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Paramètres Location Nue */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Paramètres Location Nue</h4>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Déficit foncier reporté</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.previousDeficit ?? 0}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    previousDeficit: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <FaCalculator className="h-5 w-5 text-blue-600" />
+                <h4 className="text-md font-semibold text-gray-900">Paramètres Location Nue</h4>
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-600">Plafond de déduction du déficit foncier</span>
-                <input
-                  type="number"
-                  step="100"
-                  value={investmentData?.taxParameters?.deficitLimit ?? 10700}
-                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
-                    ...investmentData?.taxParameters,
-                    deficitLimit: Number(e.target.value)
-                  })}
-                  className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                />
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Déficit foncier reporté
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.previousDeficit ?? 0}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      previousDeficit: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                    Plafond de déduction du déficit foncier
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    value={investmentData?.taxParameters?.deficitLimit ?? 10700}
+                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('taxParameters', {
+                      ...investmentData?.taxParameters,
+                      deficitLimit: Number(e.target.value)
+                    })}
+                    className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -980,89 +1022,93 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           };
 
           return (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Année objectif revente</span>
-                  <select
-                    value={targetSaleYear}
-                    onChange={async (e) => {
-                      const y = Number(e.target.value);
-                      setTargetSaleYear(y);
-                      localStorage.setItem(`targetSaleYear_${investmentId}`, String(y));
-                      updateTargetBalance(y);
-                      // Sauvegarder dans la base de données si propertyId est disponible
-                      if (propertyId) {
-                        await saveTargetSaleYear(propertyId, y);
-                      }
-                      // Notifier le composant parent de la mise à jour
-                      if (onInvestmentUpdate) {
-                        onInvestmentUpdate('targetSaleYear', y);
-                      }
-                    }}
-                    className="ml-3 w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    {saleYears.map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">% augmentation annuelle</span>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={saleParams.annualIncrease}
-                    onChange={(e) => updateSaleParams('annualIncrease', Number(e.target.value))}
-                    className="ml-3 w-28 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                  />
-                </div>
-
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Frais d'agence</span>
-                  <input
-                    type="number"
-                    value={saleParams.agencyFees}
-                    onChange={(e) => updateSaleParams('agencyFees', Number(e.target.value))}
-                    className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                  />
-                </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                  Année objectif revente
+                </label>
+                <select
+                  value={targetSaleYear}
+                  onChange={async (e) => {
+                    const y = Number(e.target.value);
+                    setTargetSaleYear(y);
+                    localStorage.setItem(`targetSaleYear_${investmentId}`, String(y));
+                    updateTargetBalance(y);
+                    // Sauvegarder dans la base de données si propertyId est disponible
+                    if (propertyId) {
+                      await saveTargetSaleYear(propertyId, y);
+                    }
+                    // Notifier le composant parent de la mise à jour
+                    if (onInvestmentUpdate) {
+                      onInvestmentUpdate('targetSaleYear', y);
+                    }
+                  }}
+                  className="max-w-40 flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {saleYears.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
               </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Frais de remboursements anticipés</span>
-                  <input
-                    type="number"
-                    value={saleParams.earlyRepaymentFees}
-                    onChange={(e) => updateSaleParams('earlyRepaymentFees', Number(e.target.value))}
-                    className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                  />
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Travaux d'amélioration non déduits</span>
-                  <input
-                    type="number"
-                    value={investmentData?.improvementWorks ?? 0}
-                    onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('improvementWorks', Number(e.target.value))}
-                    className="ml-3 w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right"
-                  />
-                </div>
-                <div className="border-t border-gray-200 pt-3">
-                  <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
-                    (targetBalance || 0) >= 0 ? 'bg-green-50' : 'bg-red-50'
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                  % augmentation annuelle
+                </label>
+                <input
+                  type="number"
+                  step={0.1}
+                  value={saleParams.annualIncrease}
+                  onChange={(e) => updateSaleParams('annualIncrease', Number(e.target.value))}
+                  className="w-24 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                  Frais d'agence
+                </label>
+                <input
+                  type="number"
+                  value={saleParams.agencyFees}
+                  onChange={(e) => updateSaleParams('agencyFees', Number(e.target.value))}
+                  className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                  Frais de remboursements anticipés
+                </label>
+                <input
+                  type="number"
+                  value={saleParams.earlyRepaymentFees}
+                  onChange={(e) => updateSaleParams('earlyRepaymentFees', Number(e.target.value))}
+                  className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+                  Travaux d'amélioration non déduits
+                </label>
+                <input
+                  type="number"
+                  value={investmentData?.improvementWorks ?? 0}
+                  onChange={(e) => onInvestmentUpdate && onInvestmentUpdate('improvementWorks', Number(e.target.value))}
+                  className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                />
+              </div>
+              <div className="border-t border-gray-200 pt-3 mt-3">
+                <div className={`flex justify-between items-center py-3 rounded-md px-4 ${
+                  (targetBalance || 0) >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                }`}>
+                  <span className={`text-base font-semibold ${
+                    (targetBalance || 0) >= 0 ? 'text-green-900' : 'text-red-900'
                   }`}>
-                    <span className={`text-sm font-semibold ${
-                      (targetBalance || 0) >= 0 ? 'text-green-900' : 'text-red-900'
-                    }`}>
-                      Solde ({selectedRegime}) · {targetSaleYear}
-                    </span>
-                    <span className={`text-lg font-bold ${
-                      (targetBalance || 0) >= 0 ? 'text-green-900' : 'text-red-900'
-                    }`}>
-                      {formatCurrency(targetBalance || 0)}
-                    </span>
-                  </div>
+                    Solde ({selectedRegime}) · {targetSaleYear}
+                  </span>
+                  <span className={`text-xl font-bold ${
+                    (targetBalance || 0) >= 0 ? 'text-green-900' : 'text-red-900'
+                  }`}>
+                    {formatCurrency(targetBalance || 0)}
+                  </span>
                 </div>
               </div>
             </div>
