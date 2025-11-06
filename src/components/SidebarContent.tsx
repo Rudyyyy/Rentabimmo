@@ -1153,33 +1153,23 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
               </div>
             )}
             {isCashflowView && (
-              <div className="border-t border-gray-200 pt-3 space-y-2">
-                <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
-                  cashFlowNu >= 0 ? 'bg-green-50' : 'bg-red-50'
-                }`}>
-                  <span className={`text-sm font-semibold ${
-                    cashFlowNu >= 0 ? 'text-green-900' : 'text-red-900'
-                  }`}>
-                    Location nue
-                    <span className="ml-2 text-xs font-normal text-gray-600">(Année {currentYear} · Mensuel {formatCurrency(monthlyNu)})</span>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">
+                    Location nue (Année {currentYear} • Mensuel {formatCurrency(monthlyNu)})
                   </span>
-                  <span className={`text-sm font-bold ${
-                    cashFlowNu >= 0 ? 'text-green-900' : 'text-red-900'
+                  <span className={`text-sm font-semibold ${
+                    cashFlowNu >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {formatCurrency(cashFlowNu)}
                   </span>
                 </div>
-                <div className={`flex justify-between items-center py-2 rounded-md px-3 ${
-                  cashFlowMeuble >= 0 ? 'bg-green-50' : 'bg-red-50'
-                }`}>
-                  <span className={`text-sm font-semibold ${
-                    cashFlowMeuble >= 0 ? 'text-green-900' : 'text-red-900'
-                  }`}>
-                    Location meublée
-                    <span className="ml-2 text-xs font-normal text-gray-600">(Année {currentYear} · Mensuel {formatCurrency(monthlyMeuble)})</span>
+                <div className="flex justify-between items-center py-2 border-t border-gray-200 pt-2">
+                  <span className="text-sm text-gray-600">
+                    Location meublée (Année {currentYear} • Mensuel {formatCurrency(monthlyMeuble)})
                   </span>
-                  <span className={`text-sm font-bold ${
-                    cashFlowMeuble >= 0 ? 'text-green-900' : 'text-red-900'
+                  <span className={`text-sm font-semibold ${
+                    cashFlowMeuble >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {formatCurrency(cashFlowMeuble)}
                   </span>
