@@ -168,7 +168,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             return acc;
           }, {} as Record<number, { principal: number; interest: number }>))
           .map(({ principal }) => principal),
-        backgroundColor: 'rgb(59, 130, 246)',
+        backgroundColor: '#87DCC0', // couleur pour Capital
         stack: 'Stack 0',
       },
       {
@@ -184,7 +184,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             return acc;
           }, {} as Record<number, { principal: number; interest: number }>))
           .map(({ interest }) => interest),
-        backgroundColor: 'rgb(239, 68, 68)',
+        backgroundColor: '#F7A1A1', // couleur pour Intérêts
         stack: 'Stack 0',
       }
     ]
