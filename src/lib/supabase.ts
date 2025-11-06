@@ -14,10 +14,12 @@ const supabaseOptions = {
     autoRefreshToken: true,
     persistSession: true,
   },
-  // Log des requêtes pour débogage
-  debug: {
-    logRequests: true
-  }
+  // Log des requêtes uniquement en développement
+  ...(import.meta.env.DEV && {
+    debug: {
+      logRequests: true
+    }
+  })
 };
 
 export const supabase = createClient<Database>(

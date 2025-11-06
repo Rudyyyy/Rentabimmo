@@ -21,14 +21,13 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Brain, Pencil, Info } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Info } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
-import { Investment, defaultInvestment } from '../types/investment';
+import { Investment, defaultInvestment, FinancialMetrics } from '../types/investment';
 import { useAuth } from '../contexts/AuthContext';
+import { logger } from '../utils/logger';
 import AcquisitionForm from './AcquisitionForm';
-import ExpensesForm from './ExpensesForm';
-import RevenuesForm from './RevenuesForm';
 import LocationForm from './LocationForm';
 import LocationTables from './LocationTables';
 import ResultsDisplay from './ResultsDisplay';
@@ -37,23 +36,13 @@ import TaxForm from './TaxForm';
 import { calculateFinancialMetrics } from '../utils/calculations';
 import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
-import Analysis from '../pages/Analysis';
 import HierarchicalNavigation from './HierarchicalNavigation';
 import MobileNavigation from './MobileNavigation';
 import SidebarContent from './SidebarContent';
 import Notification from './Notification';
-import GeneralInfoSummary from './GeneralInfoSummary';
 import ObjectiveDetailsDisplay from './ObjectiveDetailsDisplay';
 
-type View = 'acquisition' | 'frais' | 'revenus' | 'imposition' | 'profitability' | 'bilan' | 'cashflow' | 'sale' | 'irr' | 'analysis';
-
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
-type SubTab = {
-  location: 'revenus' | 'frais';
-  imposition: 'annee-courante' | 'historique-projection';
-  rentabilite: 'rentabilite-brute-nette' | 'cashflow' | 'revente';
-  bilan: 'statistiques' | 'analyse-ia';
-};
 
 export default function PropertyForm() {
   // États pour gérer le chargement, les métriques et les données d'investissement
@@ -63,11 +52,10 @@ export default function PropertyForm() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [metrics, setMetrics] = useState<any>(null);
+  const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [investmentData, setInvestmentData] = useState<Investment>(defaultInvestment);
   const [currentMainTab, setCurrentMainTab] = useState<MainTab>('acquisition');
   const [currentSubTab, setCurrentSubTab] = useState<string | undefined>(undefined);
-  const [nameError, setNameError] = useState<string | null>(null);
   const [objectiveType, setObjectiveType] = useState<'revente' | 'cashflow'>('revente');
   const [objectiveYear, setObjectiveYear] = useState<number>(() => {
     // Priorité 1: investment_data.targetSaleYear (base de données)
@@ -103,7 +91,7 @@ export default function PropertyForm() {
     // Priorité 3: valeur par défaut
     return 10000;
   });
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<{ name: string, description?: string }>();
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<{ name: string, description?: string }>();
   const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
   
   // Surveiller les changements de nom dans l'état investmentData et synchroniser avec le formulaire
@@ -193,8 +181,7 @@ export default function PropertyForm() {
   // Fonction pour charger les données d'un bien existant depuis Supabase
   async function loadProperty() {
     try {
-      console.log('==================== DÉBUT CHARGEMENT PROPRIÉTÉ ====================');
-      console.log('Chargement de la propriété avec ID:', id);
+      logger.debug('Début chargement de la propriété', { id });
       
       setLoading(true);
       const { data, error } = await supabase
@@ -204,50 +191,27 @@ export default function PropertyForm() {
         .single();
 
       if (error) {
-        console.error('❌ Erreur lors du chargement de la propriété:', error);
+        logger.error('Erreur lors du chargement de la propriété', error);
         throw error;
       }
       
       if (data) {
-        console.log('✅ Propriété récupérée avec succès, données brutes:', data);
+        logger.debug('Propriété récupérée avec succès');
         
         // Vérifier la présence des données d'investissement
         if (!data.investment_data) {
-          console.warn('⚠️ Données d\'investissement manquantes ou invalides');
-        } else {
-          console.log('✅ Données d\'investissement trouvées');
-          
-          // Vérifier la présence du tableau d'amortissement
-          if (data.investment_data.amortizationSchedule) {
-            console.log('✅ Tableau d\'amortissement trouvé:', {
-              longueur: data.investment_data.amortizationSchedule.length,
-              premièreLigne: data.investment_data.amortizationSchedule[0] || 'Aucune donnée'
-            });
-          } else {
-            console.warn('⚠️ Aucun tableau d\'amortissement trouvé dans les données');
-          }
+          logger.warn('Données d\'investissement manquantes ou invalides');
+        } else if (data.investment_data.amortizationSchedule) {
+          logger.debug('Tableau d\'amortissement trouvé', {
+            lignes: data.investment_data.amortizationSchedule.length
+          });
         }
         
         const loadedInvestmentData = {
           ...defaultInvestment,
           ...data.investment_data as Investment,
-          id: id || '' // Assigner une chaîne vide si id est undefined
+          id: id || ''
         };
-        
-        console.log('Données fusionnées avec les valeurs par défaut:', {
-          id: loadedInvestmentData.id || 'Non défini',
-          name: loadedInvestmentData.name || 'Non défini',
-          tableauAmortissement: loadedInvestmentData.amortizationSchedule ? 
-            `${loadedInvestmentData.amortizationSchedule.length} lignes` : 'Aucun'
-        });
-        
-        // Analyser le tableau d'amortissement s'il existe
-        if (loadedInvestmentData.amortizationSchedule && loadedInvestmentData.amortizationSchedule.length > 0) {
-          console.log('Analyse du tableau d\'amortissement:', 
-            `${loadedInvestmentData.amortizationSchedule.length} lignes`);
-          console.log('Première ligne du tableau:', 
-            loadedInvestmentData.amortizationSchedule[0]);
-        }
         
         setInvestmentData(loadedInvestmentData);
         reset({ name: data.name });
@@ -255,13 +219,12 @@ export default function PropertyForm() {
         const initialMetrics = calculateFinancialMetrics(loadedInvestmentData);
         setMetrics(initialMetrics);
         
-        console.log('==================== FIN CHARGEMENT PROPRIÉTÉ ====================');
+        logger.debug('Chargement de la propriété terminé avec succès');
       } else {
-        console.error('❌ Aucune donnée retournée pour l\'ID:', id);
+        logger.error('Aucune donnée retournée pour l\'ID', { id });
       }
     } catch (error) {
-      console.error('❌ Exception lors du chargement de la propriété:', error);
-      console.log('==================== FIN CHARGEMENT PROPRIÉTÉ (ERREUR) ====================');
+      logger.error('Exception lors du chargement de la propriété', error);
     } finally {
       setLoading(false);
     }
@@ -291,39 +254,21 @@ export default function PropertyForm() {
 
   // Gestionnaire pour les mises à jour de champs individuels
   const handleFieldUpdate = (field: keyof Investment, value: any) => {
-    console.log('handleFieldUpdate called with:', field, value);
-    console.log('Current investmentData before update:', investmentData);
+    logger.debug('Mise à jour du champ', { field, value });
     const updatedInvestment = {
       ...investmentData,
       [field]: value
     };
-    console.log('Updated investment:', updatedInvestment);
     setInvestmentData(updatedInvestment);
     const newMetrics = calculateFinancialMetrics(updatedInvestment);
     setMetrics(newMetrics);
-    console.log('investmentData state updated, new value should be:', updatedInvestment);
   };
 
-  // Gestionnaire de mise à jour de nom avec validation
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.trim();
-    if (!value) {
-      setNameError("Le nom du bien est obligatoire");
-    } else {
-      setNameError(null);
-    }
-    handleInvestmentUpdate({ ...investmentData, name: e.target.value });
-  };
-
-  // Gestionnaire de mise à jour de description
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    handleInvestmentUpdate({ ...investmentData, description: e.target.value });
-  };
 
   // Fonction pour sauvegarder les données dans Supabase
   const onSubmit = async (formData: { name: string, description?: string }) => {
     if (!investmentData) {
-      console.error("Données d'investissement manquantes");
+      logger.error("Données d'investissement manquantes");
       setNotification({
         message: "Erreur: Données d'investissement manquantes",
         type: 'error'
@@ -332,7 +277,7 @@ export default function PropertyForm() {
     }
 
     if (!user) {
-      console.error("Utilisateur non connecté");
+      logger.error("Utilisateur non connecté");
       setNotification({
         message: "Erreur: Vous devez être connecté pour enregistrer un bien",
         type: 'error'
@@ -341,7 +286,7 @@ export default function PropertyForm() {
     }
 
     try {
-      console.log('==================== DÉBUT SAUVEGARDE PROPRIÉTÉ ====================');
+      logger.debug('Début sauvegarde de la propriété');
       setLoading(true);
 
       // Vérifier les données minimales requises
@@ -358,19 +303,12 @@ export default function PropertyForm() {
         targetCashflow: objectiveTargetCashflow
       };
 
-      // Vérification détaillée du tableau d'amortissement
+      // Vérification du tableau d'amortissement
       if (updatedInvestment.amortizationSchedule && updatedInvestment.amortizationSchedule.length > 0) {
-        console.log("✅ Tableau d'amortissement présent avant sauvegarde:", updatedInvestment.amortizationSchedule.length, "lignes");
-        console.log("Première ligne du tableau:", updatedInvestment.amortizationSchedule[0]);
-      } else {
-        console.warn("⚠️ Aucun tableau d'amortissement trouvé avant sauvegarde");
+        logger.debug("Tableau d'amortissement présent avant sauvegarde", {
+          lignes: updatedInvestment.amortizationSchedule.length
+        });
       }
-
-      console.log("Investissement mis à jour avant sauvegarde:", updatedInvestment);
-      console.log("Tableau d'amortissement dans l'investissement:", 
-        updatedInvestment.amortizationSchedule ? 
-        `${updatedInvestment.amortizationSchedule.length} lignes` : 
-        'Aucun tableau');
 
       // Préparation de l'objet à enregistrer
       const propertyData = {
@@ -380,72 +318,46 @@ export default function PropertyForm() {
       };
 
       if (id) {
-        // S'assurer que le nom est présent pour la mise à jour
-        const updateData = {
-          name: formData.name.trim(),
-          investment_data: updatedInvestment,
-          user_id: user.id
-        };
-        
-        console.log("Données envoyées pour mise à jour:", updateData);
-        
+        // Mise à jour
         const { data, error } = await supabase
           .from('properties')
-          .update(updateData)
+          .update(propertyData)
           .eq('id', id)
           .select();
         
         if (error) {
-          console.error("❌ ERREUR lors de la mise à jour:", error);
+          logger.error("Erreur lors de la mise à jour", error);
           throw error;
         }
         
-        console.log("✅ Mise à jour réussie, données retournées:", data);
+        logger.debug("Mise à jour réussie");
         
         // Vérification des données après mise à jour
-        if (data && data.length > 0) {
-          const savedData = data[0];
-          if (savedData.investment_data && savedData.investment_data.amortizationSchedule) {
-            console.log("✅ Tableau d'amortissement correctement sauvegardé:", 
-              savedData.investment_data.amortizationSchedule.length, "lignes");
-          } else {
-            console.warn("⚠️ Le tableau d'amortissement n'apparaît pas dans les données sauvegardées");
-          }
+        if (data && data.length > 0 && data[0].investment_data?.amortizationSchedule) {
+          logger.debug("Tableau d'amortissement sauvegardé", {
+            lignes: data[0].investment_data.amortizationSchedule.length
+          });
         }
       } else {
-        // Insertion du bien avec les données complètes
-        console.log("Création d'un nouveau bien immobilier - Données:", propertyData);
-        
+        // Insertion
         const { data, error } = await supabase
           .from('properties')
           .insert([propertyData])
           .select();
                 
         if (error) {
-          console.error("ERREUR lors de la création du bien:", error);
+          logger.error("Erreur lors de la création du bien", error);
           throw error;
         }
         
         if (!data || data.length === 0) {
-          console.error("ERREUR: Le bien a été créé mais les données n'ont pas été retournées");
           throw new Error("Le bien a été créé mais les données n'ont pas été retournées");
         }
         
-        console.log("✅ Bien créé avec succès - ID:", data[0].id);
-        console.log("✅ Données complètes:", data[0]);
-        
-        // Vérification des données après création
-        if (data[0].investment_data && data[0].investment_data.amortizationSchedule) {
-          console.log("✅ Tableau d'amortissement correctement sauvegardé:", 
-            data[0].investment_data.amortizationSchedule.length, "lignes");
-        } else {
-          console.warn("⚠️ Le tableau d'amortissement n'apparaît pas dans les données sauvegardées");
-        }
+        logger.debug("Bien créé avec succès", { id: data[0].id });
       }
       
-      console.log('==================== FIN SAUVEGARDE PROPRIÉTÉ ====================');
-      
-      // Afficher une notification de succès au lieu de rediriger
+      // Afficher une notification de succès
       setNotification({
         message: id ? "Les modifications ont été enregistrées avec succès" : "Le bien a été créé avec succès",
         type: 'success'
@@ -456,13 +368,12 @@ export default function PropertyForm() {
       
       if (error instanceof Error) {
         errorMessage += `: ${error.message}`;
-        console.error('Détails de l\'erreur:', {
+        logger.error('Détails de l\'erreur', {
           name: error.name,
-          message: error.message,
-          stack: error.stack,
+          message: error.message
         });
       } else {
-        console.error('Erreur non standard:', error);
+        logger.error('Erreur non standard', error);
       }
       
       setNotification({
@@ -490,7 +401,11 @@ export default function PropertyForm() {
       if (error) throw error;
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error deleting property:', error);
+      logger.error('Erreur lors de la suppression de la propriété', error);
+      setNotification({
+        message: 'Erreur lors de la suppression du bien',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -533,7 +448,7 @@ export default function PropertyForm() {
             currentSubTab={currentSubTab || 'revenus'}
             onUpdate={handleInvestmentUpdate}
             allowManualEdit={true}
-            onManualEdit={(isEditing) => {
+            onManualEdit={() => {
               // Cette fonction sera gérée par LocationTables
             }}
           />
@@ -718,8 +633,6 @@ export default function PropertyForm() {
     };
   };
 
-  // Pour input normal caché qui récupérera la valeur du nom
-  const nameRef = register('name', { required: "Le nom du bien est obligatoire" });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -824,7 +737,7 @@ export default function PropertyForm() {
                 investment={investmentData}
                 onUpdate={handleInvestmentUpdate}
                 currentSubTab={currentSubTab || 'revenus'}
-                onManualEdit={(isEditing) => {
+                onManualEdit={() => {
                   // Cette fonction sera gérée par LocationForm
                 }}
                 onSubTabChange={(subTab) => {

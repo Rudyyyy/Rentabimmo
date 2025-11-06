@@ -377,7 +377,3 @@ export const defaultInvestment: Investment = {
   netYield: 0,
   cashOnCashReturn: 0
 };
-
-const handleResetAmortization = () => {
-  // Logique pour réinitialiser le tableau d'amortissement
-};

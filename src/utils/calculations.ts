@@ -1,4 +1,5 @@
 import { Investment, FinancialMetrics, AmortizationRow, DeferralType, YearlyExpenses } from '../types/investment';
+import { safeAmount, safeNumber, safeRate, safePercentage, toFixed } from './validation';
 
 export function calculateMonthlyPayment(
   loanAmount: number,
@@ -7,11 +8,11 @@ export function calculateMonthlyPayment(
   deferralType: DeferralType = 'none',
   deferredPeriod: number = 0
 ): number {
-  // Conversion explicite en nombres
-  const amount = Number(loanAmount);
-  const rate = Number(annualRate);
-  const duration = Number(years);
-  const deferred = Number(deferredPeriod);
+  // Validation et conversion sécurisée des nombres
+  const amount = safeAmount(loanAmount);
+  const rate = safeRate(annualRate);
+  const duration = safeNumber(years, 0, 1, 50); // Durée entre 1 et 50 ans
+  const deferred = safeNumber(deferredPeriod, 0, 0);
 
   if (amount <= 0 || rate <= 0 || duration <= 0) return 0;
   
@@ -20,24 +21,24 @@ export function calculateMonthlyPayment(
   if (deferralType === 'none' || deferred === 0) {
     // Calcul de la mensualité standard sans différé
     const numberOfPayments = duration * 12;
-    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+    return toFixed((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   } else if (deferralType === 'partial') {
     // Différé partiel : on paie les intérêts pendant le différé
     // La mensualité est calculée sur la durée totale moins le différé
     const numberOfPayments = (duration * 12) - deferred;
     if (numberOfPayments <= 0) return 0;
     
-    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+    return toFixed((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   } else if (deferralType === 'total') {
     // Différé total : on ne paie rien pendant le différé
     // La mensualité est calculée sur la durée totale moins le différé
     const numberOfPayments = (duration * 12) - deferred;
     if (numberOfPayments <= 0) return 0;
     
-    return Number(((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-           (Math.pow(1 + monthlyRate, numberOfPayments) - 1)).toFixed(2));
+    return toFixed((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+           (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   }
   
   return 0;
@@ -53,15 +54,15 @@ export function generateAmortizationSchedule(
 ): { schedule: AmortizationRow[]; deferredInterest: number } {
   const schedule: AmortizationRow[] = [];
   
-  // Conversion explicite en nombres
-  const amount = Number(loanAmount);
-  const rate = Number(annualRate);
-  const duration = Number(years);
-  const deferred = Number(deferredPeriod);
+  // Validation et conversion sécurisée des nombres
+  const amount = safeAmount(loanAmount);
+  const rate = safeRate(annualRate);
+  const duration = safeNumber(years, 0, 1, 50);
+  const deferred = safeNumber(deferredPeriod, 0, 0);
 
   const monthlyRate = rate / 12 / 100;
-  let totalDue = Number(amount.toFixed(2));
-  let remainingPrincipal = Number(amount.toFixed(2));
+  let totalDue = toFixed(amount);
+  let remainingPrincipal = toFixed(amount);
   let totalPaid = 0;
   let deferredInterest = 0;
   
@@ -77,41 +78,41 @@ export function generateAmortizationSchedule(
   }
 
   // Calculate monthly payment for the total duration (loan duration + deferral period)
-  const monthlyPayment = Number(calculateMonthlyPayment(amount, rate, duration, deferralType, deferred).toFixed(2));
+  const monthlyPayment = toFixed(calculateMonthlyPayment(amount, rate, duration, deferralType, deferred));
 
   // Période de différé
   for (let month = 1; month <= deferred; month++) {
-    const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
+    const interest = toFixed(remainingPrincipal * monthlyRate);
     const currentDate = new Date(startDateTime);
     currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
     if (deferralType === 'total') {
-      deferredInterest = Number((deferredInterest + interest).toFixed(2));
-      totalDue = Number((totalDue + interest).toFixed(2));
+      deferredInterest = toFixed(deferredInterest + interest);
+      totalDue = toFixed(totalDue + interest);
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance: Number(totalDue.toFixed(2)),
-        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
+        remainingBalance: toFixed(totalDue),
+        remainingPrincipal: toFixed(remainingPrincipal),
         monthlyPayment: 0,
         principal: 0,
-        interest: Number(interest.toFixed(2)),
-        totalPaid: Number(totalPaid.toFixed(2)),
+        interest: toFixed(interest),
+        totalPaid: toFixed(totalPaid),
         isDeferred: true
       });
     } else if (deferralType === 'partial') {
-      totalPaid = Number((totalPaid + interest).toFixed(2));
+      totalPaid = toFixed(totalPaid + interest);
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance: Number(totalDue.toFixed(2)),
-        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
-        monthlyPayment: Number(interest.toFixed(2)),
+        remainingBalance: toFixed(totalDue),
+        remainingPrincipal: toFixed(remainingPrincipal),
+        monthlyPayment: toFixed(interest),
         principal: 0,
-        interest: Number(interest.toFixed(2)),
-        totalPaid: Number(totalPaid.toFixed(2)),
+        interest: toFixed(interest),
+        totalPaid: toFixed(totalPaid),
         isDeferred: true
       });
     }
@@ -120,31 +121,31 @@ export function generateAmortizationSchedule(
   // Période d'amortissement
   if (deferralType === 'total' && deferredInterest > 0) {
     // Add deferred interest to remaining balance
-    totalDue = Number((remainingPrincipal + deferredInterest).toFixed(2));
+    totalDue = toFixed(remainingPrincipal + deferredInterest);
     
     // Calculate new monthly payment with updated balance
-    const updatedMonthlyPayment = Number(calculateMonthlyPayment(totalDue, rate, duration, 'none', 0).toFixed(2));
+    const updatedMonthlyPayment = toFixed(calculateMonthlyPayment(totalDue, rate, duration, 'none', 0));
 
     // Regular amortization period
     for (let month = deferred + 1; month <= (duration * 12) + deferred; month++) {
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
-      const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
-      const principal = Number((updatedMonthlyPayment - interest).toFixed(2));
-      remainingPrincipal = Number(Math.max(0, remainingPrincipal - principal).toFixed(2));
-      totalPaid = Number((totalPaid + updatedMonthlyPayment).toFixed(2));
-      totalDue = Number((remainingPrincipal + deferredInterest).toFixed(2));
+      const interest = toFixed(remainingPrincipal * monthlyRate);
+      const principal = toFixed(updatedMonthlyPayment - interest);
+      remainingPrincipal = toFixed(Math.max(0, remainingPrincipal - principal));
+      totalPaid = toFixed(totalPaid + updatedMonthlyPayment);
+      totalDue = toFixed(remainingPrincipal + deferredInterest);
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance: Number(totalDue.toFixed(2)),
-        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
-        monthlyPayment: Number(updatedMonthlyPayment.toFixed(2)),
-        principal: Number(principal.toFixed(2)),
-        interest: Number(interest.toFixed(2)),
-        totalPaid: Number(totalPaid.toFixed(2)),
+        remainingBalance: toFixed(totalDue),
+        remainingPrincipal: toFixed(remainingPrincipal),
+        monthlyPayment: toFixed(updatedMonthlyPayment),
+        principal: toFixed(principal),
+        interest: toFixed(interest),
+        totalPaid: toFixed(totalPaid),
         isDeferred: false
       });
     }
@@ -154,21 +155,21 @@ export function generateAmortizationSchedule(
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
-      const interest = Number((remainingPrincipal * monthlyRate).toFixed(2));
-      const principal = Number((monthlyPayment - interest).toFixed(2));
-      remainingPrincipal = Number(Math.max(0, remainingPrincipal - principal).toFixed(2));
-      totalPaid = Number((totalPaid + monthlyPayment).toFixed(2));
-      totalDue = Number(Math.max(0, totalDue - principal).toFixed(2));
+      const interest = toFixed(remainingPrincipal * monthlyRate);
+      const principal = toFixed(monthlyPayment - interest);
+      remainingPrincipal = toFixed(Math.max(0, remainingPrincipal - principal));
+      totalPaid = toFixed(totalPaid + monthlyPayment);
+      totalDue = toFixed(Math.max(0, totalDue - principal));
 
       schedule.push({
         month,
         date: currentDate.toISOString().split('T')[0],
-        remainingBalance: Number(totalDue.toFixed(2)),
-        remainingPrincipal: Number(remainingPrincipal.toFixed(2)),
-        monthlyPayment: Number(monthlyPayment.toFixed(2)),
-        principal: Number(principal.toFixed(2)),
-        interest: Number(interest.toFixed(2)),
-        totalPaid: Number(totalPaid.toFixed(2)),
+        remainingBalance: toFixed(totalDue),
+        remainingPrincipal: toFixed(remainingPrincipal),
+        monthlyPayment: toFixed(monthlyPayment),
+        principal: toFixed(principal),
+        interest: toFixed(interest),
+        totalPaid: toFixed(totalPaid),
         isDeferred: false
       });
     }
@@ -182,7 +183,7 @@ function calculateSaleMetrics(
   remainingBalance: number
 ): { saleProfit: number; capitalGain: number; estimatedSalePrice: number } {
   let salePrice = 0;
-  const purchasePrice = Number(investment.purchasePrice);
+  const purchasePrice = safeAmount(investment.purchasePrice);
 
   // Validate sale date
   let saleDate: Date;
@@ -197,26 +198,26 @@ function calculateSaleMetrics(
 
   switch (investment.appreciationType) {
     case 'global':
-      salePrice = purchasePrice * (1 + Number(investment.appreciationValue) / 100);
+      salePrice = purchasePrice * (1 + safeRate(investment.appreciationValue) / 100);
       break;
     case 'annual': {
       const startDate = new Date(investment.startDate);
       if (!isNaN(startDate.getTime())) {
         const years = (saleDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
-        salePrice = purchasePrice * Math.pow(1 + Number(investment.appreciationValue) / 100, years);
+        salePrice = purchasePrice * Math.pow(1 + safeRate(investment.appreciationValue) / 100, years);
       } else {
         salePrice = purchasePrice;
       }
       break;
     }
     case 'amount':
-      salePrice = Number(investment.appreciationValue);
+      salePrice = safeAmount(investment.appreciationValue);
       break;
     default:
       salePrice = purchasePrice;
   }
 
-  const saleAgencyFees = Number(investment.saleAgencyFees) || 0;
+  const saleAgencyFees = safeAmount(investment.saleAgencyFees);
   const netSalePrice = salePrice - saleAgencyFees;
 
   return {
@@ -231,7 +232,7 @@ function calculateAdjustedRent(
   annualIncrease: number,
   years: number
 ): number {
-  return Number(baseRent) * Math.pow(1 + Number(annualIncrease) / 100, Number(years));
+  return toFixed(safeAmount(baseRent) * Math.pow(1 + safeRate(annualIncrease) / 100, safeNumber(years)));
 }
 
 function calculateRentalProjection(
@@ -244,12 +245,12 @@ function calculateRentalProjection(
   
   for (let year = 0; year < years; year++) {
     const adjustedRent = calculateAdjustedRent(
-      Number(investment.monthlyRent),
-      Number(investment.annualRentIncrease || 0),
+      safeAmount(investment.monthlyRent),
+      safeRate(investment.annualRentIncrease),
       year
     );
     
-    const yearlyIncome = adjustedRent * 12 * (Number(investment.occupancyRate) / 100);
+    const yearlyIncome = adjustedRent * 12 * (safePercentage(investment.occupancyRate) / 100);
     annualRentalIncome.push(yearlyIncome);
     
     const yearDate = new Date(startDate);
@@ -263,33 +264,33 @@ function calculateRentalProjection(
 export function calculateFinancialMetrics(investment: Investment): FinancialMetrics {
   // Calcul du coût total de l'opération
   const totalInvestmentCost = 
-    Number(investment.purchasePrice) +
-    Number(investment.agencyFees) +
-    Number(investment.notaryFees) +
-    Number(investment.bankFees) +
-    Number(investment.renovationCosts);
+    safeAmount(investment.purchasePrice) +
+    safeAmount(investment.agencyFees) +
+    safeAmount(investment.notaryFees) +
+    safeAmount(investment.bankFees) +
+    safeAmount(investment.renovationCosts);
 
   // Calcul des charges annuelles totales
   const annualCosts = 
-    Number(investment.propertyTax) +
-    Number(investment.condoFees) +
-    Number(investment.propertyInsurance) +
-    Number(investment.managementFees) +
-    Number(investment.unpaidRentInsurance);
+    safeAmount(investment.propertyTax) +
+    safeAmount(investment.condoFees) +
+    safeAmount(investment.propertyInsurance) +
+    safeAmount(investment.managementFees) +
+    safeAmount(investment.unpaidRentInsurance);
 
   // Calcul des charges mensuelles
   const monthlyCosts = annualCosts / 12;
 
   // Calcul de la mensualité du crédit
   const monthlyPayment = calculateMonthlyPayment(
-    Number(investment.loanAmount),
-    Number(investment.interestRate),
-    Number(investment.loanDuration),
+    safeAmount(investment.loanAmount),
+    safeRate(investment.interestRate),
+    safeNumber(investment.loanDuration, 20, 1, 50),
     investment.deferralType || 'none',
-    Number(investment.deferredPeriod || 0)
+    safeNumber(investment.deferredPeriod, 0, 0)
   );
 
-  const monthlyInsurance = (Number(investment.loanAmount) * Number(investment.insuranceRate) / 100) / (Number(investment.loanDuration) * 12);
+  const monthlyInsurance = (safeAmount(investment.loanAmount) * safeRate(investment.insuranceRate) / 100) / (safeNumber(investment.loanDuration, 20, 1, 50) * 12);
   const totalMonthlyPayment = monthlyPayment + monthlyInsurance;
 
   // Calculate adjusted rent based on annual increase
@@ -297,8 +298,8 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
   const startDate = new Date(investment.startDate);
   const yearsSinceStart = Math.max(0, (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365));
   const adjustedMonthlyRent = calculateAdjustedRent(
-    Number(investment.monthlyRent),
-    Number(investment.annualRentIncrease || 0),
+    safeAmount(investment.monthlyRent),
+    safeRate(investment.annualRentIncrease),
     yearsSinceStart
   );
 
@@ -309,7 +310,8 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
   const annualCashFlow = monthlyCashFlow * 12;
 
   // ROI basé sur le cash flow annuel et l'apport personnel
-  const roi = (annualCashFlow / Number(investment.downPayment)) * 100;
+  const downPayment = safeAmount(investment.downPayment);
+  const roi = downPayment > 0 ? (annualCashFlow / downPayment) * 100 : 0;
 
   // Calcul des métriques de vente si une date de vente est spécifiée
   let saleMetrics = {};
@@ -317,11 +319,11 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
   let deferredInterest = 0;
   if (investment.saleDate) {
     const result = generateAmortizationSchedule(
-      Number(investment.loanAmount),
-      Number(investment.interestRate),
-      Number(investment.loanDuration),
+      safeAmount(investment.loanAmount),
+      safeRate(investment.interestRate),
+      safeNumber(investment.loanDuration, 20, 1, 50),
       investment.deferralType,
-      Number(investment.deferredPeriod),
+      safeNumber(investment.deferredPeriod, 0, 0),
       investment.startDate
     );
 
@@ -373,8 +375,8 @@ export function calculateTotalNu(
   tenantCharges: number,
   vacancyRate: number = 0
 ): number {
-  const total = Number(rent || 0) + Number(taxBenefit || 0) + Number(tenantCharges || 0);
-  return total * (1 - (Number(vacancyRate || 0) / 100));
+  const total = safeAmount(rent) + safeAmount(taxBenefit) + safeAmount(tenantCharges);
+  return toFixed(total * (1 - (safePercentage(vacancyRate) / 100)));
 }
 
 /**
@@ -389,8 +391,8 @@ export function calculateTotalMeuble(
   tenantCharges: number,
   vacancyRate: number = 0
 ): number {
-  const total = Number(furnishedRent || 0) + Number(tenantCharges || 0);
-  return total * (1 - (Number(vacancyRate || 0) / 100));
+  const total = safeAmount(furnishedRent) + safeAmount(tenantCharges);
+  return toFixed(total * (1 - (safePercentage(vacancyRate) / 100)));
 }
 
 /**
