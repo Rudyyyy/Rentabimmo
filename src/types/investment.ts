@@ -62,6 +62,7 @@ export interface ExpenseProjection {
   furnishedRentIncrease: number;
   tenantChargesIncrease: number;
   taxBenefitIncrease: number;
+  vacancyRate: number; // Pourcentage de vacance locative
   baseYear: {
     propertyTax: number;
     condoFees: number;
@@ -266,6 +267,7 @@ export const defaultExpenseProjection: ExpenseProjection = {
   furnishedRentIncrease: 2,
   tenantChargesIncrease: 2,
   taxBenefitIncrease: 1,
+  vacancyRate: 0, // Pourcentage de vacance locative par défaut
   baseYear: {
     propertyTax: 0,
     condoFees: 0,

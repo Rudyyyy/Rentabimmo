@@ -7,7 +7,7 @@
 
 import { Investment, TaxRegime } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
-import { generateAmortizationSchedule } from '../utils/calculations';
+import { generateAmortizationSchedule, calculateRevenuesWithVacancy } from '../utils/calculations';
 
 interface Props {
   investment: Investment;
@@ -199,15 +199,12 @@ export default function ObjectiveDetailsDisplay({ investment, objectiveType, obj
       const yearExpense = investment.expenses?.find((e: any) => e.year === yr);
       if (!yearExpense) return;
 
-      // Calcul des revenus selon le régime
-      const rent = Number(yearExpense.rent || 0);
-      const furnishedRent = Number(yearExpense.furnishedRent || 0);
-      const tenantCharges = Number(yearExpense.tenantCharges || 0);
-      const taxBenefit = Number(yearExpense.taxBenefit || 0);
-      
-      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-        ? furnishedRent + tenantCharges
-        : rent + taxBenefit + tenantCharges;
+      // Calcul des revenus selon le régime avec vacance locative
+      const revenues = calculateRevenuesWithVacancy(
+        yearExpense,
+        regime,
+        investment.expenseProjection?.vacancyRate || 0
+      );
 
       // Total des dépenses
       const expenses = 

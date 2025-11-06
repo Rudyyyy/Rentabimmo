@@ -68,7 +68,8 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
     rent: "Loyer nu mensuel × 12",
     furnishedRent: "Loyer meublé mensuel × 12",
     taxBenefit: "Aides fiscales (Pinel, Censi-Bouvard, etc.)",
-    tenantCharges: "Charges récupérables sur le locataire"
+    tenantCharges: "Charges récupérables sur le locataire",
+    vacancyRate: "Pourcentage de vacance locative du bien"
   };
 
   // Fonction pour calculer les valeurs projetées
@@ -1230,6 +1231,32 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
               type="number"
               value={investment.expenseProjection.baseYear.tenantCharges || ''}
               onChange={(e) => handleBaseYearChange('tenantCharges', Number(e.target.value))}
+              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+            />
+          </div>
+
+          {/* Pourcentage de vacance locative */}
+          <div className="relative group flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-gray-700 flex items-center flex-shrink-0">
+              Vacance locative (%)
+              <HelpCircle 
+                className="ml-1 h-4 w-4 text-gray-400 cursor-help" 
+                onMouseEnter={() => setHoveredField('vacancyRate')}
+                onMouseLeave={() => setHoveredField(null)}
+              />
+            </label>
+            {hoveredField === 'vacancyRate' && (
+              <div className="absolute left-0 top-8 z-10 bg-gray-900 text-white text-xs rounded-lg p-2 w-64">
+                Pourcentage de vacance locative du bien. Ce pourcentage sera appliqué aux totaux nu et meublé pour calculer les revenus réels.
+              </div>
+            )}
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              value={investment.expenseProjection.vacancyRate || ''}
+              onChange={(e) => handleProjectionChange('vacancyRate', Number(e.target.value))}
               className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
             />
           </div>

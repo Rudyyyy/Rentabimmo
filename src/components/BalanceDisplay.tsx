@@ -23,7 +23,7 @@
 import React, { useState, useEffect } from 'react';
 import { Investment, TaxRegime, TaxResults, CapitalGainResults } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
-import { generateAmortizationSchedule } from '../utils/calculations';
+import { generateAmortizationSchedule, calculateRevenuesWithVacancy } from '../utils/calculations';
 import { Line } from 'react-chartjs-2';
 import { Chart as ReactChart } from 'react-chartjs-2';
 import {
@@ -255,15 +255,12 @@ const BalanceDisplay: React.FC<Props> = ({ investment, currentSubTab }) => {
         let annualCashFlowBeforeTax = 0;
         let annualCashFlowNet = 0;
         if (yearExpense) {
-          // Calcul des revenus selon le régime (identique à CashFlowDisplay)
-          const rent = Number(yearExpense.rent || 0);
-          const furnishedRent = Number(yearExpense.furnishedRent || 0);
-          const tenantCharges = Number(yearExpense.tenantCharges || 0);
-          const taxBenefit = Number(yearExpense.taxBenefit || 0);
-          
-          const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-            ? furnishedRent + tenantCharges // Total meublé
-            : rent + taxBenefit + tenantCharges; // Total nu
+          // Calcul des revenus selon le régime avec vacance locative
+          const revenues = calculateRevenuesWithVacancy(
+            yearExpense,
+            regime,
+            investment.expenseProjection?.vacancyRate || 0
+          );
 
           // Total des dépenses (identique à CashFlowDisplay)
           const expenses = 

@@ -19,7 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Database } from '../types/supabase';
 import { Investment, TaxRegime } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
-import { generateAmortizationSchedule } from '../utils/calculations';
+import { generateAmortizationSchedule, calculateRevenuesWithVacancy } from '../utils/calculations';
 import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
 import TotalGainGoal from '../components/TotalGainGoal';
@@ -585,14 +585,12 @@ export default function Dashboard() {
       const yearExpense = investment.expenses?.find(e => e.year === yr);
       if (!yearExpense) continue;
       
-      const rent = Number(yearExpense.rent || 0);
-      const furnishedRent = Number(yearExpense.furnishedRent || 0);
-      const tenantCharges = Number(yearExpense.tenantCharges || 0);
-      const taxBenefit = Number(yearExpense.taxBenefit || 0);
-      
-      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-        ? furnishedRent + tenantCharges
-        : rent + taxBenefit + tenantCharges;
+      // Calcul des revenus selon le régime avec vacance locative
+      const revenues = calculateRevenuesWithVacancy(
+        yearExpense,
+        regime,
+        investment.expenseProjection?.vacancyRate || 0
+      );
       
       const expenses = 
         Number(yearExpense.propertyTax || 0) +
@@ -713,14 +711,12 @@ export default function Dashboard() {
       const yearExpense = investment.expenses?.find(e => e.year === yr);
       if (!yearExpense) continue;
       
-      const rent = Number(yearExpense.rent || 0);
-      const furnishedRent = Number(yearExpense.furnishedRent || 0);
-      const tenantCharges = Number(yearExpense.tenantCharges || 0);
-      const taxBenefit = Number(yearExpense.taxBenefit || 0);
-      
-      const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-        ? furnishedRent + tenantCharges
-        : rent + taxBenefit + tenantCharges;
+      // Calcul des revenus selon le régime avec vacance locative
+      const revenues = calculateRevenuesWithVacancy(
+        yearExpense,
+        regime,
+        investment.expenseProjection?.vacancyRate || 0
+      );
       
       const expenses = 
         Number(yearExpense.propertyTax || 0) +
@@ -789,15 +785,12 @@ export default function Dashboard() {
     const expense = investment.expenses?.find(e => e.year === year);
     if (!expense) return 0;
 
-    // Calcul des revenus selon le régime
-    const rent = Number(expense.rent || 0);
-    const furnishedRent = Number(expense.furnishedRent || 0);
-    const tenantCharges = Number(expense.tenantCharges || 0);
-    const taxBenefit = Number(expense.taxBenefit || 0);
-    
-    const revenues = (investment.selectedRegime === 'micro-bic' || investment.selectedRegime === 'reel-bic')
-      ? furnishedRent + tenantCharges // Total meublé
-      : rent + taxBenefit + tenantCharges; // Total nu
+    // Calcul des revenus selon le régime avec vacance locative
+    const revenues = calculateRevenuesWithVacancy(
+      expense,
+      investment.selectedRegime,
+      investment.expenseProjection?.vacancyRate || 0
+    );
 
     // Total des dépenses
     const expenses = 

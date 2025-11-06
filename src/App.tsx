@@ -7,7 +7,8 @@ import Dashboard from './pages/Dashboard';
 import PropertyForm from './components/PropertyForm';
 import { GlobalProfitability } from './pages/GlobalProfitability';
 import Analysis from './pages/Analysis';
-import InvestmentAssistant from './components/InvestmentAssistant';
+// TODO: V2 - Réactiver le chatbot
+// import InvestmentAssistant from './components/InvestmentAssistant';
 
 function App() {
   return (
@@ -59,8 +60,9 @@ function App() {
             <Route path="/" element={<Login />} />
           </Routes>
           
+          {/* TODO: V2 - Réactiver le chatbot */}
           {/* Assistant d'investissement disponible sur toutes les pages */}
-          <InvestmentAssistant />
+          {/* <InvestmentAssistant /> */}
         </InvestmentProvider>
       </AuthProvider>
     </Router>

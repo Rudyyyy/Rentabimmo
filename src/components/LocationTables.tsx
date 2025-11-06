@@ -13,7 +13,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { Investment, YearlyExpenses } from '../types/investment';
-import { generateAmortizationSchedule } from '../utils/calculations';
+import { generateAmortizationSchedule, calculateTotalNu, calculateTotalMeuble } from '../utils/calculations';
 
 interface Props {
   investment: Investment;
@@ -543,10 +543,22 @@ export default function LocationTables({ investment, currentSubTab, onUpdate, al
             )}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(adjustForCoverage((yearExpense.rent || 0) + (yearExpense.tenantCharges || 0) + (yearExpense.taxBenefit || 0), year))}
+            {(investment.expenseProjection.vacancyRate || 0).toFixed(1)}%
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(adjustForCoverage((yearExpense.furnishedRent || 0) + (yearExpense.tenantCharges || 0), year))}
+            {formatCurrency(adjustForCoverage(calculateTotalNu(
+              yearExpense.rent || 0,
+              yearExpense.taxBenefit || 0,
+              yearExpense.tenantCharges || 0,
+              investment.expenseProjection.vacancyRate || 0
+            ), year))}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatCurrency(adjustForCoverage(calculateTotalMeuble(
+              yearExpense.furnishedRent || 0,
+              yearExpense.tenantCharges || 0,
+              investment.expenseProjection.vacancyRate || 0
+            ), year))}
           </td>
         </tr>
       );
@@ -592,10 +604,22 @@ export default function LocationTables({ investment, currentSubTab, onUpdate, al
             </td>
           )}
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(adjustForCoverage((yearExpense.rent || 0) + (yearExpense.tenantCharges || 0) + (yearExpense.taxBenefit || 0), year))}
+            {(investment.expenseProjection.vacancyRate || 0).toFixed(1)}%
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {formatCurrency(adjustForCoverage((yearExpense.furnishedRent || 0) + (yearExpense.tenantCharges || 0), year))}
+            {formatCurrency(adjustForCoverage(calculateTotalNu(
+              yearExpense.rent || 0,
+              yearExpense.taxBenefit || 0,
+              yearExpense.tenantCharges || 0,
+              investment.expenseProjection.vacancyRate || 0
+            ), year))}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {formatCurrency(adjustForCoverage(calculateTotalMeuble(
+              yearExpense.furnishedRent || 0,
+              yearExpense.tenantCharges || 0,
+              investment.expenseProjection.vacancyRate || 0
+            ), year))}
           </td>
         </tr>
       );
@@ -757,6 +781,9 @@ export default function LocationTables({ investment, currentSubTab, onUpdate, al
                 Charges locataire
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Vacance locative (%)
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Total nu
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -801,6 +828,9 @@ export default function LocationTables({ investment, currentSubTab, onUpdate, al
                   Charges locataire
                 </th>
               )}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Vacance locative (%)
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Total nu
               </th>

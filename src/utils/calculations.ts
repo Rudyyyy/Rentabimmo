@@ -1,4 +1,4 @@
-import { Investment, FinancialMetrics, AmortizationRow, DeferralType } from '../types/investment';
+import { Investment, FinancialMetrics, AmortizationRow, DeferralType, YearlyExpenses } from '../types/investment';
 
 export function calculateMonthlyPayment(
   loanAmount: number,
@@ -357,4 +357,66 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
     deferredInterest,
     ...saleMetrics
   };
+}
+
+/**
+ * Calcule le total nu (location nue) en tenant compte de la vacance locative
+ * @param rent Loyer nu
+ * @param taxBenefit Aide fiscale
+ * @param tenantCharges Charges locataires
+ * @param vacancyRate Pourcentage de vacance locative
+ * @returns Total nu avec vacance appliquée
+ */
+export function calculateTotalNu(
+  rent: number,
+  taxBenefit: number,
+  tenantCharges: number,
+  vacancyRate: number = 0
+): number {
+  const total = Number(rent || 0) + Number(taxBenefit || 0) + Number(tenantCharges || 0);
+  return total * (1 - (Number(vacancyRate || 0) / 100));
+}
+
+/**
+ * Calcule le total meublé (location meublée) en tenant compte de la vacance locative
+ * @param furnishedRent Loyer meublé
+ * @param tenantCharges Charges locataires
+ * @param vacancyRate Pourcentage de vacance locative
+ * @returns Total meublé avec vacance appliquée
+ */
+export function calculateTotalMeuble(
+  furnishedRent: number,
+  tenantCharges: number,
+  vacancyRate: number = 0
+): number {
+  const total = Number(furnishedRent || 0) + Number(tenantCharges || 0);
+  return total * (1 - (Number(vacancyRate || 0) / 100));
+}
+
+/**
+ * Calcule les revenus selon le régime fiscal en tenant compte de la vacance locative
+ * @param yearExpense Dépenses annuelles
+ * @param regime Régime fiscal
+ * @param vacancyRate Pourcentage de vacance locative
+ * @returns Revenus calculés avec vacance
+ */
+export function calculateRevenuesWithVacancy(
+  yearExpense: YearlyExpenses,
+  regime: 'micro-foncier' | 'reel-foncier' | 'micro-bic' | 'reel-bic',
+  vacancyRate: number = 0
+): number {
+  if (regime === 'micro-bic' || regime === 'reel-bic') {
+    return calculateTotalMeuble(
+      yearExpense.furnishedRent || 0,
+      yearExpense.tenantCharges || 0,
+      vacancyRate
+    );
+  } else {
+    return calculateTotalNu(
+      yearExpense.rent || 0,
+      yearExpense.taxBenefit || 0,
+      yearExpense.tenantCharges || 0,
+      vacancyRate
+    );
+  }
 }

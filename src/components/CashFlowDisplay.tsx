@@ -22,6 +22,7 @@ import { useState, useEffect } from 'react';
 import { Investment, TaxResults } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
+import { calculateRevenuesWithVacancy } from '../utils/calculations';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -94,15 +95,12 @@ export default function CashFlowDisplay({ investment }: Props) {
         const yearExpense = investment.expenses.find(e => e.year === year);
         if (!yearExpense) return 0;
 
-        // Calcul des revenus selon le régime
-        const rent = Number(yearExpense.rent || 0);
-        const furnishedRent = Number(yearExpense.furnishedRent || 0);
-        const tenantCharges = Number(yearExpense.tenantCharges || 0);
-        const taxBenefit = Number(yearExpense.taxBenefit || 0);
-        
-        const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-          ? furnishedRent + tenantCharges // Total meublé
-          : rent + taxBenefit + tenantCharges; // Total nu
+        // Calcul des revenus selon le régime avec vacance locative
+        const revenues = calculateRevenuesWithVacancy(
+          yearExpense,
+          regime,
+          investment.expenseProjection.vacancyRate || 0
+        );
 
         // Total des dépenses
         const expenses = 
@@ -231,15 +229,12 @@ export default function CashFlowDisplay({ investment }: Props) {
               const yearExpense = investment.expenses.find(e => e.year === year);
               if (!yearExpense) return null;
 
-              // Calcul des revenus selon le régime
-              const rent = Number(yearExpense.rent || 0);
-              const furnishedRent = Number(yearExpense.furnishedRent || 0);
-              const tenantCharges = Number(yearExpense.tenantCharges || 0);
-              const taxBenefit = Number(yearExpense.taxBenefit || 0);
-              
-              const revenues = (regime === 'micro-bic' || regime === 'reel-bic')
-                ? furnishedRent + tenantCharges // Total meublé
-                : rent + taxBenefit + tenantCharges; // Total nu
+              // Calcul des revenus selon le régime avec vacance locative
+              const revenues = calculateRevenuesWithVacancy(
+                yearExpense,
+                regime,
+                investment.expenseProjection.vacancyRate || 0
+              );
 
               // Total des dépenses
               const expenses = 

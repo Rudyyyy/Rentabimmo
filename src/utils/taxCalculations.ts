@@ -1,4 +1,5 @@
 import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
+import { calculateTotalNu, calculateTotalMeuble } from './calculations';
 
 const TAX_CONSTANTS = {
   MICRO_FONCIER_ALLOWANCE: 0.3, // 30% d'abattement
@@ -34,18 +35,24 @@ function calculateAnnualRevenue(investment: Investment, year: number, regime?: T
   const yearExpenses = investment.expenses.find(e => e.year === year);
   if (!yearExpenses) return 0;
 
-  // Pour les régimes de location nue (micro-foncier et réel-foncier), on utilise uniquement le loyer nu
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+
+  // Pour les régimes de location nue (micro-foncier et réel-foncier), on utilise uniquement le loyer nu avec vacance
   if (regime === 'micro-foncier' || regime === 'reel-foncier') {
-    return Number(yearExpenses.rent || 0);
+    const rent = Number(yearExpenses.rent || 0);
+    return rent * (1 - vacancyRate / 100);
   }
   
-  // Pour les régimes de location meublée (micro-bic et réel-bic), on utilise uniquement le loyer meublé
+  // Pour les régimes de location meublée (micro-bic et réel-bic), on utilise uniquement le loyer meublé avec vacance
   if (regime === 'micro-bic' || regime === 'reel-bic') {
-    return Number(yearExpenses.furnishedRent || 0);
+    const furnishedRent = Number(yearExpenses.furnishedRent || 0);
+    return furnishedRent * (1 - vacancyRate / 100);
   }
 
-  // Si aucun régime n'est spécifié, on utilise la somme des deux
-  return Number(yearExpenses.rent || 0) + Number(yearExpenses.furnishedRent || 0);
+  // Si aucun régime n'est spécifié, on utilise la somme des deux avec vacance
+  const rent = Number(yearExpenses.rent || 0);
+  const furnishedRent = Number(yearExpenses.furnishedRent || 0);
+  return (rent + furnishedRent) * (1 - vacancyRate / 100);
 }
 
 function calculateMicroFoncier(
@@ -58,11 +65,15 @@ function calculateMicroFoncier(
   const tax = taxableIncome * (investment.taxParameters.taxRate / 100);
   const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
 
-  // Calcul du revenu net
-  const netIncome = annualRevenue + 
-                   Number(yearExpenses.tenantCharges || 0) + 
-                   Number(yearExpenses.taxBenefit || 0) - 
-                   (tax + socialCharges);
+  // Calcul du revenu net avec vacance locative (utilise le total nu avec vacance)
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  const totalNuWithVacancy = calculateTotalNu(
+    Number(yearExpenses.rent || 0),
+    Number(yearExpenses.taxBenefit || 0),
+    Number(yearExpenses.tenantCharges || 0),
+    vacancyRate
+  );
+  const netIncome = totalNuWithVacancy - (tax + socialCharges);
 
   return {
     regime: 'micro-foncier',
@@ -102,12 +113,15 @@ function calculateReelFoncier(
   const socialCharges = Math.max(0, taxableIncome * (investment.taxParameters.socialChargesRate / 100));
   const totalTax = tax + socialCharges;
 
-  // Calcul du revenu net
-  // Formule : Loyer nu + charges locataires + aide fiscale - impôts totaux
-  const netIncome = annualRevenue + 
-                   Number(yearExpenses.tenantCharges || 0) + 
-                   Number(yearExpenses.taxBenefit || 0) - 
-                   totalTax;
+  // Calcul du revenu net avec vacance locative (utilise le total nu avec vacance)
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  const totalNuWithVacancy = calculateTotalNu(
+    Number(yearExpenses.rent || 0),
+    Number(yearExpenses.taxBenefit || 0),
+    Number(yearExpenses.tenantCharges || 0),
+    vacancyRate
+  );
+  const netIncome = totalNuWithVacancy - totalTax;
                    
     // Vérification des valeurs d'imposition
   if (tax === 0 && socialCharges === 0 && totalTax === 0 && taxableIncome > 0) {
@@ -143,10 +157,14 @@ function calculateMicroBIC(
   const tax = taxableIncome * (investment.taxParameters.taxRate / 100);
   const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
 
-  // Calcul du revenu net
-  const netIncome = annualRevenue + 
-                   Number(yearExpenses.tenantCharges || 0) - 
-                   (tax + socialCharges);
+  // Calcul du revenu net avec vacance locative (utilise le total meublé avec vacance)
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  const totalMeubleWithVacancy = calculateTotalMeuble(
+    Number(yearExpenses.furnishedRent || 0),
+    Number(yearExpenses.tenantCharges || 0),
+    vacancyRate
+  );
+  const netIncome = totalMeubleWithVacancy - (tax + socialCharges);
 
   return {
     regime: 'micro-bic',
@@ -166,8 +184,10 @@ function calculateReelBIC(investment: Investment, year: number): TaxResults {
     throw new Error(`No expenses found for year ${year}`);
   }
 
-  // Calcul des revenus bruts
-  const grossIncome = yearExpenses.furnishedRent || 0;
+  // Calcul des revenus bruts avec vacance locative
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  const furnishedRent = Number(yearExpenses.furnishedRent || 0);
+  const grossIncome = furnishedRent * (1 - vacancyRate / 100);
   const tenantCharges = yearExpenses.tenantCharges || 0;
 
   // Calcul des charges déductibles
@@ -242,8 +262,13 @@ function calculateReelBIC(investment: Investment, year: number): TaxResults {
   const socialCharges = Math.max(0, taxableIncome * (investment.taxParameters.socialChargesRate / 100));
   const totalTax = tax + socialCharges;
 
-  // Calcul du revenu net selon la formule : loyer meublé + charges locataires - total impôt
-  const netIncome = grossIncome + tenantCharges - totalTax;
+  // Calcul du revenu net avec vacance locative (utilise le total meublé avec vacance)
+  const totalMeubleWithVacancy = calculateTotalMeuble(
+    furnishedRent,
+    Number(tenantCharges || 0),
+    vacancyRate
+  );
+  const netIncome = totalMeubleWithVacancy - totalTax;
 
   return {
     regime: 'reel-bic',
@@ -420,20 +445,25 @@ export function calculateGrossYield(
   regime: TaxRegime,
   yearExpenses: YearlyExpenses
 ): number {
-  // Calculer le revenu annuel selon le régime
-  const annualRevenue = calculateAnnualRevenue(investment, year, regime);
+  // Calculer le total des revenus avec vacance locative
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  let totalRevenue: number;
   
-  // Calculer le total des revenus (incluant les charges locataires et l'aide fiscale)
-  let totalRevenue = annualRevenue;
-  
-  // Pour les régimes de location nue, on ajoute les charges locataires et l'aide fiscale
+  // Pour les régimes de location nue, on utilise le total nu avec vacance
   if (regime === 'micro-foncier' || regime === 'reel-foncier') {
-    totalRevenue += Number(yearExpenses.tenantCharges || 0) + Number(yearExpenses.taxBenefit || 0);
-  }
-  
-  // Pour les régimes LMNP, on ajoute uniquement les charges locataires
-  if (regime === 'micro-bic' || regime === 'reel-bic') {
-    totalRevenue += Number(yearExpenses.tenantCharges || 0);
+    totalRevenue = calculateTotalNu(
+      Number(yearExpenses.rent || 0),
+      Number(yearExpenses.taxBenefit || 0),
+      Number(yearExpenses.tenantCharges || 0),
+      vacancyRate
+    );
+  } else {
+    // Pour les régimes LMNP, on utilise le total meublé avec vacance
+    totalRevenue = calculateTotalMeuble(
+      Number(yearExpenses.furnishedRent || 0),
+      Number(yearExpenses.tenantCharges || 0),
+      vacancyRate
+    );
   }
 
   // Calculer le total de l'investissement initial
