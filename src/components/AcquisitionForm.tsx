@@ -408,8 +408,10 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             {/* Nouveau bouton pour importer un PDF */}
             <button
               type="button"
+              disabled
               onClick={() => setShowPdfImporter(!showPdfImporter)}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed opacity-60 focus:outline-none"
+              title="Cette fonctionnalité sera disponible prochainement"
             >
               {showPdfImporter ? 'Cacher' : 'Importer un PDF'}
             </button>
