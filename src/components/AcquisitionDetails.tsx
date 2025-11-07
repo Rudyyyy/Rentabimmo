@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { Investment } from '../types/investment';
 import { HelpCircle, CreditCard } from 'lucide-react';
-import { calculateMonthlyPayment } from '../utils/calculations';
+import { calculateMonthlyPayment, generateAmortizationSchedule } from '../utils/calculations';
 
 interface Props {
   investment: Investment;
@@ -50,12 +50,11 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
       return;
     }
     
-    // Gestion des valeurs numériques
+    const parsedValue = typeof value === 'string' ? (value === '' ? 0 : Number(value)) : value;
+
     if (typeof value === 'string') {
-      const numericValue = value === '' ? 0 : Number(value);
-      onUpdate(field, numericValue);
+      onUpdate(field, parsedValue);
     } else {
-      // Gestion des booléens et autres types
       onUpdate(field, value);
     }
   };
@@ -86,6 +85,65 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
     mandatoryDiagnostics: "Généralement inclus dans le prix de vente annoncé car il est la plupart du temps à la charge du vendeur. Laisser à 0 si c'est bien le cas.",
     insuranceRate: "Assurance emprunteur (entre 0,1 % et 0,5 % du montant emprunté par an)"
   };
+
+  const monthlyPayment =
+    investment?.loanAmount && investment?.interestRate && investment?.loanDuration
+      ? calculateMonthlyPayment(
+          investment.loanAmount,
+          investment.interestRate,
+          investment.loanDuration,
+          investment.deferralType || 'none',
+          Number(investment.deferredPeriod || 0)
+        )
+      : 0;
+
+  const monthlyInsurance =
+    investment?.loanAmount && investment?.insuranceRate
+      ? (investment.loanAmount * (investment.insuranceRate / 100)) / 12
+      : 0;
+
+  const totalMonthlyPayment = monthlyPayment + monthlyInsurance;
+
+  const amortizationData =
+    investment?.loanAmount && investment?.interestRate && investment?.loanDuration
+      ? generateAmortizationSchedule(
+          investment.loanAmount,
+          investment.interestRate,
+          investment.loanDuration,
+          investment.deferralType || 'none',
+          Number(investment.deferredPeriod || 0),
+          investment.startDate || new Date().toISOString().split('T')[0]
+        )
+      : { schedule: [], deferredInterest: 0 };
+
+  const firstNonDeferredRow = amortizationData.schedule.find(row => !row.isDeferred);
+  const monthlyInterestPortion = firstNonDeferredRow
+    ? firstNonDeferredRow.interest
+    : investment?.loanAmount && investment?.interestRate
+    ? (investment.loanAmount * investment.interestRate) / 12 / 100
+    : 0;
+
+  const downPayment = Number(investment?.downPayment || 0);
+  const loanAmount = Number(investment?.loanAmount || 0);
+  const financingTotal = downPayment + loanAmount;
+  const financingDifference = totalInvestmentCost - financingTotal;
+  const hasFinancingMismatch = Math.abs(financingDifference) > 1;
+
+  const baseInputClasses = 'flex-1 px-3 py-1.5 text-sm border rounded-md focus:ring-2 text-right';
+  const normalInputClasses = 'border-gray-300 focus:ring-blue-500 focus:border-blue-500';
+  const errorInputClasses = 'border-red-500 focus:ring-red-500 focus:border-red-500';
+
+  useEffect(() => {
+    const expectedLoanAmount = Math.max(totalInvestmentCost - downPayment, 0);
+    if (Math.abs(loanAmount - expectedLoanAmount) > 1) {
+      onUpdate('loanAmount', expectedLoanAmount);
+    }
+  }, [
+    totalInvestmentCost,
+    downPayment,
+    loanAmount,
+    onUpdate
+  ]);
 
   console.log('AcquisitionDetails render - hasDeferral:', hasDeferral, 'localHasDeferral:', localHasDeferral, 'investment.hasDeferral:', investment?.hasDeferral);
   
@@ -334,9 +392,14 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
               type="number"
               value={investment?.downPayment || ''}
               onChange={(e) => handleInputChange('downPayment', e.target.value)}
-              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+              className={`${baseInputClasses} ${hasFinancingMismatch ? errorInputClasses : normalInputClasses}`}
             />
           </div>
+          {hasFinancingMismatch && (
+            <p className="text-xs text-red-600 mt-1 text-right">
+              Écart de {formatCurrency(financingDifference)} avec le coût total de l'opération.
+            </p>
+          )}
 
           {/* Somme empruntée */}
           <div className="flex items-center justify-between gap-3">
@@ -347,9 +410,14 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
               type="number"
               value={investment?.loanAmount || ''}
               onChange={(e) => handleInputChange('loanAmount', e.target.value)}
-              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+              className={`${baseInputClasses} ${hasFinancingMismatch ? errorInputClasses : normalInputClasses}`}
             />
           </div>
+          {hasFinancingMismatch && (
+            <p className="text-xs text-red-600 mt-1 text-right">
+              Écart de {formatCurrency(financingDifference)} avec le coût total de l'opération.
+            </p>
+          )}
 
           {/* Durée */}
           <div className="flex items-center justify-between gap-3">
@@ -406,20 +474,25 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
         {/* Informations calculées */}
         <div className="space-y-2 pt-2">
           <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-blue-700 font-medium">Mensualité du crédit</p>
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm text-blue-700 font-medium">
+                  Mensualité totale du crédit
+                  {investment?.deferralType === 'total' && investment?.deferredPeriod && Number(investment.deferredPeriod) > 0 && (
+                    <span className="block text-xs text-blue-600">(après différé total)</span>
+                  )}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  dont intérêts : {formatCurrency(monthlyInterestPortion)}
+                  {monthlyInsurance > 0 && (
+                    <>
+                      {' '}| assurance : {formatCurrency(monthlyInsurance)}
+                    </>
+                  )}
+                </p>
+              </div>
               <p className="text-lg font-bold text-blue-900">
-                {formatCurrency(
-                  investment?.loanAmount && investment?.interestRate && investment?.loanDuration
-                    ? calculateMonthlyPayment(
-                        investment.loanAmount,
-                        investment.interestRate,
-                        investment.loanDuration,
-                        investment.deferralType || 'none',
-                        Number(investment.deferredPeriod || 0)
-                      )
-                    : 0
-                )}
+                {formatCurrency(totalMonthlyPayment)}
               </p>
             </div>
           </div>
@@ -428,7 +501,7 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
             <div className="flex justify-between items-center">
               <p className="text-sm text-blue-700 font-medium">Intérêts différés</p>
               <p className="text-lg font-bold text-blue-900">
-                {formatCurrency(investment?.deferredInterest || 0)}
+                {formatCurrency(amortizationData.deferredInterest || 0)}
               </p>
             </div>
           </div>

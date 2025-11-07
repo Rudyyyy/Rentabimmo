@@ -122,11 +122,10 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
         (Math.pow(1 + interestRate / 1200, loanDuration * 12) - 1)
       : 0;
 
-    const totalInsuranceCost = loanAmount && insuranceRate && loanDuration
-      ? (loanAmount * (insuranceRate / 100) * loanDuration)
+    // Assurance mensuelle : taux annuel appliqué mensuellement
+    const monthlyInsurance = loanAmount && insuranceRate
+      ? (loanAmount * (insuranceRate / 100)) / 12
       : 0;
-
-    const monthlyInsurance = totalInsuranceCost / (loanDuration * 12) || 0;
 
     const annualCosts = 
       Number(propertyTax) +
@@ -168,6 +167,14 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
     monthlyCosts,
     amortizationSchedule
   } = calculations();
+
+  const financingTotal = Number(values.downPayment || 0) + Number(values.loanAmount || 0);
+  const financingDifference = totalInvestmentCost - financingTotal;
+  const hasFinancingMismatch = Math.abs(financingDifference) > 1;
+
+  const financingInputClasses = hasFinancingMismatch
+    ? 'mt-1 block w-full rounded-md border-red-500 shadow-sm focus:border-red-500 focus:ring-red-500'
+    : 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
   // Trigger calculations when form values change with debounce
   useEffect(() => {
@@ -495,7 +502,7 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
             <input
               type="number"
               {...register('downPayment')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className={financingInputClasses}
             />
           </div>
           <div>
@@ -505,9 +512,16 @@ export default function InvestmentForm({ onSubmit, initialValues }: Props) {
             <input
               type="number"
               {...register('loanAmount')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className={financingInputClasses}
             />
           </div>
+          {hasFinancingMismatch && (
+            <div className="md:col-span-3">
+              <p className="text-xs text-red-600">
+                Écart de {formatCurrency(financingDifference)} entre financement et coût total de l'opération.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Durée du prêt (années)

@@ -111,3 +111,4 @@ export const logger = new Logger();
 // Export des méthodes pour utilisation directe
 export const { debug, info, warn, error, group, table } = logger;
 
+

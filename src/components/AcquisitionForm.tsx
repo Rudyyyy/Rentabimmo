@@ -19,7 +19,7 @@
  * - Les frais d'assurance selon le type de prêt
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Investment, defaultInvestment, AmortizationRow } from '../types/investment';
 import { generateAmortizationSchedule, calculateMonthlyPayment } from '../utils/calculations';
 import AmortizationTable from './AmortizationTable';
@@ -91,10 +91,11 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
       setLoanAmountWarning(false);
     }
 
-    // Check loan amount consistency
+    // Auto-calculate downPayment when loanAmount changes
     if (field === 'loanAmount') {
-      const expectedLoanAmount = totalCost - Number(updatedInvestment.downPayment || 0);
-      setLoanAmountWarning(Number(value) !== expectedLoanAmount);
+      const calculatedDownPayment = totalCost - Number(value);
+      updatedInvestment.downPayment = calculatedDownPayment;
+      setLoanAmountWarning(false);
     }
 
     // Recalculate deferredInterest when relevant fields change
@@ -108,6 +109,22 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
         updatedInvestment.startDate
       );
       updatedInvestment.deferredInterest = deferredInterest;
+    }
+
+    const costFields: (keyof Investment)[] = [
+      'purchasePrice',
+      'agencyFees',
+      'notaryFees',
+      'bankFees',
+      'bankGuaranteeFees',
+      'mandatoryDiagnostics',
+      'renovationCosts'
+    ];
+
+    if (costFields.includes(field)) {
+      const recalculatedLoan = totalCost - Number(updatedInvestment.downPayment || 0);
+      updatedInvestment.loanAmount = Math.max(recalculatedLoan, 0);
+      setLoanAmountWarning(false);
     }
 
     updatedInvestment.startDate = updatedInvestment.startDate ?? new Date().toISOString().split('T')[0];
@@ -147,44 +164,75 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
     manualAmortizationSchedule
   ]);
 
+  // Calcul de l'assurance mensuelle (taux annuel appliqué mensuellement)
+  const monthlyInsurance = initialValues?.loanAmount && initialValues?.insuranceRate
+    ? (initialValues.loanAmount * (initialValues.insuranceRate / 100)) / 12
+    : 0;
+
+  const baseMonthlyPayment = initialValues?.loanAmount && initialValues?.interestRate && initialValues?.loanDuration
+    ? calculateMonthlyPayment(
+        initialValues.loanAmount,
+        initialValues.interestRate,
+        initialValues.loanDuration,
+        initialValues.deferralType || 'none',
+        Number(initialValues.deferredPeriod || 0)
+      )
+    : 0;
+
+  const totalMonthlyPayment = baseMonthlyPayment + monthlyInsurance;
+
+  const firstNonDeferredRow = amortizationResult.schedule.find(row => !row.isDeferred);
+  const monthlyInterestPortion = firstNonDeferredRow
+    ? firstNonDeferredRow.interest
+    : initialValues?.loanAmount && initialValues?.interestRate
+    ? (initialValues.loanAmount * initialValues.interestRate) / 12 / 100
+    : 0;
+
+  // Calcul des données agrégées par année
+  const yearlyData = amortizationResult.schedule.reduce((acc, row) => {
+    const year = new Date(row.date).getFullYear();
+    if (!acc[year]) {
+      acc[year] = { principal: 0, interest: 0, insurance: 0, deferredInterest: 0 };
+    }
+    acc[year].principal += row.principal;
+    // Pour le différé total, les intérêts ne sont pas payés mais s'accumulent
+    // Pour le différé partiel, les intérêts sont payés
+    if (row.isDeferred && initialValues?.deferralType === 'total') {
+      // Dans le différé total, les intérêts s'accumulent mais ne sont pas payés
+      acc[year].deferredInterest += row.interest;
+    } else {
+      // Dans le différé partiel ou après le différé, les intérêts sont payés
+      acc[year].interest += row.interest;
+    }
+    acc[year].insurance += monthlyInsurance;
+    return acc;
+  }, {} as Record<number, { principal: number; interest: number; insurance: number; deferredInterest: number }>);
+
   const chartData = {
-    labels: amortizationResult.schedule
-      .filter((_, index) => index % 12 === 0)
-      .map(row => {
-        const date = new Date(row.date);
-        return `${date.getFullYear()}`;
-      }),
+    labels: Object.keys(yearlyData).sort((a, b) => Number(a) - Number(b)),
     datasets: [
       {
         label: 'Capital',
-        data: Object.values(amortizationResult.schedule
-          .reduce((acc, row) => {
-            const year = new Date(row.date).getFullYear();
-            if (!acc[year]) {
-              acc[year] = { principal: 0, interest: 0 };
-            }
-            acc[year].principal += row.principal;
-            acc[year].interest += row.interest;
-            return acc;
-          }, {} as Record<number, { principal: number; interest: number }>))
-          .map(({ principal }) => principal),
+        data: Object.values(yearlyData).map(({ principal }) => principal),
         backgroundColor: '#87DCC0', // couleur pour Capital
         stack: 'Stack 0',
       },
       {
         label: 'Intérêts',
-        data: Object.values(amortizationResult.schedule
-          .reduce((acc, row) => {
-            const year = new Date(row.date).getFullYear();
-            if (!acc[year]) {
-              acc[year] = { principal: 0, interest: 0 };
-            }
-            acc[year].principal += row.principal;
-            acc[year].interest += row.interest;
-            return acc;
-          }, {} as Record<number, { principal: number; interest: number }>))
-          .map(({ interest }) => interest),
+        data: Object.values(yearlyData).map(({ interest }) => interest),
         backgroundColor: '#F7A1A1', // couleur pour Intérêts
+        stack: 'Stack 0',
+      },
+      {
+        label: 'Intérêts différés (non payés)',
+        data: Object.values(yearlyData).map(({ deferredInterest }) => deferredInterest),
+        backgroundColor: '#FBBF24', // couleur pour Intérêts différés (jaune)
+        stack: 'Stack 0',
+      },
+      {
+        label: 'Assurance',
+        data: Object.values(yearlyData).map(({ insurance }) => insurance),
+        backgroundColor: '#9CA3AF', // couleur pour Assurance
         stack: 'Stack 0',
       }
     ]
@@ -199,7 +247,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
       },
       title: {
         display: true,
-        text: 'Répartition capital / intérêts par année'
+        text: 'Répartition capital / intérêts / assurance par année'
       },
       tooltip: {
         callbacks: {
@@ -366,6 +414,34 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
     setShowAmortization(true);
   };
 
+  const financingTotal = Number(initialValues?.downPayment || 0) + Number(initialValues?.loanAmount || 0);
+  const financingDifference = totalInvestmentCost - financingTotal;
+  const hasFinancingMismatch = Math.abs(financingDifference) > 1;
+
+  const financingInputClasses = hasFinancingMismatch
+    ? 'mt-1 block w-full rounded-md border-red-500 shadow-sm focus:border-red-500 focus:ring-red-500'
+    : 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500';
+
+  useEffect(() => {
+    const downPaymentValue = Number(initialValues?.downPayment || 0);
+    const currentLoanAmount = Number(initialValues?.loanAmount || 0);
+    const expectedLoanAmount = Math.max(totalInvestmentCost - downPaymentValue, 0);
+
+    if (Math.abs(currentLoanAmount - expectedLoanAmount) > 1) {
+      const updatedInvestment: Investment = {
+        ...defaultInvestment,
+        ...initialValues,
+        loanAmount: expectedLoanAmount
+      };
+      onSubmit(updatedInvestment);
+    }
+  }, [
+    totalInvestmentCost,
+    initialValues?.downPayment,
+    initialValues?.loanAmount,
+    onSubmit
+  ]);
+
   return (
     <div className="space-y-6">
       {/* Informations de crédit et boutons */}
@@ -373,18 +449,21 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
         <h4 className="text-md font-semibold mb-4">Informations de crédit</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-            <p className="text-sm text-blue-700 font-medium">Mensualité du crédit</p>
+            <p className="text-sm text-blue-700 font-medium">
+              Mensualité totale du crédit
+              {initialValues?.deferralType === 'total' && initialValues?.deferredPeriod && Number(initialValues.deferredPeriod) > 0 && (
+                <span className="block text-xs text-blue-600 mt-1">(après différé total)</span>
+              )}
+            </p>
             <p className="text-lg font-bold text-blue-900">
-              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
-                initialValues?.loanAmount && initialValues?.interestRate && initialValues?.loanDuration
-                  ? calculateMonthlyPayment(
-                      initialValues.loanAmount,
-                      initialValues.interestRate,
-                      initialValues.loanDuration,
-                      initialValues.deferralType || 'none',
-                      Number(initialValues.deferredPeriod || 0)
-                    )
-                  : 0
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(totalMonthlyPayment)}
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              dont intérêts : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(monthlyInterestPortion)}
+              {monthlyInsurance > 0 && (
+                <>
+                  {' '}| assurance : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(monthlyInsurance)}
+                </>
               )}
             </p>
           </div>
@@ -392,7 +471,7 @@ function AcquisitionForm({ onSubmit, initialValues }: Props) {
             <p className="text-sm text-blue-700 font-medium">Intérêts différés</p>
             <p className="text-lg font-bold text-blue-900">
               {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
-                initialValues?.deferredInterest || 0
+                amortizationResult.deferredInterest || 0
               )}
             </p>
           </div>

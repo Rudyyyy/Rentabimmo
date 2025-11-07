@@ -313,3 +313,4 @@ Cette analyse se base sur une revue statique du code. Des tests en conditions r�
 4. Mettre en place un plan de refactoring progressif
 5. Établir des conventions de code pour éviter les régressions
 
+

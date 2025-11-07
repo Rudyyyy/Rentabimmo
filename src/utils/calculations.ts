@@ -33,11 +33,27 @@ export function calculateMonthlyPayment(
            (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   } else if (deferralType === 'total') {
     // Différé total : on ne paie rien pendant le différé
-    // La mensualité est calculée sur la durée totale moins le différé
+    // Les intérêts s'accumulent et sont ajoutés au capital
+    // On doit calculer le montant total dû après le différé (capital + intérêts différés)
+    
+    // Calcul des intérêts différés (intérêts composés sur la période de différé)
+    let deferredInterest = 0;
+    let currentAmount = amount;
+    for (let month = 1; month <= deferred; month++) {
+      const monthlyInterest = currentAmount * monthlyRate;
+      deferredInterest += monthlyInterest;
+      currentAmount += monthlyInterest; // Les intérêts s'ajoutent au capital
+    }
+    
+    // Le capital restant dû après le différé = capital initial + intérêts différés
+    const totalAmountAfterDeferral = amount + deferredInterest;
+    
+    // La mensualité est calculée sur le montant total dû après le différé
+    // sur la durée totale moins le différé
     const numberOfPayments = (duration * 12) - deferred;
     if (numberOfPayments <= 0) return 0;
     
-    return toFixed((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
+    return toFixed((totalAmountAfterDeferral * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
            (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   }
   
@@ -290,7 +306,8 @@ export function calculateFinancialMetrics(investment: Investment): FinancialMetr
     safeNumber(investment.deferredPeriod, 0, 0)
   );
 
-  const monthlyInsurance = (safeAmount(investment.loanAmount) * safeRate(investment.insuranceRate) / 100) / (safeNumber(investment.loanDuration, 20, 1, 50) * 12);
+  // Assurance mensuelle : taux annuel appliqué mensuellement
+  const monthlyInsurance = (safeAmount(investment.loanAmount) * safeRate(investment.insuranceRate) / 100) / 12;
   const totalMonthlyPayment = monthlyPayment + monthlyInsurance;
 
   // Calculate adjusted rent based on annual increase

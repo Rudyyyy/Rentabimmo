@@ -59,3 +59,4 @@ export function useIsValidInvestment(investment: Investment): boolean {
   }, [investment.purchasePrice, investment.loanDuration, investment.interestRate]);
 }
 
+
