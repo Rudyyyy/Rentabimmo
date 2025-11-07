@@ -8,25 +8,59 @@ const TAX_CONSTANTS = {
   MICRO_BIC_THRESHOLD: 72600, // Seuil du régime micro-BIC
 };
 
+/**
+ * Calcule la fraction de l'année couverte par le projet pour une année donnée
+ * Retourne 1 pour les années complètes, une fraction pour les années partielles
+ * @param investment - L'investissement
+ * @param year - L'année à calculer
+ * @returns Un nombre entre 0 et 1 représentant la couverture de l'année
+ */
+function getYearCoverage(investment: Investment, year: number): number {
+  const startOfYear = new Date(year, 0, 1);
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+  const projectStart = new Date(investment.projectStartDate);
+  const projectEnd = new Date(investment.projectEndDate);
+  const start = projectStart > startOfYear ? projectStart : startOfYear;
+  const end = projectEnd < endOfYear ? projectEnd : endOfYear;
+  if (end < start) return 0;
+  const msInDay = 1000 * 60 * 60 * 24;
+  const daysInYear = Math.round((new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / msInDay);
+  const coveredDays = Math.floor((end.getTime() - start.getTime()) / msInDay) + 1;
+  return Math.min(1, Math.max(0, coveredDays / daysInYear));
+}
+
+/**
+ * Ajuste une valeur annualisée en fonction de la couverture réelle de l'année
+ * @param value - La valeur annualisée
+ * @param coverage - La couverture de l'année (0 à 1)
+ * @returns La valeur ajustée
+ */
+function adjustForCoverage(value: number, coverage: number): number {
+  return Number((Number(value || 0) * coverage).toFixed(2));
+}
+
 function calculateDeductibleExpenses(investment: Investment, year: number): number {
   const yearExpenses = investment.expenses.find(e => e.year === year);
   if (!yearExpenses) return 0;
 
-  // Calcul du total des charges déductibles
+  // Obtenir la couverture de l'année pour les années partielles
+  const coverage = getYearCoverage(investment, year);
+
+  // Calcul du total des charges déductibles (valeurs annualisées ajustées pour la couverture)
   const totalDeductibleExpenses = (
-    Number(yearExpenses.propertyTax || 0) +
-    Number(yearExpenses.condoFees || 0) +
-    Number(yearExpenses.propertyInsurance || 0) +
-    Number(yearExpenses.managementFees || 0) +
-    Number(yearExpenses.unpaidRentInsurance || 0) +
-    Number(yearExpenses.repairs || 0) +
-    Number(yearExpenses.otherDeductible || 0) +
-    Number(yearExpenses.loanInsurance || 0) +
-    Number(yearExpenses.interest || 0)
+    adjustForCoverage(Number(yearExpenses.propertyTax || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.condoFees || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.propertyInsurance || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.managementFees || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.unpaidRentInsurance || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.repairs || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.otherDeductible || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.loanInsurance || 0), coverage) +
+    adjustForCoverage(Number(yearExpenses.interest || 0), coverage)
   );
 
-  // Soustraction des charges locataires
-  const tenantCharges = Number(yearExpenses.tenantCharges || 0);
+  // Soustraction des charges locataires (également ajustées)
+  const tenantCharges = adjustForCoverage(Number(yearExpenses.tenantCharges || 0), coverage);
 
   return totalDeductibleExpenses - tenantCharges;
 }
@@ -35,23 +69,25 @@ function calculateAnnualRevenue(investment: Investment, year: number, regime?: T
   const yearExpenses = investment.expenses.find(e => e.year === year);
   if (!yearExpenses) return 0;
 
+  // Obtenir la couverture de l'année pour les années partielles
+  const coverage = getYearCoverage(investment, year);
   const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
 
   // Pour les régimes de location nue (micro-foncier et réel-foncier), on utilise uniquement le loyer nu avec vacance
   if (regime === 'micro-foncier' || regime === 'reel-foncier') {
-    const rent = Number(yearExpenses.rent || 0);
+    const rent = adjustForCoverage(Number(yearExpenses.rent || 0), coverage);
     return rent * (1 - vacancyRate / 100);
   }
   
   // Pour les régimes de location meublée (micro-bic et réel-bic), on utilise uniquement le loyer meublé avec vacance
   if (regime === 'micro-bic' || regime === 'reel-bic') {
-    const furnishedRent = Number(yearExpenses.furnishedRent || 0);
+    const furnishedRent = adjustForCoverage(Number(yearExpenses.furnishedRent || 0), coverage);
     return furnishedRent * (1 - vacancyRate / 100);
   }
 
   // Si aucun régime n'est spécifié, on utilise la somme des deux avec vacance
-  const rent = Number(yearExpenses.rent || 0);
-  const furnishedRent = Number(yearExpenses.furnishedRent || 0);
+  const rent = adjustForCoverage(Number(yearExpenses.rent || 0), coverage);
+  const furnishedRent = adjustForCoverage(Number(yearExpenses.furnishedRent || 0), coverage);
   return (rent + furnishedRent) * (1 - vacancyRate / 100);
 }
 
@@ -66,11 +102,13 @@ function calculateMicroFoncier(
   const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
 
   // Calcul du revenu net avec vacance locative (utilise le total nu avec vacance)
+  // Les valeurs sont ajustées pour la couverture de l'année (années partielles)
+  const coverage = getYearCoverage(investment, year);
   const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
   const totalNuWithVacancy = calculateTotalNu(
-    Number(yearExpenses.rent || 0),
-    Number(yearExpenses.taxBenefit || 0),
-    Number(yearExpenses.tenantCharges || 0),
+    adjustForCoverage(Number(yearExpenses.rent || 0), coverage),
+    adjustForCoverage(Number(yearExpenses.taxBenefit || 0), coverage),
+    adjustForCoverage(Number(yearExpenses.tenantCharges || 0), coverage),
     vacancyRate
   );
   const netIncome = totalNuWithVacancy - (tax + socialCharges);
@@ -114,11 +152,13 @@ function calculateReelFoncier(
   const totalTax = tax + socialCharges;
 
   // Calcul du revenu net avec vacance locative (utilise le total nu avec vacance)
+  // Les valeurs sont ajustées pour la couverture de l'année (années partielles)
+  const coverage = getYearCoverage(investment, year);
   const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
   const totalNuWithVacancy = calculateTotalNu(
-    Number(yearExpenses.rent || 0),
-    Number(yearExpenses.taxBenefit || 0),
-    Number(yearExpenses.tenantCharges || 0),
+    adjustForCoverage(Number(yearExpenses.rent || 0), coverage),
+    adjustForCoverage(Number(yearExpenses.taxBenefit || 0), coverage),
+    adjustForCoverage(Number(yearExpenses.tenantCharges || 0), coverage),
     vacancyRate
   );
   const netIncome = totalNuWithVacancy - totalTax;
@@ -158,10 +198,12 @@ function calculateMicroBIC(
   const socialCharges = taxableIncome * (investment.taxParameters.socialChargesRate / 100);
 
   // Calcul du revenu net avec vacance locative (utilise le total meublé avec vacance)
+  // Les valeurs sont ajustées pour la couverture de l'année (années partielles)
+  const coverage = getYearCoverage(investment, year);
   const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
   const totalMeubleWithVacancy = calculateTotalMeuble(
-    Number(yearExpenses.furnishedRent || 0),
-    Number(yearExpenses.tenantCharges || 0),
+    adjustForCoverage(Number(yearExpenses.furnishedRent || 0), coverage),
+    adjustForCoverage(Number(yearExpenses.tenantCharges || 0), coverage),
     vacancyRate
   );
   const netIncome = totalMeubleWithVacancy - (tax + socialCharges);
@@ -184,23 +226,26 @@ function calculateReelBIC(investment: Investment, year: number): TaxResults {
     throw new Error(`No expenses found for year ${year}`);
   }
 
-  // Calcul des revenus bruts avec vacance locative
-  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
-  const furnishedRent = Number(yearExpenses.furnishedRent || 0);
-  const grossIncome = furnishedRent * (1 - vacancyRate / 100);
-  const tenantCharges = yearExpenses.tenantCharges || 0;
+  // Obtenir la couverture de l'année pour les années partielles
+  const coverage = getYearCoverage(investment, year);
 
-  // Calcul des charges déductibles
+  // Calcul des revenus bruts avec vacance locative et couverture d'année
+  const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+  const furnishedRent = adjustForCoverage(Number(yearExpenses.furnishedRent || 0), coverage);
+  const grossIncome = furnishedRent * (1 - vacancyRate / 100);
+  const tenantCharges = adjustForCoverage(yearExpenses.tenantCharges || 0, coverage);
+
+  // Calcul des charges déductibles (avec ajustement pour couverture)
   const deductibleExpenses = (
-    (yearExpenses.propertyTax || 0) +
-    (yearExpenses.condoFees || 0) +
-    (yearExpenses.propertyInsurance || 0) +
-    (yearExpenses.managementFees || 0) +
-    (yearExpenses.unpaidRentInsurance || 0) +
-    (yearExpenses.repairs || 0) +
-    (yearExpenses.otherDeductible || 0) +
-    (yearExpenses.loanInsurance || 0) +
-    (yearExpenses.interest || 0) -
+    adjustForCoverage((yearExpenses.propertyTax || 0), coverage) +
+    adjustForCoverage((yearExpenses.condoFees || 0), coverage) +
+    adjustForCoverage((yearExpenses.propertyInsurance || 0), coverage) +
+    adjustForCoverage((yearExpenses.managementFees || 0), coverage) +
+    adjustForCoverage((yearExpenses.unpaidRentInsurance || 0), coverage) +
+    adjustForCoverage((yearExpenses.repairs || 0), coverage) +
+    adjustForCoverage((yearExpenses.otherDeductible || 0), coverage) +
+    adjustForCoverage((yearExpenses.loanInsurance || 0), coverage) +
+    adjustForCoverage((yearExpenses.interest || 0), coverage) -
     tenantCharges
   );
 
@@ -263,6 +308,7 @@ function calculateReelBIC(investment: Investment, year: number): TaxResults {
   const totalTax = tax + socialCharges;
 
   // Calcul du revenu net avec vacance locative (utilise le total meublé avec vacance)
+  // furnishedRent et tenantCharges sont déjà ajustés pour la couverture
   const totalMeubleWithVacancy = calculateTotalMeuble(
     furnishedRent,
     Number(tenantCharges || 0),

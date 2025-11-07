@@ -22,8 +22,9 @@
 
 import { useState, useEffect } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
+import { HelpCircle, Info, Award, ChevronDown, ChevronUp } from 'lucide-react';
 import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
-import { calculateAllTaxRegimes } from '../utils/taxCalculations';
+import { calculateAllTaxRegimes, getRecommendedRegime } from '../utils/taxCalculations';
 
 interface Props {
   investment: Investment;
@@ -41,7 +42,11 @@ const REGIME_LABELS: { [key in TaxRegime]: string } = {
 export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) {
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
   const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
+  const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
   const currentYear = new Date().getFullYear();
+  
+  // Calculer le régime recommandé
+  const recommendedRegime = getRecommendedRegime(investment, currentYear);
 
   // Mise à jour des résultats fiscaux à chaque changement de paramètres
   useEffect(() => {
@@ -108,6 +113,33 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
   // Formatage des montants en euros
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+
+  // Calcul de la couverture d'une année (pour les années partielles)
+  const getYearCoverage = (year: number): number => {
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+    const projectStart = new Date(investment.projectStartDate);
+    const projectEnd = new Date(investment.projectEndDate);
+    const start = projectStart > startOfYear ? projectStart : startOfYear;
+    const end = projectEnd < endOfYear ? projectEnd : endOfYear;
+    if (end < start) return 0;
+    const msInDay = 1000 * 60 * 60 * 24;
+    const daysInYear = Math.round((new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / msInDay);
+    const coveredDays = Math.floor((end.getTime() - start.getTime()) / msInDay) + 1;
+    return Math.min(1, Math.max(0, coveredDays / daysInYear));
+  };
+
+  // Ajustement d'une valeur pour la couverture d'année
+  const adjustForCoverage = (value: number, year: number): number => {
+    const coverage = getYearCoverage(year);
+    return Number((Number(value || 0) * coverage).toFixed(2));
+  };
+
+  // Détection d'une année partielle
+  const isPartialYear = (year: number): boolean => {
+    const coverage = getYearCoverage(year);
+    return coverage > 0 && coverage < 1;
+  };
 
   // Données pour le graphique de comparaison
   const chartData = {
@@ -185,28 +217,33 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
       if (!yearExpense) continue;
 
       rows.push(
-        <tr key={year} className={year === currentYear ? 'bg-blue-50' : ''}>
+        <tr key={year} className={`${year === currentYear ? 'bg-blue-50' : ''} ${isPartialYear(year) ? 'bg-amber-50' : ''}`}>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-            {year}
+            <div className="flex items-center gap-2">
+              <span>{year}</span>
+              {isPartialYear(year) && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">partiel</span>
+              )}
+            </div>
           </td>
           {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearExpense.rent || 0)}
+              {formatCurrency(adjustForCoverage(yearExpense.rent || 0, year))}
             </td>
           )}
           {(projectionRegime === 'micro-bic' || projectionRegime === 'reel-bic') && (
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearExpense.furnishedRent || 0)}
+              {formatCurrency(adjustForCoverage(yearExpense.furnishedRent || 0, year))}
             </td>
           )}
           {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearExpense.tenantCharges || 0)}
+              {formatCurrency(adjustForCoverage(yearExpense.tenantCharges || 0, year))}
             </td>
           )}
           {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {formatCurrency(yearExpense.taxBenefit || 0)}
+              {formatCurrency(adjustForCoverage(yearExpense.taxBenefit || 0, year))}
             </td>
           )}
           {projectionRegime === 'reel-foncier' && (
@@ -269,48 +306,107 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
       previousYearResults = yearResults;
     }
 
+    // Composant pour les en-têtes de colonnes avec tooltip
+    const TableHeader = ({ label, tooltip }: { label: string; tooltip?: string }) => (
+      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <div className="flex items-center gap-1">
+          {label}
+          {tooltip && (
+            <div className="group relative inline-block">
+              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg p-2 whitespace-normal z-50 shadow-xl normal-case">
+                {tooltip}
+              </div>
+            </div>
+          )}
+        </div>
+      </th>
+    );
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Année</th>
+              <TableHeader label="Année" />
               {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loyer nu</th>
+                <TableHeader 
+                  label="Loyer nu" 
+                  tooltip="Loyers perçus en location nue (non meublée)" 
+                />
               )}
               {(projectionRegime === 'micro-bic' || projectionRegime === 'reel-bic') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loyer meublé</th>
+                <TableHeader 
+                  label="Loyer meublé" 
+                  tooltip="Loyers perçus en location meublée (LMNP)" 
+                />
               )}
               {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges locataires</th>
+                <TableHeader 
+                  label="Charges locataires" 
+                  tooltip="Charges récupérables auprès du locataire (eau, ordures ménagères, etc.)" 
+                />
               )}
               {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aide fiscale</th>
+                <TableHeader 
+                  label="Aide fiscale" 
+                  tooltip="Avantages fiscaux (Pinel, Denormandie, etc.)" 
+                />
               )}
               {projectionRegime === 'reel-foncier' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges déductibles</th>
+                <TableHeader 
+                  label="Charges déductibles" 
+                  tooltip="Total des charges déductibles (taxe foncière, intérêts d'emprunt, travaux, etc.)" 
+                />
               )}
               {projectionRegime === 'reel-foncier' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Déficit utilisé</th>
+                <TableHeader 
+                  label="Déficit utilisé" 
+                  tooltip="Déficit des années précédentes utilisé cette année pour réduire l'impôt" 
+                />
               )}
               {projectionRegime === 'reel-foncier' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Déficit reporté</th>
+                <TableHeader 
+                  label="Déficit reporté" 
+                  tooltip="Déficit reportable sur les 10 prochaines années" 
+                />
               )}
               {projectionRegime === 'reel-bic' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Charges déductibles</th>
+                <TableHeader 
+                  label="Charges déductibles" 
+                  tooltip="Total des charges déductibles (hors amortissements)" 
+                />
               )}
               {projectionRegime === 'reel-bic' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement disponible</th>
+                <TableHeader 
+                  label="Amortissement disponible" 
+                  tooltip="Amortissement annuel calculé (bien + mobilier + travaux)" 
+                />
               )}
               {projectionRegime === 'reel-bic' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement utilisé</th>
+                <TableHeader 
+                  label="Amortissement utilisé" 
+                  tooltip="Part de l'amortissement effectivement déduite cette année" 
+                />
               )}
               {projectionRegime === 'reel-bic' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amortissement reporté</th>
+                <TableHeader 
+                  label="Amortissement reporté" 
+                  tooltip="Amortissement non utilisé, reportable sans limite de durée" 
+                />
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenu imposable</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imposition</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenu net</th>
+              <TableHeader 
+                label="Revenu imposable" 
+                tooltip="Montant sur lequel sont calculés l'impôt et les prélèvements sociaux" 
+              />
+              <TableHeader 
+                label="Imposition" 
+                tooltip="Total de l'impôt sur le revenu (IR) + prélèvements sociaux (PS)" 
+              />
+              <TableHeader 
+                label="Revenu net" 
+                tooltip="Revenu après impôts et prélèvements sociaux" 
+              />
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -493,11 +589,92 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
     }
   };
 
+  // Composant Tooltip Helper
+  const Tooltip = ({ content }: { content: string }) => (
+    <div className="group relative inline-block ml-1">
+      <HelpCircle className="h-4 w-4 text-gray-400 cursor-help inline" />
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-80 bg-gray-900 text-white text-xs rounded-lg p-3 whitespace-pre-line z-50 shadow-xl">
+        {content}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {/* Section d'aide en haut de page */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-5 rounded-lg">
+        <div className="flex items-start gap-3">
+          <Info className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="font-semibold text-blue-900 mb-2 text-base">
+              💡 Comment choisir votre régime fiscal ?
+            </h4>
+            <ul className="text-sm text-blue-800 space-y-1.5 mb-3">
+              <li>• Les graphiques ci-dessous comparent automatiquement les 4 régimes fiscaux disponibles</li>
+              <li>• Le régime optimal est celui avec le <strong>revenu net le plus élevé</strong> (en vert)</li>
+              <li>• Les régimes "réels" permettent de déduire les charges réelles et créer des déficits</li>
+              <li>• Les régimes "micro" appliquent un abattement forfaitaire (30% ou 50%)</li>
+            </ul>
+            <button
+              onClick={() => setIsGlossaryOpen(!isGlossaryOpen)}
+              className="flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800 transition-colors"
+            >
+              {isGlossaryOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {isGlossaryOpen ? 'Masquer le glossaire' : 'Afficher le glossaire fiscal'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Glossaire fiscal (déroulant) */}
+      {isGlossaryOpen && (
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            📚 Glossaire fiscal
+          </h4>
+          <dl className="space-y-3 text-sm">
+            <div>
+              <dt className="font-semibold text-gray-900">Micro-foncier (Location nue) :</dt>
+              <dd className="ml-4 text-gray-600">Abattement forfaitaire de 30% sur les loyers perçus. Limité à 15 000€ de revenus annuels. Simple mais moins avantageux si vous avez beaucoup de charges.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Réel foncier (Location nue) :</dt>
+              <dd className="ml-4 text-gray-600">Déduction de toutes les charges réelles (intérêts d'emprunt, travaux, etc.). Permet de créer un déficit foncier reportable pendant 10 ans.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Micro-BIC / LMNP (Location meublée) :</dt>
+              <dd className="ml-4 text-gray-600">Abattement forfaitaire de 50% sur les loyers de location meublée. Limité à 72 600€ de revenus annuels. Avantageux pour les petits revenus.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Réel BIC / LMNP (Location meublée) :</dt>
+              <dd className="ml-4 text-gray-600">Déduction des charges réelles + amortissement du bien immobilier et du mobilier. Permet de réduire fortement voire annuler l'impôt pendant plusieurs années.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Revenu imposable :</dt>
+              <dd className="ml-4 text-gray-600">Montant sur lequel vous serez imposé après déduction des charges ou application de l'abattement.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Déficit foncier :</dt>
+              <dd className="ml-4 text-gray-600">Lorsque vos charges dépassent vos revenus locatifs. Ce déficit est reportable pendant 10 ans et vient diminuer vos revenus fonciers futurs.</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Amortissement (LMNP) :</dt>
+              <dd className="ml-4 text-gray-600">Déduction comptable de la perte de valeur du bien et du mobilier répartie sur plusieurs années (20-30 ans pour le bien, 5-10 ans pour le mobilier).</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-900">Prélèvements sociaux :</dt>
+              <dd className="ml-4 text-gray-600">Cotisations sociales (17,2%) calculées sur le revenu imposable, en plus de l'impôt sur le revenu.</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+
       {/* Section 1: Année courante */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Année courante</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-lg font-semibold">Année courante ({currentYear})</h3>
+          <Tooltip content="Ce graphique compare les 4 régimes fiscaux pour l'année en cours. Les barres vertes représentent votre revenu net après impôts et prélèvements sociaux. Choisissez le régime avec la barre verte la plus haute !" />
+        </div>
         <div className="h-96">
           <Bar data={chartData} options={chartOptions} />
         </div>
@@ -505,70 +682,106 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
 
       {/* Section 2: Historique et projection */}
       <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Historique et projection</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-lg font-semibold">Historique et projection</h3>
+          <Tooltip content="Visualisez vos résultats fiscaux sur toute la durée de votre investissement. Comparez les totaux cumulés et l'évolution année par année." />
+        </div>
 
         {/* Graphiques de projection */}
         <div className="mt-6 space-y-6">
           {/* Graphique des totaux cumulés */}
-          <div className="h-96">
-            <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="text-sm font-medium text-gray-700">Totaux cumulés sur la période</h4>
+              <Tooltip content="Ce graphique montre le total cumulé des revenus nets, impôts et prélèvements sociaux sur toute la durée de votre projet. Idéal pour comparer l'impact fiscal global de chaque régime." />
+            </div>
+            <div className="h-96">
+              <Bar data={cumulativeChartData} options={cumulativeChartOptions} />
+            </div>
           </div>
 
           {/* Graphique d'évolution des revenus nets */}
-          <div className="h-96">
-            <Line 
-              data={netIncomeEvolutionData} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top' as const,
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="text-sm font-medium text-gray-700">Évolution année par année</h4>
+              <Tooltip content="Ce graphique montre l'évolution de votre revenu net fiscal année après année pour chaque régime. Les différences s'expliquent par les déficits reportés (réel foncier) et les amortissements (LMNP réel)." />
+            </div>
+            <div className="h-96">
+              <Line 
+                data={netIncomeEvolutionData} 
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top' as const,
+                    },
+                    title: {
+                      display: true,
+                      text: 'Évolution des revenus nets par régime fiscal'
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context: any) {
+                          return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                        }
+                      }
+                    }
                   },
-                  title: {
-                    display: true,
-                    text: 'Évolution des revenus nets par régime fiscal'
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function(context: any) {
-                        return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                  scales: {
+                    y: {
+                      ticks: {
+                        callback: function(value: any) {
+                          return formatCurrency(value);
+                        }
                       }
                     }
                   }
-                },
-                scales: {
-                  y: {
-                    ticks: {
-                      callback: function(value: any) {
-                        return formatCurrency(value);
-                      }
-                    }
-                  }
-                }
-              }} 
-            />
+                }} 
+              />
+            </div>
           </div>
         </div>
 
         {/* Sélection du régime juste au-dessus du tableau */}
         <div className="mt-6 border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {Object.entries(REGIME_LABELS).map(([regime, label]) => (
-              <button
-                key={regime}
-                type="button"
-                onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                  ${projectionRegime === regime
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                `}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              Détails par régime fiscal
+              <Tooltip content="Sélectionnez un régime pour voir le détail année par année avec toutes les données fiscales (charges, déficits, amortissements, etc.)" />
+            </h4>
+            {recommendedRegime && (
+              <div className="flex items-center gap-2 text-sm text-green-700">
+                <Award className="h-4 w-4" />
+                <span className="font-medium">Régime recommandé : {REGIME_LABELS[recommendedRegime]}</span>
+              </div>
+            )}
+          </div>
+          <nav className="-mb-px flex space-x-4">
+            {Object.entries(REGIME_LABELS).map(([regime, label]) => {
+              const isRecommended = regime === recommendedRegime;
+              return (
+                <button
+                  key={regime}
+                  type="button"
+                  onClick={() => handleProjectionRegimeChange(regime as TaxRegime)}
+                  className={`
+                    whitespace-nowrap py-4 px-3 border-b-2 font-medium text-sm relative
+                    ${projectionRegime === regime
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                    ${isRecommended ? 'bg-green-50' : ''}
+                  `}
+                >
+                  <div className="flex items-center gap-2">
+                    {label}
+                    {isRecommended && (
+                      <Award className="h-4 w-4 text-green-600" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </nav>
         </div>
 

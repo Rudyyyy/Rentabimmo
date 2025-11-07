@@ -394,6 +394,152 @@ describe('taxCalculations', () => {
       });
     });
   });
+
+  describe('📅 Années partielles (couverture partielle)', () => {
+    it('should adjust revenues for partial year starting mid-year', () => {
+      // Projet commençant le 1er septembre (4 mois en 2024)
+      const partialYearInvestment: Investment = {
+        ...mockInvestment,
+        projectStartDate: '2024-09-01',
+        projectEndDate: '2044-12-31',
+        expenses: [
+          {
+            ...mockInvestment.expenses[0],
+            year: 2024,
+            rent: 12000, // Loyer annualisé
+            furnishedRent: 15000 // Loyer meublé annualisé
+          }
+        ]
+      };
+
+      const results = calculateAllTaxRegimes(partialYearInvestment, 2024);
+
+      // Avec 4 mois sur 12, la couverture est environ 4/12 = 0.333
+      // Le loyer réel devrait être environ 12000 * 0.333 = 4000€
+      // Le revenu imposable pour micro-foncier devrait être environ 4000 * 0.7 = 2800€
+      expect(results['micro-foncier'].taxableIncome).toBeLessThan(5000);
+      expect(results['micro-foncier'].taxableIncome).toBeGreaterThan(2000);
+
+      // Pour micro-bic avec 15000€ annualisés
+      // Loyer réel: 15000 * 0.333 = 5000€
+      // Revenu imposable: 5000 * 0.5 = 2500€
+      expect(results['micro-bic'].taxableIncome).toBeLessThan(3500);
+      expect(results['micro-bic'].taxableIncome).toBeGreaterThan(1500);
+    });
+
+    it('should adjust expenses for partial year starting mid-year', () => {
+      // Projet commençant le 1er juillet (6 mois en 2024)
+      const partialYearInvestment: Investment = {
+        ...mockInvestment,
+        projectStartDate: '2024-07-01',
+        projectEndDate: '2044-12-31',
+        expenses: [
+          {
+            ...mockInvestment.expenses[0],
+            year: 2024,
+            rent: 12000, // Loyer annualisé
+            propertyTax: 1200, // Taxe foncière annualisée
+            interest: 2400 // Intérêts annualisés
+          }
+        ]
+      };
+
+      const results = calculateAllTaxRegimes(partialYearInvestment, 2024);
+
+      // Avec 6 mois sur 12, les charges déductibles devraient être réduites de moitié
+      expect(results['reel-foncier'].deductibleExpenses).toBeDefined();
+      if (results['reel-foncier'].deductibleExpenses) {
+        // Les charges annualisées totales incluent toutes les charges du mockInvestment
+        // Pour 6 mois: environ la moitié des charges annuelles
+        expect(results['reel-foncier'].deductibleExpenses).toBeLessThan(5000);
+        expect(results['reel-foncier'].deductibleExpenses).toBeGreaterThan(1000);
+      }
+    });
+
+    it('should handle full year correctly (coverage = 1)', () => {
+      // Année complète
+      const fullYearInvestment: Investment = {
+        ...mockInvestment,
+        projectStartDate: '2024-01-01',
+        projectEndDate: '2044-12-31',
+        expenses: [
+          {
+            ...mockInvestment.expenses[0],
+            year: 2024,
+            rent: 12000
+          }
+        ]
+      };
+
+      const results = calculateAllTaxRegimes(fullYearInvestment, 2024);
+
+      // Pour une année complète avec 12000€ de loyer
+      // Revenu imposable micro-foncier: 12000 * 0.7 = 8400€
+      expect(results['micro-foncier'].taxableIncome).toBeCloseTo(8400, 0);
+    });
+
+    it('should handle project ending mid-year', () => {
+      // Projet se terminant le 30 juin (6 mois en 2024)
+      const partialYearInvestment: Investment = {
+        ...mockInvestment,
+        projectStartDate: '2024-01-01',
+        projectEndDate: '2024-06-30',
+        expenses: [
+          {
+            ...mockInvestment.expenses[0],
+            year: 2024,
+            rent: 12000, // Loyer annualisé
+            furnishedRent: 15000
+          }
+        ]
+      };
+
+      const results = calculateAllTaxRegimes(partialYearInvestment, 2024);
+
+      // 6 mois sur 12 = environ 0.5 de couverture (peut varier légèrement selon le nombre exact de jours)
+      // Loyer réel: 12000 * ~0.5 = ~6000€
+      // Revenu imposable micro-foncier: ~6000 * 0.7 = ~4200€
+      expect(results['micro-foncier'].taxableIncome).toBeGreaterThan(4000);
+      expect(results['micro-foncier'].taxableIncome).toBeLessThan(4400);
+    });
+
+    it('should calculate correct tax for partial year', () => {
+      // Projet commençant le 1er octobre (3 mois en 2024)
+      const partialYearInvestment: Investment = {
+        ...mockInvestment,
+        projectStartDate: '2024-10-01',
+        projectEndDate: '2044-12-31',
+        expenses: [
+          {
+            ...mockInvestment.expenses[0],
+            year: 2024,
+            rent: 12000 // Loyer annualisé
+          }
+        ],
+        taxParameters: {
+          ...mockInvestment.taxParameters,
+          taxRate: 30,
+          socialChargesRate: 17.2
+        }
+      };
+
+      const results = calculateAllTaxRegimes(partialYearInvestment, 2024);
+
+      // 3 mois sur 12 = environ 0.25 de couverture
+      // Loyer réel: 12000 * ~0.25 = ~3000€
+      // Revenu imposable: ~3000 * 0.7 = ~2100€
+      // Impôt: ~2100 * 0.30 = ~630€
+      // Prélèvements sociaux: ~2100 * 0.172 = ~361.2€
+      // Total: ~991.2€
+
+      expect(results['micro-foncier'].taxableIncome).toBeGreaterThan(2000);
+      expect(results['micro-foncier'].taxableIncome).toBeLessThan(2200);
+      expect(results['micro-foncier'].tax).toBeGreaterThan(600);
+      expect(results['micro-foncier'].tax).toBeLessThan(660);
+      expect(results['micro-foncier'].totalTax).toBeGreaterThan(950);
+      expect(results['micro-foncier'].totalTax).toBeLessThan(1050);
+    });
+  });
 });
 
 
