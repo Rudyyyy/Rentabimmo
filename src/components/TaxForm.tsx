@@ -22,7 +22,7 @@
 
 import { useState, useEffect } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import { HelpCircle, Info, Award, ChevronDown, ChevronUp } from 'lucide-react';
+import { HelpCircle, Info, Award, ChevronDown, ChevronUp, Calculator, X } from 'lucide-react';
 import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
 import { calculateAllTaxRegimes, getRecommendedRegime } from '../utils/taxCalculations';
 
@@ -43,6 +43,13 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(investment.selectedRegime || 'micro-foncier');
   const [projectionRegime, setProjectionRegime] = useState<TaxRegime>('micro-foncier');
   const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
+  const [calculationDetailModal, setCalculationDetailModal] = useState<{
+    isOpen: boolean;
+    year: number;
+    regime: TaxRegime;
+    results: TaxResults;
+    yearExpenses: YearlyExpenses;
+  } | null>(null);
   const currentYear = new Date().getFullYear();
   
   // Calculer le régime recommandé
@@ -226,6 +233,26 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
               )}
             </div>
           </td>
+          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+            <button
+              onClick={() => {
+                if (yearExpense) {
+                  setCalculationDetailModal({
+                    isOpen: true,
+                    year,
+                    regime: projectionRegime,
+                    results: yearResults[projectionRegime],
+                    yearExpenses: yearExpense
+                  });
+                }
+              }}
+              className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600 hover:text-blue-700"
+              aria-label="Voir le détail du calcul"
+              title="Voir le détail du calcul"
+            >
+              <Calculator className="h-5 w-5" />
+            </button>
+          </td>
           {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               {formatCurrency(adjustForCoverage(yearExpense.rent || 0, year))}
@@ -329,6 +356,11 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
           <thead className="bg-gray-50">
             <tr>
               <TableHeader label="Année" />
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="flex items-center justify-center gap-1">
+                  <Calculator className="h-4 w-4 text-blue-600" />
+                </div>
+              </th>
               {(projectionRegime === 'micro-foncier' || projectionRegime === 'reel-foncier') && (
                 <TableHeader 
                   label="Loyer nu" 
@@ -599,8 +631,416 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
     </div>
   );
 
+  // Composant Modal de détails de calcul
+  const CalculationDetailModal = () => {
+    if (!calculationDetailModal?.isOpen || !calculationDetailModal) return null;
+
+    const { year, regime, results, yearExpenses } = calculationDetailModal;
+    const coverage = getYearCoverage(year);
+    const vacancyRate = investment.expenseProjection?.vacancyRate || 0;
+    const taxRate = investment.taxParameters.taxRate;
+    const socialChargesRate = investment.taxParameters.socialChargesRate;
+
+    const renderCalculationDetails = () => {
+      switch (regime) {
+        case 'micro-foncier': {
+          const rent = adjustForCoverage(yearExpenses.rent || 0, year);
+          const rentWithVacancy = rent * (1 - vacancyRate / 100);
+          const abatement = rentWithVacancy * 0.3;
+          const taxableIncome = rentWithVacancy * 0.7;
+          
+          return (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Principe du Micro-foncier</h4>
+                <p className="text-sm text-blue-800">
+                  Le régime micro-foncier applique un abattement forfaitaire de <strong>30%</strong> sur les loyers perçus.
+                  Vous êtes imposé sur les 70% restants.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="text-sm text-gray-600">1. Loyer annuel</p>
+                  <p className="text-lg font-semibold">{formatCurrency(rent)}</p>
+                  {isPartialYear(year) && (
+                    <p className="text-xs text-amber-600">⚠️ Année partielle - couverture: {(coverage * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                {vacancyRate > 0 && (
+                  <>
+                    <div className="text-center text-gray-400">↓</div>
+                    <div className="border-l-4 border-orange-500 pl-4">
+                      <p className="text-sm text-gray-600">2. Ajustement vacance locative (-{vacancyRate}%)</p>
+                      <p className="text-lg font-semibold">{formatCurrency(rentWithVacancy)}</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-green-500 pl-4">
+                  <p className="text-sm text-gray-600">3. Abattement forfaitaire (30%)</p>
+                  <p className="text-lg font-semibold text-green-600">- {formatCurrency(abatement)}</p>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-purple-500 pl-4 bg-purple-50 p-3 rounded">
+                  <p className="text-sm text-gray-600">4. Revenu imposable (70% du loyer)</p>
+                  <p className="text-xl font-bold text-purple-700">{formatCurrency(taxableIncome)}</p>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Impôt sur le revenu ({taxRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.tax)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Prélèvements sociaux ({socialChargesRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.socialCharges)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span className="font-semibold">Total Imposition</span>
+                    <span className="text-xl font-bold text-red-600">{formatCurrency(results.totalTax)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        case 'reel-foncier': {
+          const rent = adjustForCoverage(yearExpenses.rent || 0, year);
+          const rentWithVacancy = rent * (1 - vacancyRate / 100);
+          const deductibleExpenses = results.deductibleExpenses || 0;
+          const usedDeficit = results.usedDeficit || 0;
+          const carriedForwardDeficit = results.deficit || 0;
+          
+          return (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Principe du Réel foncier</h4>
+                <p className="text-sm text-blue-800">
+                  Le régime réel permet de déduire toutes vos <strong>charges réelles</strong> (intérêts d'emprunt, travaux, taxe foncière, etc.).
+                  Si les charges dépassent les revenus, vous créez un <strong>déficit foncier</strong> reportable 10 ans.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="text-sm text-gray-600">1. Loyer annuel</p>
+                  <p className="text-lg font-semibold">{formatCurrency(rent)}</p>
+                  {isPartialYear(year) && (
+                    <p className="text-xs text-amber-600">⚠️ Année partielle - couverture: {(coverage * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                {vacancyRate > 0 && (
+                  <>
+                    <div className="text-center text-gray-400">↓</div>
+                    <div className="border-l-4 border-orange-500 pl-4">
+                      <p className="text-sm text-gray-600">2. Ajustement vacance locative (-{vacancyRate}%)</p>
+                      <p className="text-lg font-semibold">{formatCurrency(rentWithVacancy)}</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-red-500 pl-4">
+                  <p className="text-sm text-gray-600">3. Charges déductibles réelles</p>
+                  <p className="text-lg font-semibold text-red-600">- {formatCurrency(deductibleExpenses)}</p>
+                  <details className="mt-2">
+                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Voir le détail des charges</summary>
+                    <div className="mt-2 text-xs space-y-1 bg-gray-50 p-2 rounded">
+                      <div className="flex justify-between"><span>Taxe foncière</span><span>{formatCurrency(adjustForCoverage(yearExpenses.propertyTax || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Charges de copropriété</span><span>{formatCurrency(adjustForCoverage(yearExpenses.condoFees || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Assurance PNO</span><span>{formatCurrency(adjustForCoverage(yearExpenses.propertyInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Frais de gestion</span><span>{formatCurrency(adjustForCoverage(yearExpenses.managementFees || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>GLI</span><span>{formatCurrency(adjustForCoverage(yearExpenses.unpaidRentInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Travaux et réparations</span><span>{formatCurrency(adjustForCoverage(yearExpenses.repairs || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Intérêts d'emprunt</span><span>{formatCurrency(adjustForCoverage(yearExpenses.interest || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Assurance emprunteur</span><span>{formatCurrency(adjustForCoverage(yearExpenses.loanInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Autres charges</span><span>{formatCurrency(adjustForCoverage(yearExpenses.otherDeductible || 0, year))}</span></div>
+                    </div>
+                  </details>
+                </div>
+
+                {usedDeficit > 0 && (
+                  <>
+                    <div className="text-center text-gray-400">↓</div>
+                    <div className="border-l-4 border-yellow-500 pl-4">
+                      <p className="text-sm text-gray-600">4. Déficit reporté utilisé</p>
+                      <p className="text-lg font-semibold text-yellow-600">- {formatCurrency(usedDeficit)}</p>
+                      <p className="text-xs text-gray-500 mt-1">Déficit des années précédentes déduit cette année</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-purple-500 pl-4 bg-purple-50 p-3 rounded">
+                  <p className="text-sm text-gray-600">Revenu imposable</p>
+                  <p className="text-xl font-bold text-purple-700">{formatCurrency(results.taxableIncome)}</p>
+                </div>
+
+                {carriedForwardDeficit > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                    <p className="text-sm font-semibold text-yellow-800">💡 Déficit reporté</p>
+                    <p className="text-lg font-bold text-yellow-700">{formatCurrency(carriedForwardDeficit)}</p>
+                    <p className="text-xs text-yellow-600 mt-1">Reportable sur les 10 prochaines années</p>
+                  </div>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Impôt sur le revenu ({taxRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.tax)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Prélèvements sociaux ({socialChargesRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.socialCharges)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span className="font-semibold">Total Imposition</span>
+                    <span className="text-xl font-bold text-red-600">{formatCurrency(results.totalTax)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        case 'micro-bic': {
+          const furnishedRent = adjustForCoverage(yearExpenses.furnishedRent || 0, year);
+          const rentWithVacancy = furnishedRent * (1 - vacancyRate / 100);
+          const abatement = rentWithVacancy * 0.5;
+          const taxableIncome = rentWithVacancy * 0.5;
+          
+          return (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Principe du Micro-BIC (LMNP)</h4>
+                <p className="text-sm text-blue-800">
+                  Le régime micro-BIC applique un abattement forfaitaire de <strong>50%</strong> sur les loyers perçus en location meublée.
+                  Vous êtes imposé sur les 50% restants.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="text-sm text-gray-600">1. Loyer meublé annuel</p>
+                  <p className="text-lg font-semibold">{formatCurrency(furnishedRent)}</p>
+                  {isPartialYear(year) && (
+                    <p className="text-xs text-amber-600">⚠️ Année partielle - couverture: {(coverage * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                {vacancyRate > 0 && (
+                  <>
+                    <div className="text-center text-gray-400">↓</div>
+                    <div className="border-l-4 border-orange-500 pl-4">
+                      <p className="text-sm text-gray-600">2. Ajustement vacance locative (-{vacancyRate}%)</p>
+                      <p className="text-lg font-semibold">{formatCurrency(rentWithVacancy)}</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-green-500 pl-4">
+                  <p className="text-sm text-gray-600">3. Abattement forfaitaire (50%)</p>
+                  <p className="text-lg font-semibold text-green-600">- {formatCurrency(abatement)}</p>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-purple-500 pl-4 bg-purple-50 p-3 rounded">
+                  <p className="text-sm text-gray-600">4. Revenu imposable (50% du loyer)</p>
+                  <p className="text-xl font-bold text-purple-700">{formatCurrency(taxableIncome)}</p>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Impôt sur le revenu ({taxRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.tax)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Prélèvements sociaux ({socialChargesRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.socialCharges)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span className="font-semibold">Total Imposition</span>
+                    <span className="text-xl font-bold text-red-600">{formatCurrency(results.totalTax)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        case 'reel-bic': {
+          const furnishedRent = adjustForCoverage(yearExpenses.furnishedRent || 0, year);
+          const rentWithVacancy = furnishedRent * (1 - vacancyRate / 100);
+          const deductibleExpenses = results.deductibleExpenses || 0;
+          const totalAmortization = results.amortization?.total || 0;
+          const usedAmortization = results.amortization?.used || 0;
+          const carriedForwardAmortization = results.amortization?.carriedForward || 0;
+          
+          return (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Principe du Réel BIC (LMNP)</h4>
+                <p className="text-sm text-blue-800">
+                  Le régime réel BIC permet de déduire toutes vos <strong>charges réelles</strong> ET les <strong>amortissements</strong> du bien et du mobilier.
+                  C'est le régime le plus avantageux pour les locations meublées ! Les amortissements non utilisés sont reportables sans limite de durée.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="text-sm text-gray-600">1. Loyer meublé annuel</p>
+                  <p className="text-lg font-semibold">{formatCurrency(furnishedRent)}</p>
+                  {isPartialYear(year) && (
+                    <p className="text-xs text-amber-600">⚠️ Année partielle - couverture: {(coverage * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                {vacancyRate > 0 && (
+                  <>
+                    <div className="text-center text-gray-400">↓</div>
+                    <div className="border-l-4 border-orange-500 pl-4">
+                      <p className="text-sm text-gray-600">2. Ajustement vacance locative (-{vacancyRate}%)</p>
+                      <p className="text-lg font-semibold">{formatCurrency(rentWithVacancy)}</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-red-500 pl-4">
+                  <p className="text-sm text-gray-600">3. Charges déductibles réelles</p>
+                  <p className="text-lg font-semibold text-red-600">- {formatCurrency(deductibleExpenses)}</p>
+                  <details className="mt-2">
+                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Voir le détail des charges</summary>
+                    <div className="mt-2 text-xs space-y-1 bg-gray-50 p-2 rounded">
+                      <div className="flex justify-between"><span>Taxe foncière</span><span>{formatCurrency(adjustForCoverage(yearExpenses.propertyTax || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Charges de copropriété</span><span>{formatCurrency(adjustForCoverage(yearExpenses.condoFees || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Assurance PNO</span><span>{formatCurrency(adjustForCoverage(yearExpenses.propertyInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Frais de gestion</span><span>{formatCurrency(adjustForCoverage(yearExpenses.managementFees || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>GLI</span><span>{formatCurrency(adjustForCoverage(yearExpenses.unpaidRentInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Travaux et réparations</span><span>{formatCurrency(adjustForCoverage(yearExpenses.repairs || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Intérêts d'emprunt</span><span>{formatCurrency(adjustForCoverage(yearExpenses.interest || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Assurance emprunteur</span><span>{formatCurrency(adjustForCoverage(yearExpenses.loanInsurance || 0, year))}</span></div>
+                      <div className="flex justify-between"><span>Autres charges</span><span>{formatCurrency(adjustForCoverage(yearExpenses.otherDeductible || 0, year))}</span></div>
+                    </div>
+                  </details>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-green-500 pl-4">
+                  <p className="text-sm text-gray-600">4. Amortissements disponibles</p>
+                  <p className="text-lg font-semibold text-green-600">- {formatCurrency(totalAmortization)}</p>
+                  <details className="mt-2">
+                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Voir le détail des amortissements</summary>
+                    <div className="mt-2 text-xs space-y-1 bg-gray-50 p-2 rounded">
+                      <div className="flex justify-between"><span>Bien immobilier</span><span>{formatCurrency(results.amortization?.building || 0)}</span></div>
+                      <div className="flex justify-between"><span>Mobilier</span><span>{formatCurrency(results.amortization?.furniture || 0)}</span></div>
+                      <div className="flex justify-between"><span>Travaux</span><span>{formatCurrency(results.amortization?.works || 0)}</span></div>
+                      <div className="flex justify-between"><span>Autres</span><span>{formatCurrency(results.amortization?.other || 0)}</span></div>
+                    </div>
+                  </details>
+                  {usedAmortization < totalAmortization && (
+                    <div className="mt-2 text-xs bg-yellow-50 p-2 rounded border border-yellow-200">
+                      <p className="text-yellow-800">
+                        ⚠️ Amortissement utilisé: {formatCurrency(usedAmortization)}<br/>
+                        L'amortissement ne peut pas créer de déficit
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {carriedForwardAmortization > 0 && (
+                  <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                    <p className="text-sm font-semibold text-green-800">💡 Amortissement reporté</p>
+                    <p className="text-lg font-bold text-green-700">{formatCurrency(carriedForwardAmortization)}</p>
+                    <p className="text-xs text-green-600 mt-1">Reportable sans limite de durée !</p>
+                  </div>
+                )}
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="border-l-4 border-purple-500 pl-4 bg-purple-50 p-3 rounded">
+                  <p className="text-sm text-gray-600">Revenu imposable</p>
+                  <p className="text-xl font-bold text-purple-700">{formatCurrency(results.taxableIncome)}</p>
+                </div>
+
+                <div className="text-center text-gray-400">↓</div>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Impôt sur le revenu ({taxRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.tax)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Prélèvements sociaux ({socialChargesRate}%)</span>
+                    <span className="font-semibold">{formatCurrency(results.socialCharges)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span className="font-semibold">Total Imposition</span>
+                    <span className="text-xl font-bold text-red-600">{formatCurrency(results.totalTax)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Calculator className="h-6 w-6 text-blue-600" />
+                Détail du calcul de l'imposition
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Année {year} - {REGIME_LABELS[regime]}
+              </p>
+            </div>
+            <button
+              onClick={() => setCalculationDetailModal(null)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Fermer"
+            >
+              <X className="h-6 w-6 text-gray-500" />
+            </button>
+          </div>
+          
+          <div className="px-6 py-6">
+            {renderCalculationDetails()}
+          </div>
+
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+            <button
+              onClick={() => setCalculationDetailModal(null)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
+      {/* Modal de détails de calcul */}
+      <CalculationDetailModal />
+      
       {/* Section d'aide en haut de page */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-5 rounded-lg">
         <div className="flex items-start gap-3">
