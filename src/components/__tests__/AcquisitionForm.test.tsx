@@ -45,7 +45,7 @@ describe('AcquisitionForm', () => {
       render(<AcquisitionForm onSubmit={mockOnSubmit} initialValues={mockBasicInvestment as Investment} />);
 
       expect(screen.getByText(/informations de crédit/i)).toBeInTheDocument();
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
       expect(screen.getByText(/intérêts différés/i)).toBeInTheDocument();
     });
 
@@ -83,7 +83,7 @@ describe('AcquisitionForm', () => {
       render(<AcquisitionForm onSubmit={mockOnSubmit} initialValues={investment as Investment} />);
 
       // La mensualité devrait être affichée (valeur approximative)
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
       // Vérifier qu'un montant en euros est affiché
       const amountElements = screen.getAllByText(/€/);
       expect(amountElements.length).toBeGreaterThan(0);
@@ -157,7 +157,7 @@ describe('AcquisitionForm', () => {
       render(<AcquisitionForm onSubmit={mockOnSubmit} initialValues={pinelBagnolet as Investment} />);
 
       expect(screen.getByText(/informations de crédit/i)).toBeInTheDocument();
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
     });
 
     it('should calculate correct monthly payment for Pinel Bagnolet', () => {
@@ -165,7 +165,7 @@ describe('AcquisitionForm', () => {
 
       // Avec différé total de 24 mois, durée 20 ans, taux 1.5%
       // Mensualité devrait être autour de 685 €
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
       
       // Vérifier qu'il y a des montants affichés
       const amounts = screen.getAllByText(/€/);
@@ -226,7 +226,7 @@ describe('AcquisitionForm', () => {
 
       render(<AcquisitionForm onSubmit={mockOnSubmit} initialValues={investment as Investment} />);
 
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
     });
 
     it('should handle high interest rate', () => {
@@ -237,7 +237,7 @@ describe('AcquisitionForm', () => {
 
       render(<AcquisitionForm onSubmit={mockOnSubmit} initialValues={investment as Investment} />);
 
-      expect(screen.getByText(/mensualité du crédit/i)).toBeInTheDocument();
+      expect(screen.getByText(/mensualité totale du crédit/i)).toBeInTheDocument();
     });
   });
 

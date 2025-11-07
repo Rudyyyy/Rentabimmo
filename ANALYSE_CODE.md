@@ -314,3 +314,4 @@ Cette analyse se base sur une revue statique du code. Des tests en conditions r�
 5. Établir des conventions de code pour éviter les régressions
 
 
+

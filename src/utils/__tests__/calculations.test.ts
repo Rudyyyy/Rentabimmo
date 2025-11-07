@@ -14,7 +14,8 @@ describe('calculations - Loan and Amortization', () => {
     it('should calculate monthly payment without deferral', () => {
       const monthlyPayment = calculateMonthlyPayment(200000, 1.5, 20);
       expect(monthlyPayment).toBeGreaterThan(0);
-      expect(monthlyPayment).toBeCloseTo(965.49, 1);
+      // Calcul standard : 200 000 € à 1,5% sur 20 ans (240 mois)
+      expect(monthlyPayment).toBeCloseTo(965.09, 1);
     });
 
     it('should return 0 for invalid inputs', () => {
@@ -26,15 +27,32 @@ describe('calculations - Loan and Amortization', () => {
     it('should calculate monthly payment with partial deferral', () => {
       const monthlyPayment = calculateMonthlyPayment(200000, 1.5, 20, 'partial', 12);
       expect(monthlyPayment).toBeGreaterThan(0);
-      // With partial deferral, payment should be slightly higher
-      expect(monthlyPayment).toBeCloseTo(1025.71, 1);
+      // Différé partiel : on paie les intérêts pendant 12 mois, puis on rembourse
+      // le capital sur 240 mois (20 ans). La durée de remboursement n'est pas réduite.
+      // La mensualité est la même que sans différé
+      expect(monthlyPayment).toBeCloseTo(965.09, 1);
     });
 
     it('should calculate monthly payment with total deferral', () => {
       const monthlyPayment = calculateMonthlyPayment(200000, 1.5, 20, 'total', 12);
       expect(monthlyPayment).toBeGreaterThan(0);
-      // With total deferral, payment should be higher as interest accumulates
-      expect(monthlyPayment).toBeCloseTo(1025.71, 1);
+      // Différé total : on ne paie rien pendant 12 mois, les intérêts s'ajoutent au capital
+      // Capital après différé ≈ 203 000 €, remboursé sur 240 mois (20 ans)
+      // La mensualité est plus élevée que sans différé (plus de capital à rembourser)
+      expect(monthlyPayment).toBeCloseTo(979.67, 1);
+    });
+
+    it('should have correct monthly payment relationships between deferral types', () => {
+      const noDeferral = calculateMonthlyPayment(200000, 1.5, 20, 'none', 0);
+      const partialDeferral = calculateMonthlyPayment(200000, 1.5, 20, 'partial', 12);
+      const totalDeferral = calculateMonthlyPayment(200000, 1.5, 20, 'total', 12);
+
+      // Sans différé et différé partiel : même mensualité (même capital remboursé sur même durée)
+      expect(noDeferral).toBeCloseTo(partialDeferral, 2);
+      
+      // Différé total : mensualité plus élevée (capital + intérêts capitalisés remboursés sur même durée)
+      expect(totalDeferral).toBeGreaterThan(noDeferral);
+      expect(totalDeferral).toBeGreaterThan(partialDeferral);
     });
 
     it('should handle edge cases', () => {
@@ -90,7 +108,7 @@ describe('calculations - Loan and Amortization', () => {
         '2023-01-01'
       );
 
-      expect(schedule).toHaveLength(30); // 2 years + 6 months deferral
+      expect(schedule).toHaveLength(30); // 6 months deferral + 24 months repayment (2 years loan duration)
       expect(deferredInterest).toBe(0); // No deferred interest in partial deferral
 
       // Check deferral period
@@ -116,7 +134,7 @@ describe('calculations - Loan and Amortization', () => {
         '2023-01-01'
       );
 
-      expect(schedule).toHaveLength(30); // 2 years + 6 months deferral
+      expect(schedule).toHaveLength(30); // 6 months deferral + 24 months repayment (2 years loan duration)
       expect(deferredInterest).toBeGreaterThan(0);
 
       // Check deferral period
@@ -129,6 +147,98 @@ describe('calculations - Loan and Amortization', () => {
 
       // Check that remaining balance increased during deferral
       expect(schedule[5].remainingBalance).toBeGreaterThan(200000);
+    });
+
+    it('should have interest > 0 for all non-final payments with total deferral', () => {
+      const { schedule } = generateAmortizationSchedule(
+        200000,
+        1.5,
+        20, // Long duration to test the bug
+        'total',
+        12, // 12 months deferral
+        '2023-01-01'
+      );
+
+      expect(schedule).toHaveLength(252); // 12 months deferral + 240 months repayment (20 years loan duration)
+
+      // During the regular amortization period (after deferral), 
+      // interest should always be > 0 until the very last payment
+      const regularPayments = schedule.slice(12); // Skip deferral period
+      
+      for (let i = 0; i < regularPayments.length - 1; i++) {
+        const payment = regularPayments[i];
+        expect(payment.interest).toBeGreaterThan(0, 
+          `Interest should be > 0 at month ${payment.month}, but got ${payment.interest}`);
+        expect(payment.remainingBalance).toBeGreaterThan(0,
+          `Remaining balance should be > 0 at month ${payment.month}, but got ${payment.remainingBalance}`);
+      }
+
+      // Last payment should have balance close to 0
+      const lastPayment = regularPayments[regularPayments.length - 1];
+      expect(lastPayment.remainingBalance).toBeCloseTo(0, 1);
+      expect(lastPayment.remainingPrincipal).toBeCloseTo(0, 1);
+    });
+
+    it('should have interest > 0 for all non-final payments with partial deferral', () => {
+      const { schedule } = generateAmortizationSchedule(
+        200000,
+        1.5,
+        20, // Long duration to test
+        'partial',
+        12, // 12 months deferral
+        '2023-01-01'
+      );
+
+      expect(schedule).toHaveLength(252); // 12 months deferral + 240 months repayment (20 years loan duration)
+
+      // During the regular amortization period (after deferral), 
+      // interest should always be > 0 until the very last payment
+      const regularPayments = schedule.slice(12); // Skip deferral period
+      
+      for (let i = 0; i < regularPayments.length - 1; i++) {
+        const payment = regularPayments[i];
+        expect(payment.interest).toBeGreaterThan(0, 
+          `Interest should be > 0 at month ${payment.month}, but got ${payment.interest}`);
+        expect(payment.remainingBalance).toBeGreaterThan(0,
+          `Remaining balance should be > 0 at month ${payment.month}, but got ${payment.remainingBalance}`);
+      }
+
+      // Last payment should have balance close to 0 (may have small rounding differences)
+      const lastPayment = regularPayments[regularPayments.length - 1];
+      expect(lastPayment.remainingBalance).toBeCloseTo(0, 0); // Less strict tolerance due to accumulated rounding
+      expect(lastPayment.remainingPrincipal).toBeCloseTo(0, 0);
+    });
+
+    it('should correctly capitalize deferred interest into principal', () => {
+      const { schedule, deferredInterest } = generateAmortizationSchedule(
+        200000,
+        1.5,
+        20,
+        'total',
+        12, // 12 months deferral
+        '2023-01-01'
+      );
+
+      // The deferred interest should be > 0
+      expect(deferredInterest).toBeGreaterThan(0);
+      
+      // Check that during deferral, the balance increases
+      const lastDeferredPayment = schedule[11]; // Last deferral month (month 12, index 11)
+      expect(lastDeferredPayment.remainingBalance).toBeCloseTo(200000 + deferredInterest, 1);
+
+      // After deferral, the first regular payment should have:
+      // - Interest calculated on the total capital (initial + capitalized deferred interest)
+      const firstRegularPayment = schedule[12]; // First payment after 12 months deferral
+      
+      // Before this first regular payment is made, the remaining balance should be 
+      // initial capital + deferred interest. After the payment, it will have decreased.
+      // So we check that the interest calculation is based on the full amount
+      const expectedInterest = (200000 + deferredInterest) * (1.5 / 12 / 100);
+      expect(firstRegularPayment.interest).toBeCloseTo(expectedInterest, 1);
+      
+      // And the remaining balance after this first payment should be less than the initial + deferred
+      expect(firstRegularPayment.remainingBalance).toBeLessThan(200000 + deferredInterest);
+      expect(firstRegularPayment.remainingBalance).toBeGreaterThan(200000); // But still more than initial
     });
 
     it('should handle dates correctly', () => {
@@ -214,9 +324,16 @@ describe('calculations - Financial Metrics', () => {
     it('should calculate gross yield correctly', () => {
       const metrics = calculateFinancialMetrics(mockInvestment);
       const totalCost = 200000 + 10000 + 15000 + 2000 + 20000;
-      const expectedGrossYield = (1200 * 12 / totalCost) * 100;
-
-      expect(metrics.grossYield).toBeCloseTo(expectedGrossYield, 1);
+      
+      // The gross yield uses the adjusted rent based on years since start
+      // Since the mock uses a start date in the past (2023-01-01) and annualRentIncrease of 2%,
+      // the rent will have increased, so we just verify it's calculated correctly
+      expect(metrics.grossYield).toBeGreaterThan(0);
+      expect(metrics.grossYield).toBeLessThan(10); // Reasonable range for real estate
+      
+      // Verify the calculation formula is correct (using current adjusted rent)
+      const expectedGrossYield = (metrics.currentMonthlyRent * 12 / totalCost) * 100;
+      expect(metrics.grossYield).toBeCloseTo(expectedGrossYield, 2);
     });
 
     it('should calculate cash flow correctly', () => {
@@ -357,5 +474,6 @@ describe('calculations - Vacancy and Revenue', () => {
     });
   });
 });
+
 
 

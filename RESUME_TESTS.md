@@ -260,3 +260,4 @@ Tests à créer pour :
 **Conclusion :** Vous disposez maintenant d'un système de tests robuste couvrant 85,6% des fonctionnalités critiques de l'application. Les tests sont bien structurés, documentés et prêts à être utilisés au quotidien. 🎉
 
 
+

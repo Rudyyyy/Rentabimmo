@@ -723,7 +723,9 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
         <select
           value={referenceYear}
           onChange={(e) => handleReferenceYearChange(Number(e.target.value))}
-          className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
+          disabled
+          aria-readonly="true"
         >
           {availableYears.map(year => (
             <option key={year} value={year}>{year}</option>
@@ -1032,7 +1034,7 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
               step="0.1"
               value={investment.expenseProjection.unpaidRentInsuranceIncrease}
               onChange={(e) => handleProjectionChange('unpaidRentInsuranceIncrease', Number(e.target.value))}
-              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+              className="w-24 flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
             />
           </div>
 
@@ -1094,7 +1096,9 @@ export default function LocationForm({ investment, onUpdate, currentSubTab, onMa
         <select
           value={referenceYear}
           onChange={(e) => handleReferenceYearChange(Number(e.target.value))}
-          className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
+          disabled
+          aria-readonly="true"
         >
           {availableYears.map(year => (
             <option key={year} value={year}>{year}</option>

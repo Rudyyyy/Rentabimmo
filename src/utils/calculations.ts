@@ -25,8 +25,9 @@ export function calculateMonthlyPayment(
            (Math.pow(1 + monthlyRate, numberOfPayments) - 1));
   } else if (deferralType === 'partial') {
     // Différé partiel : on paie les intérêts pendant le différé
-    // La mensualité est calculée sur la durée totale moins le différé
-    const numberOfPayments = (duration * 12) - deferred;
+    // La mensualité de remboursement est calculée sur la durée du prêt (duration * 12)
+    // Le différé vient s'ajouter à cette durée, mais ne la réduit pas
+    const numberOfPayments = duration * 12;
     if (numberOfPayments <= 0) return 0;
     
     return toFixed((amount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
@@ -48,9 +49,9 @@ export function calculateMonthlyPayment(
     // Le capital restant dû après le différé = capital initial + intérêts différés
     const totalAmountAfterDeferral = amount + deferredInterest;
     
-    // La mensualité est calculée sur le montant total dû après le différé
-    // sur la durée totale moins le différé
-    const numberOfPayments = (duration * 12) - deferred;
+    // La mensualité de remboursement est calculée sur la durée du prêt (duration * 12)
+    // Le différé vient s'ajouter à cette durée, mais ne la réduit pas
+    const numberOfPayments = duration * 12;
     if (numberOfPayments <= 0) return 0;
     
     return toFixed((totalAmountAfterDeferral * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
@@ -136,22 +137,28 @@ export function generateAmortizationSchedule(
 
   // Période d'amortissement
   if (deferralType === 'total' && deferredInterest > 0) {
-    // Add deferred interest to remaining balance
-    totalDue = toFixed(remainingPrincipal + deferredInterest);
+    // Add deferred interest to remaining balance - the deferred interest becomes part of the principal
+    // This is the new total capital to reimburse after the deferral period
+    remainingPrincipal = toFixed(remainingPrincipal + deferredInterest);
+    totalDue = toFixed(remainingPrincipal);
     
-    // Calculate new monthly payment with updated balance
-    const updatedMonthlyPayment = toFixed(calculateMonthlyPayment(totalDue, rate, duration, 'none', 0));
+    // Calculate new monthly payment with updated balance (capital + capitalized interest)
+    // The loan duration (duration * 12) represents the repayment period, not including deferral
+    // So we calculate payment over the full loan duration
+    const updatedMonthlyPayment = toFixed(calculateMonthlyPayment(remainingPrincipal, rate, duration, 'none', 0));
 
-    // Regular amortization period
+    // Regular amortization period - now we amortize the total capital (initial + capitalized interest)
+    // The repayment lasts for the full loan duration: duration * 12 months
     for (let month = deferred + 1; month <= (duration * 12) + deferred; month++) {
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
 
+      // Calculate interest on the TOTAL remaining capital (including capitalized deferred interest)
       const interest = toFixed(remainingPrincipal * monthlyRate);
       const principal = toFixed(updatedMonthlyPayment - interest);
       remainingPrincipal = toFixed(Math.max(0, remainingPrincipal - principal));
       totalPaid = toFixed(totalPaid + updatedMonthlyPayment);
-      totalDue = toFixed(remainingPrincipal + deferredInterest);
+      totalDue = toFixed(remainingPrincipal);
 
       schedule.push({
         month,
@@ -167,6 +174,8 @@ export function generateAmortizationSchedule(
     }
   } else {
     // Regular amortization period (for cases without deferral or partial deferral)
+    // For these cases, there's no deferred interest, so totalDue = remainingPrincipal
+    // The repayment period lasts for the full loan duration: duration * 12 months
     for (let month = deferred + 1; month <= (duration * 12) + deferred; month++) {
       const currentDate = new Date(startDateTime);
       currentDate.setMonth(startDateTime.getMonth() + month - 1);
@@ -175,7 +184,8 @@ export function generateAmortizationSchedule(
       const principal = toFixed(monthlyPayment - interest);
       remainingPrincipal = toFixed(Math.max(0, remainingPrincipal - principal));
       totalPaid = toFixed(totalPaid + monthlyPayment);
-      totalDue = toFixed(Math.max(0, totalDue - principal));
+      // For no deferral or partial deferral, totalDue = remainingPrincipal (no capitalized interest)
+      totalDue = toFixed(remainingPrincipal);
 
       schedule.push({
         month,
