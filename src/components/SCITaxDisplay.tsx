@@ -18,6 +18,7 @@ import { Investment } from '../types/investment';
 import { SCI, SCITaxResults } from '../types/sci';
 import { getSCIById } from '../lib/api';
 import { calculateSCITaxResults, calculateAllSCITaxResults } from '../utils/sciTaxCalculations';
+import { getYearCoverage, getInterestForYear, getLoanInfoForYear, adjustForCoverage } from '../utils/propertyCalculations';
 import { Line } from 'react-chartjs-2';
 
 interface Props {
@@ -293,30 +294,21 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
                     const property = sciProperties.find(p => p.id === contrib.propertyId);
                     const yearExpense = property?.expenses.find(e => e.year === selectedYear);
                     
-                    // Calculer le prorata de l'année pour ce bien
-                    const getYearCoverage = (year: number): number => {
-                      if (!property) return 1;
-                      const startOfYear = new Date(year, 0, 1);
-                      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
-                      const projectStart = new Date(property.projectStartDate);
-                      const projectEnd = new Date(property.projectEndDate);
-                      const start = projectStart > startOfYear ? projectStart : startOfYear;
-                      const end = projectEnd < endOfYear ? projectEnd : endOfYear;
-                      if (end < start) return 0;
-                      const msInDay = 1000 * 60 * 60 * 24;
-                      const daysInYear = Math.round((new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / msInDay);
-                      const coveredDays = Math.floor((end.getTime() - start.getTime()) / msInDay) + 1;
-                      return Math.min(1, Math.max(0, coveredDays / daysInYear));
-                    };
+                    // Utiliser les fonctions de calcul communes
+                    const coverage = property ? getYearCoverage(property, selectedYear) : 1;
+                    const partial = coverage > 0 && coverage < 1;
                     
-                    const coverage = getYearCoverage(selectedYear);
-                    const isPartialYear = coverage > 0 && coverage < 1;
+                    // Calculer les intérêts et assurances du prêt directement
+                    const yearlyInterest = property ? getInterestForYear(property, selectedYear) : 0;
+                    const loanInfo = property ? getLoanInfoForYear(property, selectedYear) : { payment: 0, insurance: 0 };
+                    const adjustedInterest = adjustForCoverage(yearlyInterest, coverage);
+                    const adjustedInsurance = adjustForCoverage(loanInfo.insurance, coverage);
                     
                     return (
                       <div key={contrib.propertyId} className="border border-red-200 rounded p-2 bg-red-50">
                         <div className="font-semibold text-red-900 mb-1.5 pb-1 border-b border-red-200 flex items-center justify-between">
                           <span>{contrib.propertyName}</span>
-                          {isPartialYear && (
+                          {partial && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-normal">
                               partiel {(coverage * 100).toFixed(0)}%
                             </span>
@@ -353,20 +345,11 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
                           </div>
                           <div className="flex justify-between font-medium text-blue-800 pt-0.5 border-t border-red-200">
                             <span className="pl-2">• Assurance emprunteur (calculée) :</span>
-                            <span>{formatCurrency(contrib.expenses - 
-                              ((yearExpense?.propertyTax || 0) * coverage) -
-                              ((yearExpense?.condoFees || 0) * coverage) -
-                              ((yearExpense?.propertyInsurance || 0) * coverage) -
-                              ((yearExpense?.managementFees || 0) * coverage) -
-                              ((yearExpense?.unpaidRentInsurance || 0) * coverage) -
-                              ((yearExpense?.repairs || 0) * coverage) -
-                              ((yearExpense?.otherDeductible || 0) * coverage) +
-                              ((yearExpense?.tenantCharges || 0) * coverage) -
-                              ((yearExpense?.interest || 0) * coverage) || 0)}</span>
+                            <span>{formatCurrency(adjustedInsurance)}</span>
                           </div>
                           <div className="flex justify-between font-medium text-blue-800">
                             <span className="pl-2">• Intérêts du prêt (calculés) :</span>
-                            <span>{formatCurrency((yearExpense?.interest || 0) * coverage)}</span>
+                            <span>{formatCurrency(adjustedInterest)}</span>
                           </div>
                           {yearExpense?.tenantCharges && yearExpense.tenantCharges > 0 && (
                             <div className="flex justify-between text-orange-700 pt-0.5 border-t border-red-200">
