@@ -222,8 +222,27 @@ function calculateMicroBIC(
 
 function calculateReelBIC(investment: Investment, year: number): TaxResults {
   const yearExpenses = investment.expenses.find(e => e.year === year);
+  
+  // Si aucune dépense pour cette année, retourner des valeurs par défaut
   if (!yearExpenses) {
-    throw new Error(`No expenses found for year ${year}`);
+    return {
+      regime: 'reel-bic',
+      taxableIncome: 0,
+      deductibleExpenses: 0,
+      tax: 0,
+      socialCharges: 0,
+      totalTax: 0,
+      netIncome: 0,
+      amortization: {
+        building: 0,
+        furniture: 0,
+        works: 0,
+        other: 0,
+        total: 0,
+        used: 0,
+        carriedForward: 0
+      }
+    };
   }
 
   // Obtenir la couverture de l'année pour les années partielles
@@ -458,11 +477,16 @@ export function getRecommendedRegime(
   investment: Investment,
   year: number
 ): TaxRegime {
-  const results = calculateAllTaxRegimes(investment, year);
+  // Si l'année demandée est avant le début du projet, utiliser la première année du projet
+  const projectStartYear = new Date(investment.projectStartDate).getFullYear();
+  const projectEndYear = new Date(investment.projectEndDate).getFullYear();
+  const effectiveYear = Math.max(projectStartYear, Math.min(year, projectEndYear));
+  
+  const results = calculateAllTaxRegimes(investment, effectiveYear);
   
   // Vérifier l'éligibilité aux régimes micro
-  const canUseMicroFoncier = isEligibleForMicroFoncier(investment, year);
-  const canUseMicroBIC = isEligibleForMicroBIC(investment, year);
+  const canUseMicroFoncier = isEligibleForMicroFoncier(investment, effectiveYear);
+  const canUseMicroBIC = isEligibleForMicroBIC(investment, effectiveYear);
 
   // Comparer les résultats nets
   const netIncomes = {

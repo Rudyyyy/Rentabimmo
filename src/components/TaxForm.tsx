@@ -52,12 +52,17 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
   } | null>(null);
   const currentYear = new Date().getFullYear();
   
-  // Calculer le régime recommandé
-  const recommendedRegime = getRecommendedRegime(investment, currentYear);
+  // Utiliser l'année effective (dans la période du bien)
+  const projectStartYear = new Date(investment.projectStartDate).getFullYear();
+  const projectEndYear = new Date(investment.projectEndDate).getFullYear();
+  const effectiveYear = Math.max(projectStartYear, Math.min(currentYear, projectEndYear));
+  
+  // Calculer le régime recommandé pour l'année effective
+  const recommendedRegime = getRecommendedRegime(investment, effectiveYear);
 
   // Mise à jour des résultats fiscaux à chaque changement de paramètres
   useEffect(() => {
-    const results = calculateAllTaxRegimes(investment, currentYear);
+    const results = calculateAllTaxRegimes(investment, effectiveYear);
     
     onUpdate({
       ...investment,
@@ -65,7 +70,7 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
       taxRegime: selectedRegime,
       taxResults: results
     });
-  }, [investment.taxParameters, selectedRegime, currentYear, investment.expenses]);
+  }, [investment.taxParameters, selectedRegime, effectiveYear, investment.expenses]);
 
   // Synchronisation avec la sélection provenant de l'extérieur (sidebar)
   useEffect(() => {
@@ -81,20 +86,20 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
 
   // Synchronisation des revenus avec les paramètres fiscaux
   useEffect(() => {
-    const currentYearExpense = investment.expenses.find(e => e.year === currentYear);
-    if (currentYearExpense && (!investment.taxParameters.rent || !investment.taxParameters.furnishedRent || !investment.taxParameters.tenantCharges || !investment.taxParameters.taxBenefit)) {
+    const effectiveYearExpense = investment.expenses.find(e => e.year === effectiveYear);
+    if (effectiveYearExpense && (!investment.taxParameters.rent || !investment.taxParameters.furnishedRent || !investment.taxParameters.tenantCharges || !investment.taxParameters.taxBenefit)) {
       onUpdate({
         ...investment,
         taxParameters: {
           ...investment.taxParameters,
-          rent: currentYearExpense.rent || 0,
-          furnishedRent: currentYearExpense.furnishedRent || 0,
-          tenantCharges: currentYearExpense.tenantCharges || 0,
-          taxBenefit: currentYearExpense.taxBenefit || 0
+          rent: effectiveYearExpense.rent || 0,
+          furnishedRent: effectiveYearExpense.furnishedRent || 0,
+          tenantCharges: effectiveYearExpense.tenantCharges || 0,
+          taxBenefit: effectiveYearExpense.taxBenefit || 0
         }
       });
     }
-  }, [currentYear, investment.expenses]);
+  }, [effectiveYear, investment.expenses]);
 
   // Gestionnaires d'événements pour les changements de paramètres
   const handleTaxParameterChange = (field: keyof Investment['taxParameters'], value: number) => {
