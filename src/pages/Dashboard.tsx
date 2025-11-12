@@ -1003,6 +1003,15 @@ export default function Dashboard() {
                   )}
                 </Droppable>
               </DragDropContext>
+              <div className="mt-6 pt-5 border-t border-gray-200">
+                <button
+                  onClick={() => setShowQuickForm(true)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Ajouter un bien
+                </button>
+              </div>
             </div>
           </div>
         </aside>
@@ -1168,16 +1177,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bouton d'ajout de bien */}
-      <div className="fixed bottom-6 right-24">
-        <button
-          onClick={() => setShowQuickForm(true)}
-          className="bg-blue-600 text-white rounded-full p-3 shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      </div>
-      
       {/* Formulaire rapide */}
       {showQuickForm && (
         <QuickPropertyForm
