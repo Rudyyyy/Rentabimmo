@@ -14,7 +14,7 @@ import SCISelector from './SCISelector';
 
 interface Props {
   investment: Investment;
-  onUpdate: (field: keyof Investment, value: any) => void;
+  onUpdate: (field: keyof Investment | Partial<Investment>, value?: any) => void;
 }
 
 export default function AcquisitionDetails({ investment, onUpdate }: Props) {
@@ -149,8 +149,11 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
   console.log('AcquisitionDetails render - hasDeferral:', hasDeferral, 'localHasDeferral:', localHasDeferral, 'investment.hasDeferral:', investment?.hasDeferral);
   
   const handleSCIChange = (sciId: string | undefined, propertyValue: number | undefined) => {
-    onUpdate('sciId', sciId);
-    onUpdate('sciPropertyValue', propertyValue);
+    // Mettre à jour les deux champs en une seule fois
+    onUpdate({
+      sciId: sciId,
+      sciPropertyValue: propertyValue
+    } as any);
   };
 
   return (

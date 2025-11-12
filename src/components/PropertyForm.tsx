@@ -254,12 +254,25 @@ export default function PropertyForm() {
   };
 
   // Gestionnaire pour les mises à jour de champs individuels
-  const handleFieldUpdate = (field: keyof Investment, value: any) => {
-    logger.debug('Mise à jour du champ', { field, value });
-    const updatedInvestment = {
-      ...investmentData,
-      [field]: value
-    };
+  const handleFieldUpdate = (field: keyof Investment | Partial<Investment>, value?: any) => {
+    let updatedInvestment: Investment;
+    
+    // Si 'field' est un objet, on fait une mise à jour de plusieurs champs
+    if (typeof field === 'object' && field !== null) {
+      logger.debug('Mise à jour de plusieurs champs', field);
+      updatedInvestment = {
+        ...investmentData,
+        ...field
+      };
+    } else {
+      // Sinon, mise à jour d'un seul champ
+      logger.debug('Mise à jour du champ', { field, value });
+      updatedInvestment = {
+        ...investmentData,
+        [field as keyof Investment]: value
+      };
+    }
+    
     setInvestmentData(updatedInvestment);
     const newMetrics = calculateFinancialMetrics(updatedInvestment);
     setMetrics(newMetrics);
