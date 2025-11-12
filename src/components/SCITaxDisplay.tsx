@@ -293,52 +293,85 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
                     const property = sciProperties.find(p => p.id === contrib.propertyId);
                     const yearExpense = property?.expenses.find(e => e.year === selectedYear);
                     
+                    // Calculer le prorata de l'année pour ce bien
+                    const getYearCoverage = (year: number): number => {
+                      if (!property) return 1;
+                      const startOfYear = new Date(year, 0, 1);
+                      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+                      const projectStart = new Date(property.projectStartDate);
+                      const projectEnd = new Date(property.projectEndDate);
+                      const start = projectStart > startOfYear ? projectStart : startOfYear;
+                      const end = projectEnd < endOfYear ? projectEnd : endOfYear;
+                      if (end < start) return 0;
+                      const msInDay = 1000 * 60 * 60 * 24;
+                      const daysInYear = Math.round((new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / msInDay);
+                      const coveredDays = Math.floor((end.getTime() - start.getTime()) / msInDay) + 1;
+                      return Math.min(1, Math.max(0, coveredDays / daysInYear));
+                    };
+                    
+                    const coverage = getYearCoverage(selectedYear);
+                    const isPartialYear = coverage > 0 && coverage < 1;
+                    
                     return (
                       <div key={contrib.propertyId} className="border border-red-200 rounded p-2 bg-red-50">
-                        <div className="font-semibold text-red-900 mb-1.5 pb-1 border-b border-red-200">
-                          {contrib.propertyName}
+                        <div className="font-semibold text-red-900 mb-1.5 pb-1 border-b border-red-200 flex items-center justify-between">
+                          <span>{contrib.propertyName}</span>
+                          {isPartialYear && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-normal">
+                              partiel {(coverage * 100).toFixed(0)}%
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-0.5 text-red-800">
                           <div className="flex justify-between">
                             <span className="pl-2">• Taxe foncière :</span>
-                            <span>{formatCurrency(yearExpense?.propertyTax || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.propertyTax || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Charges copropriété :</span>
-                            <span>{formatCurrency(yearExpense?.condoFees || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.condoFees || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Assurance propriétaire :</span>
-                            <span>{formatCurrency(yearExpense?.propertyInsurance || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.propertyInsurance || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Frais d'agence :</span>
-                            <span>{formatCurrency(yearExpense?.managementFees || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.managementFees || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Assurance loyers impayés :</span>
-                            <span>{formatCurrency(yearExpense?.unpaidRentInsurance || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.unpaidRentInsurance || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Travaux :</span>
-                            <span>{formatCurrency(yearExpense?.repairs || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.repairs || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="pl-2">• Autres déductibles :</span>
-                            <span>{formatCurrency(yearExpense?.otherDeductible || 0)}</span>
+                            <span>{formatCurrency((yearExpense?.otherDeductible || 0) * coverage)}</span>
                           </div>
                           <div className="flex justify-between font-medium text-blue-800 pt-0.5 border-t border-red-200">
-                            <span className="pl-2">• Assurance emprunteur :</span>
-                            <span>{formatCurrency(yearExpense?.loanInsurance || 0)}</span>
+                            <span className="pl-2">• Assurance emprunteur (calculée) :</span>
+                            <span>{formatCurrency(contrib.expenses - 
+                              ((yearExpense?.propertyTax || 0) * coverage) -
+                              ((yearExpense?.condoFees || 0) * coverage) -
+                              ((yearExpense?.propertyInsurance || 0) * coverage) -
+                              ((yearExpense?.managementFees || 0) * coverage) -
+                              ((yearExpense?.unpaidRentInsurance || 0) * coverage) -
+                              ((yearExpense?.repairs || 0) * coverage) -
+                              ((yearExpense?.otherDeductible || 0) * coverage) +
+                              ((yearExpense?.tenantCharges || 0) * coverage) -
+                              ((yearExpense?.interest || 0) * coverage) || 0)}</span>
                           </div>
                           <div className="flex justify-between font-medium text-blue-800">
-                            <span className="pl-2">• Intérêts du prêt :</span>
-                            <span>{formatCurrency(yearExpense?.interest || 0)}</span>
+                            <span className="pl-2">• Intérêts du prêt (calculés) :</span>
+                            <span>{formatCurrency((yearExpense?.interest || 0) * coverage)}</span>
                           </div>
                           {yearExpense?.tenantCharges && yearExpense.tenantCharges > 0 && (
                             <div className="flex justify-between text-orange-700 pt-0.5 border-t border-red-200">
                               <span className="pl-2">• Charges locataire (non déduct.) :</span>
-                              <span>- {formatCurrency(yearExpense.tenantCharges)}</span>
+                              <span>- {formatCurrency(yearExpense.tenantCharges * coverage)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-bold text-red-900 pt-1 mt-1 border-t border-red-300">
