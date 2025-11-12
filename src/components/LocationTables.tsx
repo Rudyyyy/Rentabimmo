@@ -132,6 +132,11 @@ export default function LocationTables({ investment, currentSubTab, onUpdate, al
 
   // Fonction pour déterminer si une colonne de projection doit être masquée
   const shouldHideProjectionColumn = (field: keyof YearlyExpenses) => {
+    // Exception pour le prêt : toujours afficher si le bien a un prêt
+    if (field === 'loanPayment' && investment.loanAmount && investment.loanAmount > 0) {
+      return false;
+    }
+    
     const projectedExpenses = investment.expenses.filter(expense => expense.year > years.currentYear);
     if (projectedExpenses.length === 0) return true;
     return projectedExpenses.every(expense => {
