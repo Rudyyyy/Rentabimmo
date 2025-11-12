@@ -23,6 +23,7 @@ import { generateAmortizationSchedule, calculateRevenuesWithVacancy } from '../u
 import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
 import TotalGainGoal from '../components/TotalGainGoal';
+import OnboardingTour from '../components/OnboardingTour';
 
 ChartJS.register(
   CategoryScale,
@@ -61,6 +62,10 @@ export default function Dashboard() {
   const [totalGainGoal, setTotalGainGoal] = useState<number>(() => {
     const savedGoal = localStorage.getItem('totalGainGoal');
     return savedGoal ? parseFloat(savedGoal) : 0;
+  });
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    const completed = localStorage.getItem('onboarding_completed');
+    return completed !== 'true';
   });
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -904,6 +909,13 @@ export default function Dashboard() {
           </div>
           <h1 className="text-xl font-semibold text-gray-900 flex-1 text-center">Dashboard</h1>
           <div className="flex items-center space-x-4 flex-1 justify-end">
+            <button
+              onClick={() => setShowOnboarding(true)}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              title="Revoir le guide de démarrage"
+            >
+              Guide de démarrage
+            </button>
             <span className="text-sm text-gray-600">{user?.email}</span>
             <button
               onClick={() => signOut()}
@@ -1184,6 +1196,11 @@ export default function Dashboard() {
           onSave={handleQuickPropertySave}
           onDetailedForm={handleDetailedForm}
         />
+      )}
+
+      {/* Tour guidé de démarrage */}
+      {showOnboarding && (
+        <OnboardingTour onClose={() => setShowOnboarding(false)} />
       )}
     </div>
   );

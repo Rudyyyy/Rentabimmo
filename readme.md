@@ -7,6 +7,7 @@ Ce projet permet de suivre ses investissements immobiliers et calculer la rentab
 
 - **[Documentation complète](./DOCUMENTATION.md)** - Documentation détaillée de l'application
 - **[Guide de démarrage rapide](./GUIDE_DEMARRAGE.md)** - Guide pour démarrer rapidement
+- **[Guide du tour guidé](./GUIDE_ONBOARDING.md)** - Documentation du système d'onboarding
 
 ## 🚀 Tech Stack
 
@@ -23,6 +24,7 @@ Ce projet permet de suivre ses investissements immobiliers et calculer la rentab
 ## 🧪 Fonctionnalités principales
 
 - ✅ Authentification utilisateur sécurisée via Supabase
+- ✅ **Tour guidé interactif** pour les nouveaux utilisateurs
 - ✅ Gestion de plusieurs biens immobiliers
 - ✅ Calculs de rentabilité (rendement brut, net, cash flow, ROI, TRI)
 - ✅ Calculs fiscaux (micro-foncier, réel-foncier, LMNP)
