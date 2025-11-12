@@ -31,6 +31,7 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
   const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [showSCIParams, setShowSCIParams] = useState(false);
+  const [showChargesDetail, setShowChargesDetail] = useState(false);
 
   useEffect(() => {
     loadSCIData();
@@ -114,7 +115,7 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
                 <div>
                   <span className="text-gray-600">Biens :</span>
                   <span className="ml-2 font-semibold text-gray-900">
-                    {sci.propertyIds.length}
+                    {sciProperties.length}
                   </span>
                 </div>
                 <div>
@@ -273,9 +274,41 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
               <p className="text-2xl font-bold text-red-600">
                 {formatCurrency(taxResults.totalDeductibleExpenses)}
               </p>
-              <p className="text-xs text-red-700 mt-1">
-                Charges des biens + charges de fonctionnement SCI
-              </p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-red-700">
+                  Charges immobilières + intérêts prêts + assurances + charges SCI
+                </p>
+                <button
+                  onClick={() => setShowChargesDetail(!showChargesDetail)}
+                  className="text-xs text-red-700 hover:text-red-900 font-medium underline"
+                >
+                  {showChargesDetail ? 'Masquer' : 'Détail'}
+                </button>
+              </div>
+              
+              {showChargesDetail && (
+                <div className="mt-3 pt-3 border-t border-red-300 space-y-1.5 text-xs">
+                  {Object.values(taxResults.propertyContributions).map(contrib => (
+                    <div key={contrib.propertyId} className="flex justify-between">
+                      <span className="text-red-800">Charges {contrib.propertyName} :</span>
+                      <span className="font-medium text-red-900">{formatCurrency(contrib.expenses)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-1 border-t border-red-300">
+                    <span className="text-red-800">Charges fonctionnement SCI :</span>
+                    <span className="font-medium text-red-900">
+                      {formatCurrency(
+                        sci.taxParameters.accountingFees +
+                        sci.taxParameters.legalFees +
+                        sci.taxParameters.bankFees +
+                        sci.taxParameters.insuranceFees +
+                        sci.taxParameters.otherExpenses +
+                        sci.taxParameters.operatingExpenses
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
@@ -374,7 +407,7 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
                     {formatCurrency(taxResults.totalIS)}
                   </p>
                   <p className="text-xs mt-1 opacity-90">
-                    À répartir entre les {sci.propertyIds.length} bien(s) de la SCI
+                    À répartir entre les {sciProperties.length} bien(s) de la SCI
                   </p>
                 </div>
               </>

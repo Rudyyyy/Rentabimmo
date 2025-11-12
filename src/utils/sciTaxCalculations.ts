@@ -204,14 +204,15 @@ function calculatePropertyAmortization(
   let totalAmortization = 0;
   
   // 1. Amortissement du bien immobilier (terrain non amortissable)
-  // On considère que 20% du prix est le terrain (non amortissable)
-  const buildingValue = property.purchasePrice * 0.8;
+  // Utiliser la valeur définie dans taxParameters, sinon 80% du prix d'achat par défaut
+  const buildingValue = property.taxParameters?.buildingValue || (property.purchasePrice * 0.8);
   if (yearsElapsed < taxParameters.buildingAmortizationYears) {
     totalAmortization += buildingValue / taxParameters.buildingAmortizationYears;
   }
   
   // 2. Amortissement du mobilier (si LMNP ou meublé)
-  const furnitureValue = property.lmnpData?.furnitureValue || 0;
+  // Utiliser la valeur définie dans taxParameters, sinon lmnpData
+  const furnitureValue = property.taxParameters?.furnitureValue || property.lmnpData?.furnitureValue || 0;
   if (furnitureValue > 0 && yearsElapsed < taxParameters.furnitureAmortizationYears) {
     totalAmortization += furnitureValue / taxParameters.furnitureAmortizationYears;
   }
