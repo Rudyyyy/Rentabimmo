@@ -12,6 +12,7 @@ import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime, Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
+import SCITaxSidebar from './SCITaxSidebar';
 import { Brain, X } from 'lucide-react';
 import { processUserMessageWithMistral } from '../services/mistral';
 import { processUserMessage } from '../services/openai';
@@ -766,6 +767,12 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
         );
 
       case 'imposition':
+        // Si le bien est en SCI, afficher la sidebar SCI
+        if (investmentData?.sciId && onInvestmentUpdate) {
+          return <SCITaxSidebar investment={investmentData} onUpdate={onInvestmentUpdate} />;
+        }
+
+        // Sinon, afficher la sidebar classique pour les biens en nom propre
         const regimeLabels: Record<TaxRegime, string> = {
           'micro-foncier': 'Location nue - Micro-foncier',
           'reel-foncier': 'Location nue - Frais réels',

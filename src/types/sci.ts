@@ -46,6 +46,14 @@ export interface SCITaxParameters {
   furnitureAmortizationYears: number; // 5-10 ans
   worksAmortizationYears: number; // 10-15 ans
   
+  // Charges de fonctionnement de la SCI (annuelles)
+  operatingExpenses: number; // Frais de comptabilité, frais bancaires, AGM, etc.
+  accountingFees: number; // Honoraires du comptable
+  legalFees: number; // Frais juridiques et administratifs
+  bankFees: number; // Frais bancaires de la SCI
+  insuranceFees: number; // Assurance de la SCI (responsabilité civile, etc.)
+  otherExpenses: number; // Autres charges de fonctionnement
+  
   // Taux de prélèvement à la source de l'IS (optionnel)
   advancePaymentRate?: number; // Acomptes d'IS (généralement 4 acomptes trimestriels)
 }
@@ -104,6 +112,12 @@ export const defaultSCITaxParameters: SCITaxParameters = {
   buildingAmortizationYears: 25,
   furnitureAmortizationYears: 10,
   worksAmortizationYears: 10,
+  operatingExpenses: 0,
+  accountingFees: 0,
+  legalFees: 0,
+  bankFees: 0,
+  insuranceFees: 0,
+  otherExpenses: 0,
   advancePaymentRate: 0
 };
 

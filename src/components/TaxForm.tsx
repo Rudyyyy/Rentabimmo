@@ -25,6 +25,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import { HelpCircle, Info, Award, ChevronDown, ChevronUp, Calculator, X } from 'lucide-react';
 import { Investment, TaxRegime, TaxResults, YearlyExpenses } from '../types/investment';
 import { calculateAllTaxRegimes, getRecommendedRegime } from '../utils/taxCalculations';
+import SCITaxDisplay from './SCITaxDisplay';
 
 interface Props {
   investment: Investment;
@@ -1040,6 +1041,11 @@ export default function TaxForm({ investment, onUpdate, currentSubTab }: Props) 
       </div>
     );
   };
+
+  // Si le bien est en SCI, afficher le composant SCITaxDisplay
+  if (investment.sciId) {
+    return <SCITaxDisplay investment={investment} currentYear={effectiveYear} />;
+  }
 
   return (
     <div className="space-y-6">

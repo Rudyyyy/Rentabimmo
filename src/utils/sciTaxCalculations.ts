@@ -107,10 +107,21 @@ export function calculateSCITaxResults(
     totalAmortization += propertyAmortization;
   });
   
-  // 2. Calculer le résultat fiscal avant imputation des déficits
+  // 2. Ajouter les charges de fonctionnement globales de la SCI
+  const sciOperatingExpenses = 
+    (sci.taxParameters.operatingExpenses || 0) +
+    (sci.taxParameters.accountingFees || 0) +
+    (sci.taxParameters.legalFees || 0) +
+    (sci.taxParameters.bankFees || 0) +
+    (sci.taxParameters.insuranceFees || 0) +
+    (sci.taxParameters.otherExpenses || 0);
+  
+  totalDeductibleExpenses += sciOperatingExpenses;
+  
+  // 3. Calculer le résultat fiscal avant imputation des déficits
   const resultBeforeDeficit = totalRevenues - totalDeductibleExpenses - totalAmortization;
   
-  // 3. Gestion des déficits reportables
+  // 4. Gestion des déficits reportables
   const previousDeficit = previousYearResults?.deficitCarriedForward || sci.taxParameters.previousDeficits;
   
   let deficitUsed = 0;
@@ -129,7 +140,7 @@ export function calculateSCITaxResults(
   
   const deficitCarriedForward = previousDeficit - deficitUsed + deficitGenerated;
   
-  // 4. Calcul de l'IS avec barème progressif
+  // 5. Calcul de l'IS avec barème progressif
   let isAtReducedRate = 0;
   let isAtStandardRate = 0;
   let totalIS = 0;
@@ -146,7 +157,7 @@ export function calculateSCITaxResults(
     totalIS = isAtReducedRate + isAtStandardRate;
   }
   
-  // 5. Répartir l'IS par prorata sur chaque bien
+  // 6. Répartir l'IS par prorata sur chaque bien
   Object.keys(propertyContributions).forEach(propertyId => {
     const contribution = propertyContributions[propertyId];
     contribution.allocatedIS = totalIS * contribution.prorataWeight;
