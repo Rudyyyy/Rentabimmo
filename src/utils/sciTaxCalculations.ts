@@ -198,7 +198,7 @@ export function calculateSCITaxResults(
  * Calcule l'amortissement d'un bien pour une année donnée
  * @param property - Le bien immobilier
  * @param year - Année fiscale
- * @param taxParameters - Paramètres fiscaux de la SCI
+ * @param taxParameters - Paramètres fiscaux de la SCI (fallback si le bien n'a pas ses propres paramètres)
  * @returns Le montant d'amortissement pour l'année
  */
 function calculatePropertyAmortization(
@@ -206,7 +206,8 @@ function calculatePropertyAmortization(
   year: number,
   taxParameters: SCITaxParameters
 ): number {
-  const startDate = new Date(property.startDate);
+  // Utiliser projectStartDate au lieu de startDate pour cohérence
+  const startDate = new Date(property.projectStartDate);
   const startYear = startDate.getFullYear();
   
   // Calcul des années écoulées depuis l'acquisition
@@ -217,24 +218,27 @@ function calculatePropertyAmortization(
   
   let totalAmortization = 0;
   
+  // Utiliser les paramètres du bien en priorité, sinon ceux de la SCI
+  const buildingAmortYears = property.taxParameters?.buildingAmortizationYears || taxParameters.buildingAmortizationYears;
+  const furnitureAmortYears = property.taxParameters?.furnitureAmortizationYears || taxParameters.furnitureAmortizationYears;
+  const worksAmortYears = property.taxParameters?.worksAmortizationYears || taxParameters.worksAmortizationYears;
+  
   // 1. Amortissement du bien immobilier (terrain non amortissable)
-  // Utiliser la valeur définie dans taxParameters, sinon 80% du prix d'achat par défaut
   const buildingValue = property.taxParameters?.buildingValue || (property.purchasePrice * 0.8);
-  if (yearsElapsed < taxParameters.buildingAmortizationYears) {
-    totalAmortization += buildingValue / taxParameters.buildingAmortizationYears;
+  if (yearsElapsed < buildingAmortYears) {
+    totalAmortization += buildingValue / buildingAmortYears;
   }
   
   // 2. Amortissement du mobilier (si LMNP ou meublé)
-  // Utiliser la valeur définie dans taxParameters, sinon lmnpData
   const furnitureValue = property.taxParameters?.furnitureValue || property.lmnpData?.furnitureValue || 0;
-  if (furnitureValue > 0 && yearsElapsed < taxParameters.furnitureAmortizationYears) {
-    totalAmortization += furnitureValue / taxParameters.furnitureAmortizationYears;
+  if (furnitureValue > 0 && yearsElapsed < furnitureAmortYears) {
+    totalAmortization += furnitureValue / furnitureAmortYears;
   }
   
   // 3. Amortissement des travaux
   const worksValue = property.renovationCosts || 0;
-  if (worksValue > 0 && yearsElapsed < taxParameters.worksAmortizationYears) {
-    totalAmortization += worksValue / taxParameters.worksAmortizationYears;
+  if (worksValue > 0 && yearsElapsed < worksAmortYears) {
+    totalAmortization += worksValue / worksAmortYears;
   }
   
   return totalAmortization;

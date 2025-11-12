@@ -32,6 +32,7 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
     buildingValue: "Valeur du bien immobilier (hors terrain). En général, on considère que 20% du prix d'achat correspond au terrain (non amortissable).",
     buildingAmortizationYears: "Durée d'amortissement du bien. Généralement entre 25 et 30 ans pour un immeuble.",
     furnitureValue: "Valeur du mobilier si le bien est meublé. Cela inclut tous les meubles et équipements.",
+    furnitureAmortizationYears: "Durée d'amortissement du mobilier. Généralement entre 5 et 10 ans selon le type de mobilier.",
     renovationCosts: "Montant des travaux de rénovation effectués. Ces travaux seront amortis sur leur durée de vie.",
     worksAmortizationYears: "Durée d'amortissement des travaux. Généralement entre 10 et 15 ans selon la nature des travaux."
   };
@@ -165,12 +166,42 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="0"
           />
-          {(investment.taxParameters?.furnitureValue || 0) > 0 && (
+        </div>
+
+        {/* Durée d'amortissement du mobilier */}
+        {(investment.taxParameters?.furnitureValue || 0) > 0 && (
+          <div className="relative group">
+            <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+              <span className="flex items-center gap-1">
+                Durée d'amortissement (années)
+                <HelpCircle 
+                  className="h-3.5 w-3.5 text-gray-400 cursor-help"
+                  onMouseEnter={() => setHoveredField('furnitureAmortizationYears')}
+                  onMouseLeave={() => setHoveredField(null)}
+                />
+              </span>
+            </label>
+            {hoveredField === 'furnitureAmortizationYears' && (
+              <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
+                {tooltips.furnitureAmortizationYears}
+              </div>
+            )}
+            <input
+              type="number"
+              value={investment.taxParameters?.furnitureAmortizationYears || 10}
+              onChange={(e) => handleInputChange('taxParameters', {
+                ...investment.taxParameters,
+                furnitureAmortizationYears: Number(e.target.value)
+              })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              max="50"
+            />
             <div className="text-xs text-gray-500 mt-1">
               Amortissement annuel : {formatCurrency((investment.taxParameters?.furnitureValue || 0) / (investment.taxParameters?.furnitureAmortizationYears || 10))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Section : Travaux */}
