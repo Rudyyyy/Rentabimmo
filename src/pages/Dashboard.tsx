@@ -24,6 +24,9 @@ import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
 import TotalGainGoal from '../components/TotalGainGoal';
 import OnboardingTour from '../components/OnboardingTour';
+import { SCI } from '../types/sci';
+import { getSCIs, createSCI } from '../lib/api';
+import SCIForm from '../components/SCIForm';
 
 ChartJS.register(
   CategoryScale,
@@ -47,6 +50,7 @@ interface CashFlowData {
 
 export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
+  const [scis, setSCIs] = useState<SCI[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
@@ -59,6 +63,7 @@ export default function Dashboard() {
     return savedOrder ? JSON.parse(savedOrder) : [];
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
+  const [showSCIForm, setShowSCIForm] = useState(false);
   const [totalGainGoal, setTotalGainGoal] = useState<number>(() => {
     const savedGoal = localStorage.getItem('totalGainGoal');
     return savedGoal ? parseFloat(savedGoal) : 0;
@@ -160,6 +165,12 @@ export default function Dashboard() {
       console.log(`✅ ${properties.length} biens chargés:`, properties.map(p => ({ id: p.id, name: p.name })));
       
       setProperties(properties);
+      
+      // Charger les SCI
+      console.log("🔍 Chargement des SCI pour l'utilisateur:", user.id);
+      const loadedSCIs = await getSCIs(user.id);
+      console.log(`✅ ${loadedSCIs.length} SCI chargées:`, loadedSCIs.map(s => ({ id: s.id, name: s.name })));
+      setSCIs(loadedSCIs);
       
       // Initialiser les préférences et l'ordre pour les nouveaux biens
       if (properties.length > 0) {
@@ -895,6 +906,41 @@ export default function Dashboard() {
     navigate('/property/new');
   };
 
+  const handleSCISave = async (sciData: Omit<SCI, 'id' | 'user_id' | 'created_at'>) => {
+    if (!user) return;
+    
+    try {
+      const newSCI = await createSCI(user.id, sciData);
+      if (newSCI) {
+        console.log('✅ SCI créée:', newSCI);
+        await loadProperties(); // Recharger les SCI
+        setShowSCIForm(false);
+      } else {
+        setError('Erreur lors de la création de la SCI');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création de la SCI:', error);
+      setError('Erreur lors de la création de la SCI');
+    }
+  };
+
+  // Séparer les biens en nom propre et les biens en SCI
+  const propertiesWithoutSCI = properties.filter(property => {
+    const investment = property.investment_data as unknown as Investment;
+    return !investment?.sciId;
+  });
+
+  const propertiesBySCI: Record<string, Property[]> = {};
+  properties.forEach(property => {
+    const investment = property.investment_data as unknown as Investment;
+    if (investment?.sciId) {
+      if (!propertiesBySCI[investment.sciId]) {
+        propertiesBySCI[investment.sciId] = [];
+      }
+      propertiesBySCI[investment.sciId].push(property);
+    }
+  });
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Bannière unifiée */}
@@ -930,100 +976,176 @@ export default function Dashboard() {
       <div className="flex">
         {/* Sidebar avec la liste des biens */}
         <aside className="w-110 min-h-screen bg-gray-100 p-4">
-          <div className="sticky top-4">
-            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Mes biens immobiliers</h2>
-              <DragDropContext onDragEnd={handleDragEnd}>
-                <Droppable droppableId="properties">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-3"
-                    >
-                      {sortedProperties.map((property, index) => {
-                        const investment = property.investment_data as unknown as Investment;
-                        if (!investment || typeof investment !== 'object') return null;
-                        
-                        return (
-                          <Draggable key={property.id} draggableId={property.id} index={index}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative ${
-                                  snapshot.isDragging ? 'bg-blue-50 shadow-lg border-blue-300' : ''
-                                }`}
-                              >
-                                {/* Drag handle */}
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="absolute left-2 top-1/2 -translate-y-1/2 cursor-move flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <div className="w-1 h-8 bg-gray-300 rounded-full"></div>
-                                </div>
+          <div className="sticky top-4 space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+            
+            {/* Section : Biens en nom propre */}
+            {propertiesWithoutSCI.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">🏠 Biens en nom propre</h2>
+                <div className="space-y-3">
+                  {propertiesWithoutSCI.map((property) => {
+                    const investment = property.investment_data as unknown as Investment;
+                    if (!investment || typeof investment !== 'object') return null;
+                    
+                    return (
+                      <div
+                        key={property.id}
+                        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative"
+                      >
+                        {/* Bouton de modification */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/property/${property.id}`);
+                          }}
+                          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Modifier le bien"
+                        >
+                          <Pencil className="h-4 w-4 text-gray-500" />
+                        </button>
 
-                                {/* Bouton de modification */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/property/${property.id}`);
-                                  }}
-                                  className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Modifier le bien"
-                                >
-                                  <Pencil className="h-4 w-4 text-gray-500" />
-                                </button>
-
-                                {/* Contenu principal */}
-                                <div className="pl-6 pr-10">
-                                  <div className="flex justify-between items-start mb-2">
-                                    <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
-                                      }}
-                                      className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-                                        showInDashboard[property.id] 
-                                          ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                    >
-                                      {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
-                                    </button>
-                                  </div>
-                                  {investment.description && (
-                                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                                      {investment.description}
-                                    </p>
-                                  )}
-                                  <div className="text-sm">
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-gray-600">Régime</span>
-                                      <span className="font-medium text-gray-900">{getRegimeLabel(investment.selectedRegime)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-              <div className="mt-6 pt-5 border-t border-gray-200">
-                <button
-                  onClick={() => setShowQuickForm(true)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  <Plus className="h-5 w-5" />
-                  Ajouter un bien
-                </button>
+                        {/* Contenu principal */}
+                        <div className="pr-10">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                              }}
+                              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                                showInDashboard[property.id] 
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                            </button>
+                          </div>
+                          {investment.description && (
+                            <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                              {investment.description}
+                            </p>
+                          )}
+                          <div className="text-sm">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600">Régime</span>
+                              <span className="font-medium text-gray-900">{getRegimeLabel(investment.selectedRegime)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowQuickForm(true)}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Ajouter un bien
+                  </button>
+                </div>
               </div>
+            )}
+
+            {/* Section : SCI */}
+            {scis.map((sci) => (
+              <div key={sci.id} className="bg-white border border-blue-200 rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-blue-900">🏢 SCI {sci.name}</h2>
+                  <span className="text-xs text-gray-500">
+                    {propertiesBySCI[sci.id]?.length || 0} bien(s)
+                  </span>
+                </div>
+                
+                {sci.description && (
+                  <p className="text-sm text-gray-600 mb-4">{sci.description}</p>
+                )}
+
+                <div className="space-y-3">
+                  {propertiesBySCI[sci.id]?.map((property) => {
+                    const investment = property.investment_data as unknown as Investment;
+                    if (!investment || typeof investment !== 'object') return null;
+                    
+                    return (
+                      <div
+                        key={property.id}
+                        className="bg-blue-50 border border-blue-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative"
+                      >
+                        {/* Bouton de modification */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/property/${property.id}`);
+                          }}
+                          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-blue-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Modifier le bien"
+                        >
+                          <Pencil className="h-4 w-4 text-blue-600" />
+                        </button>
+
+                        {/* Contenu principal */}
+                        <div className="pr-10">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                              }}
+                              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                                showInDashboard[property.id] 
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                            </button>
+                          </div>
+                          {investment.description && (
+                            <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                              {investment.description}
+                            </p>
+                          )}
+                          <div className="text-sm">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600">Régime</span>
+                              <span className="font-medium text-gray-900">SCI à l'IS</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <button
+                    onClick={() => {
+                      // TODO: Ajouter un bien à cette SCI
+                      console.log('Ajouter un bien à la SCI:', sci.id);
+                      setShowQuickForm(true);
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-blue-600 bg-white border border-blue-300 rounded-lg hover:bg-blue-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Ajouter un bien à cette SCI
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Bouton : Créer une nouvelle SCI */}
+            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+              <button
+                onClick={() => setShowSCIForm(true)}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <Plus className="h-5 w-5" />
+                Créer une SCI
+              </button>
             </div>
           </div>
         </aside>
@@ -1195,6 +1317,14 @@ export default function Dashboard() {
           onClose={() => setShowQuickForm(false)}
           onSave={handleQuickPropertySave}
           onDetailedForm={handleDetailedForm}
+        />
+      )}
+
+      {/* Formulaire de création de SCI */}
+      {showSCIForm && (
+        <SCIForm
+          onClose={() => setShowSCIForm(false)}
+          onSave={handleSCISave}
         />
       )}
 

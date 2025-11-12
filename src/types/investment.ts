@@ -209,6 +209,10 @@ export interface Investment {
   manualDeficit: number;
   lmnpData?: LMNPData;
   
+  // SCI properties (si le bien appartient à une SCI)
+  sciId?: string; // ID de la SCI propriétaire
+  sciPropertyValue?: number; // Valeur du bien dans la SCI (pour calcul du prorata)
+  
   selectedRegime: TaxRegime;
   taxParameters: TaxParameters;
   taxResults: Record<TaxRegime, TaxResults>;
