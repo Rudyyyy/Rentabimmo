@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { Investment } from '../types/investment';
 import { HelpCircle, CreditCard } from 'lucide-react';
 import { calculateMonthlyPayment, generateAmortizationSchedule } from '../utils/calculations';
+import SCISelector from './SCISelector';
 
 interface Props {
   investment: Investment;
@@ -147,8 +148,21 @@ export default function AcquisitionDetails({ investment, onUpdate }: Props) {
 
   console.log('AcquisitionDetails render - hasDeferral:', hasDeferral, 'localHasDeferral:', localHasDeferral, 'investment.hasDeferral:', investment?.hasDeferral);
   
+  const handleSCIChange = (sciId: string | undefined, propertyValue: number | undefined) => {
+    onUpdate('sciId', sciId);
+    onUpdate('sciPropertyValue', propertyValue);
+  };
+
   return (
     <div className="space-y-3">
+      
+      {/* Sélection de la SCI */}
+      <SCISelector
+        selectedSCIId={investment?.sciId}
+        propertyValue={investment?.sciPropertyValue}
+        purchasePrice={investment?.purchasePrice || 0}
+        onChange={handleSCIChange}
+      />
       
       {/* Prix d'achat */}
       <div className="flex items-center justify-between gap-3">
