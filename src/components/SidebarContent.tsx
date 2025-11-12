@@ -16,6 +16,9 @@ import { Brain, X } from 'lucide-react';
 import { processUserMessageWithMistral } from '../services/mistral';
 import { processUserMessage } from '../services/openai';
 import { saveTargetSaleYear, saveTargetGain, saveTargetCashflow } from '../lib/api';
+import TotalGainGoal from './TotalGainGoal';
+import CashFlowGoal from './CashFlowGoal';
+import IRRSummary from './IRRSummary';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -1741,6 +1744,48 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           );
         }
         
+        // Sous-onglet TRI
+        if (currentSubTab === 'tri') {
+          // Récupérer l'année de revente sélectionnée
+          const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+          const endYear = investmentData?.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
+          
+          // Fonction pour calculer le solde de revente (réutilisée de PropertyForm)
+          const calculateBalanceForIRR = (yearIndex: number, regime: TaxRegime): number => {
+            const year = startYear + yearIndex;
+            
+            // Récupérer les paramètres de vente depuis localStorage
+            const investmentId = `${investmentData.purchasePrice || 0}_${investmentData.startDate || ''}`;
+            const saleParamsStr = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
+            const saleParams = saleParamsStr ? JSON.parse(saleParamsStr) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
+
+            // Calculer le prix de vente revalorisé
+            const yearsSincePurchase = year - startYear;
+            const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+            const netSellingPrice = revaluedValue - Number(saleParams.agencyFees);
+
+            // Calculer le capital restant dû (simplifié - utilise une estimation linéaire)
+            const loanDuration = Number(investmentData.loanDuration) || 20;
+            const yearsPassed = Math.min(yearsSincePurchase, loanDuration);
+            const remainingBalance = yearsPassed < loanDuration
+              ? Number(investmentData.loanAmount) * (1 - yearsPassed / loanDuration)
+              : 0;
+            
+            const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
+            const saleBalance = netSellingPrice - totalDebt;
+
+            return saleBalance;
+          };
+          
+          return (
+            <IRRSummary
+              investment={investmentData as Investment}
+              calculateBalanceFunction={calculateBalanceForIRR}
+              targetYear={selectedSaleYear}
+            />
+          );
+        }
+        
         // Sous-onglet Bilan (par défaut) - contenu existant inchangé
         const REGIME_LABELS: Record<TaxRegime, string> = {
           'micro-foncier': 'Location nue - Micro-foncier',
@@ -1892,6 +1937,7 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
   // Configuration des sous-onglets pour bilan (si applicable)
   const bilanSubTabs = currentMainTab === 'bilan' ? [
     { id: 'bilan', label: 'Bilan', icon: FaChartBar },
+    { id: 'tri', label: 'TRI', icon: FaChartLine },
     { id: 'objectif', label: 'Objectif', icon: FaChartPie }
   ] : [];
 

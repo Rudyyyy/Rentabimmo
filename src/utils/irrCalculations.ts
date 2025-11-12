@@ -82,27 +82,72 @@ export function calculateIRR(
  * @param maxIterations Nombre maximum d'itérations
  * @returns Le TRI en décimal (ex: 0.08 pour 8%)
  */
-function calculateIRRFromCashFlows(
+export function calculateIRRFromCashFlows(
   cashFlows: number[],
   guess: number = 0.1,
   tolerance: number = 1e-7,
   maxIterations: number = 100
 ): number {
+  // Validation des entrées
+  if (!cashFlows || cashFlows.length < 2) {
+    console.error('IRR calculation requires at least 2 cash flows');
+    return 0;
+  }
+  
+  // Vérifier que tous les flux sont des nombres valides
+  if (cashFlows.some(cf => !isFinite(cf))) {
+    console.error('IRR calculation requires all cash flows to be finite numbers');
+    return 0;
+  }
+  
+  // Vérifier qu'il y a au moins un flux positif et un flux négatif
+  const hasPositive = cashFlows.some(cf => cf > 0);
+  const hasNegative = cashFlows.some(cf => cf < 0);
+  
+  if (!hasPositive || !hasNegative) {
+    console.error('IRR calculation requires both positive and negative cash flows');
+    return 0;
+  }
+  
   let rate = guess;
   
   for (let i = 0; i < maxIterations; i++) {
     const npv = calculateNPV(cashFlows, rate);
+    
+    // Vérifier que la NPV est un nombre valide
+    if (!isFinite(npv)) {
+      console.error('NPV calculation resulted in non-finite value');
+      return 0;
+    }
+    
     if (Math.abs(npv) < tolerance) {
       return rate; // Convergence atteinte
     }
     
     const derivative = calculateNPVDerivative(cashFlows, rate);
-    if (derivative === 0) {
-      break; // Éviter la division par zéro
+    
+    // Vérifier que la dérivée est valide
+    if (!isFinite(derivative) || Math.abs(derivative) < 1e-10) {
+      // Dérivée trop petite ou invalide, essayer avec un autre guess
+      rate = guess * 2;
+      continue;
     }
     
     // Méthode de Newton-Raphson: r_n+1 = r_n - f(r_n) / f'(r_n)
     const newRate = rate - npv / derivative;
+    
+    // Vérifier que le nouveau taux est valide
+    if (!isFinite(newRate)) {
+      console.error('New rate calculation resulted in non-finite value');
+      return 0;
+    }
+    
+    // Limiter le taux à des valeurs raisonnables
+    if (newRate > 10 || newRate < -0.99) {
+      // Taux trop extrême, réinitialiser avec un guess différent
+      rate = guess / 2;
+      continue;
+    }
     
     // Vérifier la convergence
     if (Math.abs(newRate - rate) < tolerance) {
@@ -113,7 +158,12 @@ function calculateIRRFromCashFlows(
   }
   
   // Si aucune solution n'est trouvée après le nombre maximum d'itérations
-  // Retourner la meilleure approximation
+  // Vérifier que le rate final est valide avant de le retourner
+  if (!isFinite(rate)) {
+    console.warn('IRR calculation did not converge to a finite value');
+    return 0;
+  }
+  
   return rate;
 }
 

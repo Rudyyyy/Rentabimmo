@@ -36,6 +36,7 @@ import TaxForm from './TaxForm';
 import { calculateFinancialMetrics } from '../utils/calculations';
 import SaleDisplay from './SaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
+import IRRDisplay from './IRRDisplay';
 import HierarchicalNavigation from './HierarchicalNavigation';
 import MobileNavigation from './MobileNavigation';
 import SidebarContent from './SidebarContent';
@@ -428,6 +429,35 @@ export default function PropertyForm() {
     setSearchParams(newSearchParams, { replace: true });
   };
 
+  // Fonction pour calculer le solde après vente pour le TRI
+  // Cette fonction est utilisée par IRRDisplay pour calculer le TRI
+  const calculateBalanceForIRR = (yearIndex: number, regime: TaxRegime): number => {
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    const year = startYear + yearIndex;
+    
+    // Récupérer les paramètres de vente depuis localStorage
+    const investmentId = `${investmentData.purchasePrice || 0}_${investmentData.startDate || ''}`;
+    const saleParamsStr = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
+    const saleParams = saleParamsStr ? JSON.parse(saleParamsStr) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
+
+    // Calculer le prix de vente revalorisé
+    const yearsSincePurchase = year - startYear;
+    const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+    const netSellingPrice = revaluedValue - Number(saleParams.agencyFees);
+
+    // Calculer le capital restant dû (simplifié - utilise une estimation linéaire)
+    const loanDuration = Number(investmentData.loanDuration) || 20;
+    const yearsPassed = Math.min(yearsSincePurchase, loanDuration);
+    const remainingBalance = yearsPassed < loanDuration
+      ? Number(investmentData.loanAmount) * (1 - yearsPassed / loanDuration)
+      : 0;
+    
+    const totalDebt = remainingBalance + Number(saleParams.earlyRepaymentFees);
+    const saleBalance = netSellingPrice - totalDebt;
+
+    return saleBalance;
+  };
+
   const renderContent = () => {
     if (!metrics) return null;
 
@@ -501,6 +531,14 @@ export default function PropertyForm() {
               objectiveYear={objectiveYear}
               objectiveTargetGain={objectiveTargetGain}
               objectiveTargetCashflow={objectiveTargetCashflow}
+            />
+          );
+        } else if (currentSubTab === 'tri') {
+          // Afficher le TRI (Taux de Rentabilité Interne)
+          return (
+            <IRRDisplay
+              investment={investmentData}
+              calculateBalanceFunction={calculateBalanceForIRR}
             />
           );
         } else if (currentSubTab === 'bilan' || currentSubTab === 'statistiques' || currentSubTab === 'analyse-ia' || !currentSubTab) {
