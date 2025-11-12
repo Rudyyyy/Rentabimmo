@@ -287,25 +287,125 @@ export default function SCITaxDisplay({ investment, currentYear }: Props) {
               </div>
               
               {showChargesDetail && (
-                <div className="mt-3 pt-3 border-t border-red-300 space-y-1.5 text-xs">
-                  {Object.values(taxResults.propertyContributions).map(contrib => (
-                    <div key={contrib.propertyId} className="flex justify-between">
-                      <span className="text-red-800">Charges {contrib.propertyName} :</span>
-                      <span className="font-medium text-red-900">{formatCurrency(contrib.expenses)}</span>
+                <div className="mt-3 pt-3 border-t border-red-300 space-y-2 text-xs">
+                  {/* Détail par bien */}
+                  {Object.values(taxResults.propertyContributions).map(contrib => {
+                    const property = sciProperties.find(p => p.id === contrib.propertyId);
+                    const yearExpense = property?.expenses.find(e => e.year === selectedYear);
+                    
+                    return (
+                      <div key={contrib.propertyId} className="border border-red-200 rounded p-2 bg-red-50">
+                        <div className="font-semibold text-red-900 mb-1.5 pb-1 border-b border-red-200">
+                          {contrib.propertyName}
+                        </div>
+                        <div className="space-y-0.5 text-red-800">
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Taxe foncière :</span>
+                            <span>{formatCurrency(yearExpense?.propertyTax || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Charges copropriété :</span>
+                            <span>{formatCurrency(yearExpense?.condoFees || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Assurance propriétaire :</span>
+                            <span>{formatCurrency(yearExpense?.propertyInsurance || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Frais d'agence :</span>
+                            <span>{formatCurrency(yearExpense?.managementFees || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Assurance loyers impayés :</span>
+                            <span>{formatCurrency(yearExpense?.unpaidRentInsurance || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Travaux :</span>
+                            <span>{formatCurrency(yearExpense?.repairs || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="pl-2">• Autres déductibles :</span>
+                            <span>{formatCurrency(yearExpense?.otherDeductible || 0)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium text-blue-800 pt-0.5 border-t border-red-200">
+                            <span className="pl-2">• Assurance emprunteur :</span>
+                            <span>{formatCurrency(yearExpense?.loanInsurance || 0)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium text-blue-800">
+                            <span className="pl-2">• Intérêts du prêt :</span>
+                            <span>{formatCurrency(yearExpense?.interest || 0)}</span>
+                          </div>
+                          {yearExpense?.tenantCharges && yearExpense.tenantCharges > 0 && (
+                            <div className="flex justify-between text-orange-700 pt-0.5 border-t border-red-200">
+                              <span className="pl-2">• Charges locataire (non déduct.) :</span>
+                              <span>- {formatCurrency(yearExpense.tenantCharges)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-bold text-red-900 pt-1 mt-1 border-t border-red-300">
+                            <span>Total bien :</span>
+                            <span>{formatCurrency(contrib.expenses)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Charges de fonctionnement SCI */}
+                  <div className="border border-red-200 rounded p-2 bg-red-50">
+                    <div className="font-semibold text-red-900 mb-1.5 pb-1 border-b border-red-200">
+                      Charges de fonctionnement SCI
                     </div>
-                  ))}
-                  <div className="flex justify-between pt-1 border-t border-red-300">
-                    <span className="text-red-800">Charges fonctionnement SCI :</span>
-                    <span className="font-medium text-red-900">
-                      {formatCurrency(
-                        sci.taxParameters.accountingFees +
-                        sci.taxParameters.legalFees +
-                        sci.taxParameters.bankFees +
-                        sci.taxParameters.insuranceFees +
-                        sci.taxParameters.otherExpenses +
-                        sci.taxParameters.operatingExpenses
+                    <div className="space-y-0.5 text-red-800">
+                      {sci.taxParameters.accountingFees > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Frais comptables :</span>
+                          <span>{formatCurrency(sci.taxParameters.accountingFees)}</span>
+                        </div>
                       )}
-                    </span>
+                      {sci.taxParameters.legalFees > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Frais juridiques :</span>
+                          <span>{formatCurrency(sci.taxParameters.legalFees)}</span>
+                        </div>
+                      )}
+                      {sci.taxParameters.bankFees > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Frais bancaires :</span>
+                          <span>{formatCurrency(sci.taxParameters.bankFees)}</span>
+                        </div>
+                      )}
+                      {sci.taxParameters.insuranceFees > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Assurances SCI :</span>
+                          <span>{formatCurrency(sci.taxParameters.insuranceFees)}</span>
+                        </div>
+                      )}
+                      {sci.taxParameters.operatingExpenses > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Charges d'exploitation :</span>
+                          <span>{formatCurrency(sci.taxParameters.operatingExpenses)}</span>
+                        </div>
+                      )}
+                      {sci.taxParameters.otherExpenses > 0 && (
+                        <div className="flex justify-between">
+                          <span className="pl-2">• Autres charges :</span>
+                          <span>{formatCurrency(sci.taxParameters.otherExpenses)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-red-900 pt-1 mt-1 border-t border-red-300">
+                        <span>Total SCI :</span>
+                        <span>
+                          {formatCurrency(
+                            sci.taxParameters.accountingFees +
+                            sci.taxParameters.legalFees +
+                            sci.taxParameters.bankFees +
+                            sci.taxParameters.insuranceFees +
+                            sci.taxParameters.otherExpenses +
+                            sci.taxParameters.operatingExpenses
+                          )}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
