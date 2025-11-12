@@ -310,6 +310,35 @@ function ExpensesForm({ investment, onUpdate }: Props) {
     return Number(baseValue) * Math.pow(1 + (Number(increaseRate) || 0) / 100, yearsAhead);
   };
 
+  // Recalculer les intérêts et assurances du prêt pour toutes les années
+  useEffect(() => {
+    if (!investment.loanAmount || investment.loanAmount === 0) return;
+    
+    const updatedExpenses = [...investment.expenses];
+    let hasChanges = false;
+    
+    // Recalculer les intérêts et assurances pour toutes les années existantes
+    for (const expense of updatedExpenses) {
+      const yearlyInterests = getInterestForYear(expense.year);
+      const loanInfo = getLoanInfoForYear(expense.year);
+      
+      // Mettre à jour seulement si les valeurs ont changé
+      if (expense.interest !== yearlyInterests || expense.loanPayment !== loanInfo.payment || expense.loanInsurance !== loanInfo.insurance) {
+        expense.interest = yearlyInterests;
+        expense.loanPayment = loanInfo.payment;
+        expense.loanInsurance = loanInfo.insurance;
+        hasChanges = true;
+      }
+    }
+    
+    if (hasChanges) {
+      onUpdate({
+        ...investment,
+        expenses: updatedExpenses.sort((a, b) => a.year - b.year)
+      });
+    }
+  }, [investment.loanAmount, investment.interestRate, investment.loanDuration, investment.insuranceRate, investment.deferralType, investment.deferredPeriod, investment.startDate]);
+
   // Initialisation des projections au montage du composant
   useEffect(() => {
     const baseValues = investment.expenseProjection.baseYear;
