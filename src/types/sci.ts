@@ -6,6 +6,8 @@
  * prorata sur chaque bien.
  */
 
+export type RentalType = 'unfurnished' | 'furnished';
+
 export interface SCI {
   id: string;
   name: string;
@@ -56,6 +58,9 @@ export interface SCITaxParameters {
   
   // Taux de prélèvement à la source de l'IS (optionnel)
   advancePaymentRate?: number; // Acomptes d'IS (généralement 4 acomptes trimestriels)
+  
+  // Type de location pour tous les biens de la SCI
+  rentalType: RentalType; // 'unfurnished' (nu) ou 'furnished' (meublé)
 }
 
 export interface SCITaxResults {
@@ -118,7 +123,8 @@ export const defaultSCITaxParameters: SCITaxParameters = {
   bankFees: 0,
   insuranceFees: 0,
   otherExpenses: 0,
-  advancePaymentRate: 0
+  advancePaymentRate: 0,
+  rentalType: 'unfurnished' // Par défaut : location nue
 };
 
 // SCI par défaut pour la création

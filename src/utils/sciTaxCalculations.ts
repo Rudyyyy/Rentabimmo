@@ -10,72 +10,8 @@
  */
 
 import { SCI, SCITaxResults, PropertyContribution, SCITaxParameters } from '../types/sci';
-import { Investment, YearlyExpenses } from '../types/investment';
-import { generateAmortizationSchedule } from './calculations';
-
-/**
- * Calcule la fraction de l'année couverte par le projet
- * @param property - Le bien immobilier
- * @param year - L'année à évaluer
- * @returns Un nombre entre 0 et 1 représentant la fraction d'année couverte
- */
-function getYearCoverage(property: Investment, year: number): number {
-  const startOfYear = new Date(year, 0, 1);
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
-  const projectStart = new Date(property.projectStartDate);
-  const projectEnd = new Date(property.projectEndDate);
-  
-  const start = projectStart > startOfYear ? projectStart : startOfYear;
-  const end = projectEnd < endOfYear ? projectEnd : endOfYear;
-  
-  if (end < start) return 0;
-  
-  const msInDay = 1000 * 60 * 60 * 24;
-  const daysInYear = Math.round((new Date(year + 1, 0, 1).getTime() - new Date(year, 0, 1).getTime()) / msInDay);
-  const coveredDays = Math.floor((end.getTime() - start.getTime()) / msInDay) + 1;
-  
-  return Math.min(1, Math.max(0, coveredDays / daysInYear));
-}
-
-/**
- * Calcule les intérêts et assurances du prêt pour une année donnée
- * @param property - Le bien immobilier
- * @param year - L'année fiscale
- * @returns Les intérêts et assurances annuels
- */
-function calculateLoanInfo(property: Investment, year: number): { interest: number; insurance: number } {
-  if (!property.loanAmount || !property.interestRate || !property.loanDuration) {
-    return { interest: 0, insurance: 0 };
-  }
-  
-  const amortizationResult = generateAmortizationSchedule(
-    property.loanAmount,
-    property.interestRate,
-    property.loanDuration,
-    property.deferralType,
-    property.deferredPeriod,
-    property.startDate
-  );
-  
-  const projectStart = new Date(property.projectStartDate);
-  const projectEnd = new Date(property.projectEndDate);
-  
-  const yearlyInterest = amortizationResult.schedule
-    .filter(row => {
-      const d = new Date(row.date);
-      return d.getFullYear() === year && d >= projectStart && d <= projectEnd;
-    })
-    .reduce((sum, row) => sum + row.interest, 0);
-  
-  const yearlyInsurance = amortizationResult.schedule
-    .filter(row => {
-      const d = new Date(row.date);
-      return d.getFullYear() === year && d >= projectStart && d <= projectEnd;
-    })
-    .reduce((sum) => sum + (property.loanAmount * (property.insuranceRate || 0)) / (100 * 12), 0);
-  
-  return { interest: yearlyInterest, insurance: yearlyInsurance };
-}
+import { Investment } from '../types/investment';
+import { getYearCoverage, getInterestForYear, getLoanInfoForYear, adjustForCoverage } from './propertyCalculations';
 
 /**
  * Calcule les résultats fiscaux consolidés d'une SCI pour une année donnée
@@ -113,9 +49,10 @@ export function calculateSCITaxResults(
     const coverage = getYearCoverage(property, year);
     
     // Calculer les intérêts et assurances du prêt (toujours calculés dynamiquement)
-    const loanInfo = calculateLoanInfo(property, year);
-    const adjustedLoanInterest = loanInfo.interest * coverage;
-    const adjustedLoanInsurance = loanInfo.insurance * coverage;
+    const yearlyInterest = getInterestForYear(property, year);
+    const loanInfo = getLoanInfoForYear(property, year);
+    const adjustedLoanInterest = adjustForCoverage(yearlyInterest, coverage);
+    const adjustedLoanInsurance = adjustForCoverage(loanInfo.insurance, coverage);
     
     if (!yearExpense) {
       // Si pas de dépenses pour cette année, on met des valeurs à 0
@@ -138,22 +75,24 @@ export function calculateSCITaxResults(
       return;
     }
     
-    // Appliquer le prorata aux revenus
-    const propertyRevenues = 
-      (Number(yearExpense.rent || 0) + Number(yearExpense.furnishedRent || 0)) * coverage;
+    // Appliquer le prorata aux revenus (selon le type de location de la SCI)
+    const rentAmount = sci.taxParameters.rentalType === 'unfurnished' 
+      ? Number(yearExpense.rent || 0) 
+      : Number(yearExpense.furnishedRent || 0);
+    const propertyRevenues = adjustForCoverage(rentAmount, coverage);
     
     // Appliquer le prorata aux charges déductibles du bien
     const propertyExpenses = 
-      (Number(yearExpense.propertyTax || 0) * coverage) +
-      (Number(yearExpense.condoFees || 0) * coverage) +
-      (Number(yearExpense.propertyInsurance || 0) * coverage) +
-      (Number(yearExpense.managementFees || 0) * coverage) +
-      (Number(yearExpense.unpaidRentInsurance || 0) * coverage) +
-      (Number(yearExpense.repairs || 0) * coverage) +
-      (Number(yearExpense.otherDeductible || 0) * coverage) +
+      adjustForCoverage(Number(yearExpense.propertyTax || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.condoFees || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.propertyInsurance || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.managementFees || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.unpaidRentInsurance || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.repairs || 0), coverage) +
+      adjustForCoverage(Number(yearExpense.otherDeductible || 0), coverage) +
       adjustedLoanInsurance + // Déjà ajusté
       adjustedLoanInterest - // Déjà ajusté
-      (Number(yearExpense.tenantCharges || 0) * coverage); // Les charges locataires sont soustraites
+      adjustForCoverage(Number(yearExpense.tenantCharges || 0), coverage); // Les charges locataires sont soustraites
     
     // Amortissements du bien
     const propertyAmortization = calculatePropertyAmortization(property, year, sci.taxParameters);

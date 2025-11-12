@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { SCI, defaultSCI, defaultSCITaxParameters } from '../types/sci';
+import { SCI, defaultSCI, defaultSCITaxParameters, RentalType } from '../types/sci';
 
 interface SCIFormProps {
   onClose: () => void;
@@ -51,6 +51,9 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
   const [worksAmortizationYears, setWorksAmortizationYears] = useState(
     initialData?.taxParameters.worksAmortizationYears || defaultSCITaxParameters.worksAmortizationYears
   );
+  const [rentalType, setRentalType] = useState(
+    initialData?.taxParameters.rentalType || defaultSCITaxParameters.rentalType
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +86,15 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
           previousDeficits: initialData?.taxParameters.previousDeficits || 0,
           buildingAmortizationYears,
           furnitureAmortizationYears,
-          worksAmortizationYears
+          worksAmortizationYears,
+          operatingExpenses: initialData?.taxParameters.operatingExpenses || 0,
+          accountingFees: initialData?.taxParameters.accountingFees || 0,
+          legalFees: initialData?.taxParameters.legalFees || 0,
+          bankFees: initialData?.taxParameters.bankFees || 0,
+          insuranceFees: initialData?.taxParameters.insuranceFees || 0,
+          otherExpenses: initialData?.taxParameters.otherExpenses || 0,
+          advancePaymentRate: initialData?.taxParameters.advancePaymentRate || 0,
+          rentalType
         },
         propertyIds: initialData?.propertyIds || [],
         consolidatedTaxResults: initialData?.consolidatedTaxResults || {},
@@ -331,6 +342,38 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
                 />
                 <p className="text-xs text-gray-500 mt-1">Généralement 10-15 ans</p>
               </div>
+            </div>
+          </div>
+
+          {/* Section : Type de location */}
+          <div className="mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Type de location</h3>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
+              <p className="text-sm text-amber-800">
+                <strong>Important :</strong> Ce paramètre détermine si les revenus pris en compte sont les loyers nus ou meublés pour tous les biens de la SCI.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="rentalType" className="block text-sm font-medium text-gray-700 mb-1">
+                Type de location
+              </label>
+              <select
+                id="rentalType"
+                value={rentalType}
+                onChange={(e) => setRentalType(e.target.value as 'unfurnished' | 'furnished')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              >
+                <option value="unfurnished">Location nue</option>
+                <option value="furnished">Location meublée</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {rentalType === 'unfurnished' 
+                  ? 'Seuls les loyers nus seront pris en compte dans le calcul fiscal'
+                  : 'Seuls les loyers meublés seront pris en compte dans le calcul fiscal'}
+              </p>
             </div>
           </div>
 
