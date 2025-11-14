@@ -54,6 +54,23 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
   const [rentalType, setRentalType] = useState(
     initialData?.taxParameters.rentalType || defaultSCITaxParameters.rentalType
   );
+  
+  // Frais de fonctionnement de la SCI
+  const [accountingFees, setAccountingFees] = useState(
+    initialData?.taxParameters.accountingFees || defaultSCITaxParameters.accountingFees
+  );
+  const [legalFees, setLegalFees] = useState(
+    initialData?.taxParameters.legalFees || defaultSCITaxParameters.legalFees
+  );
+  const [bankFees, setBankFees] = useState(
+    initialData?.taxParameters.bankFees || defaultSCITaxParameters.bankFees
+  );
+  const [insuranceFees, setInsuranceFees] = useState(
+    initialData?.taxParameters.insuranceFees || defaultSCITaxParameters.insuranceFees
+  );
+  const [otherExpenses, setOtherExpenses] = useState(
+    initialData?.taxParameters.otherExpenses || defaultSCITaxParameters.otherExpenses
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,12 +104,12 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
           buildingAmortizationYears,
           furnitureAmortizationYears,
           worksAmortizationYears,
-          operatingExpenses: initialData?.taxParameters.operatingExpenses || 0,
-          accountingFees: initialData?.taxParameters.accountingFees || 0,
-          legalFees: initialData?.taxParameters.legalFees || 0,
-          bankFees: initialData?.taxParameters.bankFees || 0,
-          insuranceFees: initialData?.taxParameters.insuranceFees || 0,
-          otherExpenses: initialData?.taxParameters.otherExpenses || 0,
+          operatingExpenses: accountingFees + legalFees + bankFees + insuranceFees + otherExpenses,
+          accountingFees,
+          legalFees,
+          bankFees,
+          insuranceFees,
+          otherExpenses,
           advancePaymentRate: initialData?.taxParameters.advancePaymentRate || 0,
           rentalType
         },
@@ -374,6 +391,118 @@ export default function SCIForm({ onClose, onSave, initialData, title = 'Créer 
                   ? 'Seuls les loyers nus seront pris en compte dans le calcul fiscal'
                   : 'Seuls les loyers meublés seront pris en compte dans le calcul fiscal'}
               </p>
+            </div>
+          </div>
+
+          {/* Section : Frais de fonctionnement */}
+          <div className="mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Frais de fonctionnement de la SCI</h3>
+            
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+              <p className="text-sm text-green-800">
+                <strong>Nouveauté :</strong> Ces frais annuels seront déduits du résultat fiscal de la SCI. Ils viennent s'ajouter aux charges déductibles des biens.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="accountingFees" className="block text-sm font-medium text-gray-700 mb-1">
+                  Honoraires comptable (€/an)
+                </label>
+                <input
+                  id="accountingFees"
+                  type="number"
+                  value={accountingFees}
+                  onChange={(e) => setAccountingFees(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="100"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Frais d'expertise comptable annuels</p>
+              </div>
+
+              <div>
+                <label htmlFor="legalFees" className="block text-sm font-medium text-gray-700 mb-1">
+                  Frais juridiques (€/an)
+                </label>
+                <input
+                  id="legalFees"
+                  type="number"
+                  value={legalFees}
+                  onChange={(e) => setLegalFees(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="50"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Frais d'avocat, publications, AGM...</p>
+              </div>
+
+              <div>
+                <label htmlFor="bankFees" className="block text-sm font-medium text-gray-700 mb-1">
+                  Frais bancaires (€/an)
+                </label>
+                <input
+                  id="bankFees"
+                  type="number"
+                  value={bankFees}
+                  onChange={(e) => setBankFees(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="10"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Frais de tenue de compte de la SCI</p>
+              </div>
+
+              <div>
+                <label htmlFor="insuranceFees" className="block text-sm font-medium text-gray-700 mb-1">
+                  Assurances SCI (€/an)
+                </label>
+                <input
+                  id="insuranceFees"
+                  type="number"
+                  value={insuranceFees}
+                  onChange={(e) => setInsuranceFees(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="50"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Responsabilité civile, etc.</p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label htmlFor="otherExpenses" className="block text-sm font-medium text-gray-700 mb-1">
+                  Autres frais (€/an)
+                </label>
+                <input
+                  id="otherExpenses"
+                  type="number"
+                  value={otherExpenses}
+                  onChange={(e) => setOtherExpenses(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="50"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Autres charges de fonctionnement déductibles</p>
+              </div>
+            </div>
+
+            {/* Affichage du total des frais de fonctionnement */}
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Total des frais de fonctionnement annuels :</span>
+                <span className="text-lg font-semibold text-gray-900">
+                  {new Intl.NumberFormat('fr-FR', { 
+                    style: 'currency', 
+                    currency: 'EUR',
+                    maximumFractionDigits: 0
+                  }).format(accountingFees + legalFees + bankFees + insuranceFees + otherExpenses)}
+                </span>
+              </div>
             </div>
           </div>
 

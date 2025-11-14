@@ -42,9 +42,9 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
   const buildingValue = investment.taxParameters?.buildingValue || defaultBuildingValue;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* En-tête informatif */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <div className="flex items-start gap-3">
           <Building2 className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
@@ -52,15 +52,14 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
               Bien en SCI à l'IS
             </h4>
             <p className="text-xs text-blue-800">
-              Les paramètres ci-dessous servent au calcul de l'IS global de la SCI. 
-              L'impôt sera ensuite réparti par prorata sur chaque bien.
+              Paramètres pour le calcul de l'IS consolidé de la SCI.
             </p>
           </div>
         </div>
       </div>
 
       {/* Section : Amortissements du bien */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <Calculator className="h-4 w-4 text-gray-600" />
           <h4 className="text-sm font-semibold text-gray-900">Amortissements</h4>
@@ -68,72 +67,72 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
 
         {/* Valeur du bien */}
         <div className="relative group">
-          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-            <span className="flex items-center gap-1">
-              Valeur du bien (hors terrain)
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+              Valeur bien
               <HelpCircle 
                 className="h-3.5 w-3.5 text-gray-400 cursor-help"
                 onMouseEnter={() => setHoveredField('buildingValue')}
                 onMouseLeave={() => setHoveredField(null)}
               />
-            </span>
-          </label>
+            </label>
+            <input
+              type="number"
+              value={buildingValue}
+              onChange={(e) => handleInputChange('taxParameters', {
+                ...investment.taxParameters,
+                buildingValue: Number(e.target.value)
+              })}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Valeur"
+            />
+          </div>
           {hoveredField === 'buildingValue' && (
             <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
               {tooltips.buildingValue}
             </div>
           )}
-          <input
-            type="number"
-            value={buildingValue}
-            onChange={(e) => handleInputChange('taxParameters', {
-              ...investment.taxParameters,
-              buildingValue: Number(e.target.value)
-            })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Valeur amortissable"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Par défaut : {formatCurrency(defaultBuildingValue)} (80% du prix d'achat)
+          <p className="text-xs text-gray-500 mt-1 text-right">
+            Par défaut : {formatCurrency(defaultBuildingValue)}
           </p>
         </div>
 
         {/* Durée d'amortissement du bien */}
         <div className="relative group">
-          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-            <span className="flex items-center gap-1">
-              Durée d'amortissement (années)
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+              Durée (ans)
               <HelpCircle 
                 className="h-3.5 w-3.5 text-gray-400 cursor-help"
                 onMouseEnter={() => setHoveredField('buildingAmortizationYears')}
                 onMouseLeave={() => setHoveredField(null)}
               />
-            </span>
-          </label>
+            </label>
+            <input
+              type="number"
+              value={investment.taxParameters?.buildingAmortizationYears || 25}
+              onChange={(e) => handleInputChange('taxParameters', {
+                ...investment.taxParameters,
+                buildingAmortizationYears: Number(e.target.value)
+              })}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              max="50"
+            />
+          </div>
           {hoveredField === 'buildingAmortizationYears' && (
             <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
               {tooltips.buildingAmortizationYears}
             </div>
           )}
-          <input
-            type="number"
-            value={investment.taxParameters?.buildingAmortizationYears || 25}
-            onChange={(e) => handleInputChange('taxParameters', {
-              ...investment.taxParameters,
-              buildingAmortizationYears: Number(e.target.value)
-            })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            min="1"
-            max="50"
-          />
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-gray-500 mt-1 text-right">
             Amortissement annuel : {formatCurrency(buildingValue / (investment.taxParameters?.buildingAmortizationYears || 25))}
           </div>
         </div>
       </div>
 
       {/* Section : Mobilier (si meublé) */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <Wrench className="h-4 w-4 text-gray-600" />
           <h4 className="text-sm font-semibold text-gray-900">Mobilier</h4>
@@ -141,63 +140,63 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
 
         {/* Valeur du mobilier */}
         <div className="relative group">
-          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-            <span className="flex items-center gap-1">
-              Valeur du mobilier
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+              Valeur mobilier
               <HelpCircle 
                 className="h-3.5 w-3.5 text-gray-400 cursor-help"
                 onMouseEnter={() => setHoveredField('furnitureValue')}
                 onMouseLeave={() => setHoveredField(null)}
               />
-            </span>
-          </label>
+            </label>
+            <input
+              type="number"
+              value={investment.taxParameters?.furnitureValue || 0}
+              onChange={(e) => handleInputChange('taxParameters', {
+                ...investment.taxParameters,
+                furnitureValue: Number(e.target.value)
+              })}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0"
+            />
+          </div>
           {hoveredField === 'furnitureValue' && (
             <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
               {tooltips.furnitureValue}
             </div>
           )}
-          <input
-            type="number"
-            value={investment.taxParameters?.furnitureValue || 0}
-            onChange={(e) => handleInputChange('taxParameters', {
-              ...investment.taxParameters,
-              furnitureValue: Number(e.target.value)
-            })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="0"
-          />
         </div>
 
         {/* Durée d'amortissement du mobilier */}
         {(investment.taxParameters?.furnitureValue || 0) > 0 && (
           <div className="relative group">
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-              <span className="flex items-center gap-1">
-                Durée d'amortissement (années)
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+                Durée (ans)
                 <HelpCircle 
                   className="h-3.5 w-3.5 text-gray-400 cursor-help"
                   onMouseEnter={() => setHoveredField('furnitureAmortizationYears')}
                   onMouseLeave={() => setHoveredField(null)}
                 />
-              </span>
-            </label>
+              </label>
+              <input
+                type="number"
+                value={investment.taxParameters?.furnitureAmortizationYears || 10}
+                onChange={(e) => handleInputChange('taxParameters', {
+                  ...investment.taxParameters,
+                  furnitureAmortizationYears: Number(e.target.value)
+                })}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                max="50"
+              />
+            </div>
             {hoveredField === 'furnitureAmortizationYears' && (
               <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
                 {tooltips.furnitureAmortizationYears}
               </div>
             )}
-            <input
-              type="number"
-              value={investment.taxParameters?.furnitureAmortizationYears || 10}
-              onChange={(e) => handleInputChange('taxParameters', {
-                ...investment.taxParameters,
-                furnitureAmortizationYears: Number(e.target.value)
-              })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              min="1"
-              max="50"
-            />
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 mt-1 text-right">
               Amortissement annuel : {formatCurrency((investment.taxParameters?.furnitureValue || 0) / (investment.taxParameters?.furnitureAmortizationYears || 10))}
             </div>
           </div>
@@ -205,7 +204,7 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
       </div>
 
       {/* Section : Travaux */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <Wrench className="h-4 w-4 text-gray-600" />
           <h4 className="text-sm font-semibold text-gray-900">Travaux</h4>
@@ -213,60 +212,60 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
 
         {/* Montant des travaux */}
         <div className="relative group">
-          <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-            <span className="flex items-center gap-1">
-              Montant des travaux
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+              Montant travaux
               <HelpCircle 
                 className="h-3.5 w-3.5 text-gray-400 cursor-help"
                 onMouseEnter={() => setHoveredField('renovationCosts')}
                 onMouseLeave={() => setHoveredField(null)}
               />
-            </span>
-          </label>
+            </label>
+            <input
+              type="number"
+              value={investment.renovationCosts || 0}
+              onChange={(e) => handleInputChange('renovationCosts', e.target.value)}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0"
+            />
+          </div>
           {hoveredField === 'renovationCosts' && (
             <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
               {tooltips.renovationCosts}
             </div>
           )}
-          <input
-            type="number"
-            value={investment.renovationCosts || 0}
-            onChange={(e) => handleInputChange('renovationCosts', e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="0"
-          />
         </div>
 
         {/* Durée d'amortissement des travaux */}
         {(investment.renovationCosts || 0) > 0 && (
           <div className="relative group">
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-              <span className="flex items-center gap-1">
-                Durée d'amortissement (années)
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">
+                Durée (ans)
                 <HelpCircle 
                   className="h-3.5 w-3.5 text-gray-400 cursor-help"
                   onMouseEnter={() => setHoveredField('worksAmortizationYears')}
                   onMouseLeave={() => setHoveredField(null)}
                 />
-              </span>
-            </label>
+              </label>
+              <input
+                type="number"
+                value={investment.taxParameters?.worksAmortizationYears || 10}
+                onChange={(e) => handleInputChange('taxParameters', {
+                  ...investment.taxParameters,
+                  worksAmortizationYears: Number(e.target.value)
+                })}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                max="30"
+              />
+            </div>
             {hoveredField === 'worksAmortizationYears' && (
               <div className="absolute left-0 top-full mt-1 z-10 bg-gray-900 text-white text-xs rounded-lg p-3 w-64 shadow-lg">
                 {tooltips.worksAmortizationYears}
               </div>
             )}
-            <input
-              type="number"
-              value={investment.taxParameters?.worksAmortizationYears || 10}
-              onChange={(e) => handleInputChange('taxParameters', {
-                ...investment.taxParameters,
-                worksAmortizationYears: Number(e.target.value)
-              })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              min="1"
-              max="30"
-            />
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 mt-1 text-right">
               Amortissement annuel : {formatCurrency((investment.renovationCosts || 0) / (investment.taxParameters?.worksAmortizationYears || 10))}
             </div>
           </div>
@@ -274,8 +273,8 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
       </div>
 
       {/* Récapitulatif des amortissements */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h5 className="text-sm font-semibold text-gray-900 mb-3">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+        <h5 className="text-sm font-semibold text-gray-900 mb-2">
           Récapitulatif des amortissements annuels
         </h5>
         <div className="space-y-2 text-sm">
@@ -315,7 +314,7 @@ export default function SCITaxSidebar({ investment, onUpdate }: Props) {
       </div>
 
       {/* Note explicative */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
         <p className="text-xs text-amber-800">
           <strong>ℹ️ Fonctionnement :</strong> Ces amortissements seront ajoutés aux charges 
           déductibles de ce bien lors du calcul de l'IS consolidé de la SCI. L'IS total sera 

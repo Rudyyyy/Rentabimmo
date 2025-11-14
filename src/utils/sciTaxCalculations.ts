@@ -14,6 +14,22 @@ import { Investment } from '../types/investment';
 import { getYearCoverage, getInterestForYear, getLoanInfoForYear, adjustForCoverage } from './propertyCalculations';
 
 /**
+ * Calcule la couverture de l'année pour la SCI (basée sur tous les biens)
+ * Prend le maximum de couverture parmi tous les biens de la SCI
+ * @param properties - Liste des biens appartenant à la SCI
+ * @param year - Année fiscale
+ * @returns La fraction de l'année couverte par la SCI (0 à 1)
+ */
+function calculateSCIYearCoverage(properties: Investment[], year: number): number {
+  if (properties.length === 0) return 0;
+  
+  // Pour la SCI, on prend la couverture maximale parmi tous les biens
+  // Car les frais de fonctionnement de la SCI sont actifs dès qu'au moins un bien est actif
+  const coverages = properties.map(property => getYearCoverage(property, year));
+  return Math.max(...coverages, 0);
+}
+
+/**
  * Calcule les résultats fiscaux consolidés d'une SCI pour une année donnée
  * @param sci - La SCI
  * @param properties - Liste des biens appartenant à la SCI
@@ -94,8 +110,8 @@ export function calculateSCITaxResults(
       adjustedLoanInterest - // Déjà ajusté
       adjustForCoverage(Number(yearExpense.tenantCharges || 0), coverage); // Les charges locataires sont soustraites
     
-    // Amortissements du bien
-    const propertyAmortization = calculatePropertyAmortization(property, year, sci.taxParameters);
+    // Amortissements du bien (avec prorata temporel)
+    const propertyAmortization = calculatePropertyAmortization(property, year, sci.taxParameters, coverage);
     
     // Contribution au résultat (peut être négatif)
     const contributionToResult = propertyRevenues - propertyExpenses - propertyAmortization;
@@ -122,13 +138,20 @@ export function calculateSCITaxResults(
   });
   
   // 2. Ajouter les charges de fonctionnement globales de la SCI
-  const sciOperatingExpenses = 
-    (sci.taxParameters.operatingExpenses || 0) +
+  // Calculer la couverture de l'année pour la SCI (min/max de tous les biens)
+  const sciYearCoverage = calculateSCIYearCoverage(properties, year);
+  
+  // Frais de fonctionnement annuels de la SCI (SOMME des frais détaillés, PAS operatingExpenses)
+  // Note: operatingExpenses est stocké comme la somme mais on le recalcule pour éviter toute incohérence
+  const annualSciOperatingExpenses = 
     (sci.taxParameters.accountingFees || 0) +
     (sci.taxParameters.legalFees || 0) +
     (sci.taxParameters.bankFees || 0) +
     (sci.taxParameters.insuranceFees || 0) +
     (sci.taxParameters.otherExpenses || 0);
+  
+  // Appliquer le prorata temporel aux frais de fonctionnement
+  const sciOperatingExpenses = adjustForCoverage(annualSciOperatingExpenses, sciYearCoverage);
   
   totalDeductibleExpenses += sciOperatingExpenses;
   
@@ -199,12 +222,14 @@ export function calculateSCITaxResults(
  * @param property - Le bien immobilier
  * @param year - Année fiscale
  * @param taxParameters - Paramètres fiscaux de la SCI (fallback si le bien n'a pas ses propres paramètres)
- * @returns Le montant d'amortissement pour l'année
+ * @param coverage - Fraction de l'année couverte (0 à 1) pour le prorata temporel
+ * @returns Le montant d'amortissement pour l'année (ajusté au prorata)
  */
 function calculatePropertyAmortization(
   property: Investment,
   year: number,
-  taxParameters: SCITaxParameters
+  taxParameters: SCITaxParameters,
+  coverage: number = 1
 ): number {
   // Utiliser projectStartDate au lieu de startDate pour cohérence
   const startDate = new Date(property.projectStartDate);
@@ -226,19 +251,22 @@ function calculatePropertyAmortization(
   // 1. Amortissement du bien immobilier (terrain non amortissable)
   const buildingValue = property.taxParameters?.buildingValue || (property.purchasePrice * 0.8);
   if (yearsElapsed < buildingAmortYears) {
-    totalAmortization += buildingValue / buildingAmortYears;
+    const annualBuildingAmortization = buildingValue / buildingAmortYears;
+    totalAmortization += adjustForCoverage(annualBuildingAmortization, coverage);
   }
   
   // 2. Amortissement du mobilier (si LMNP ou meublé)
   const furnitureValue = property.taxParameters?.furnitureValue || property.lmnpData?.furnitureValue || 0;
   if (furnitureValue > 0 && yearsElapsed < furnitureAmortYears) {
-    totalAmortization += furnitureValue / furnitureAmortYears;
+    const annualFurnitureAmortization = furnitureValue / furnitureAmortYears;
+    totalAmortization += adjustForCoverage(annualFurnitureAmortization, coverage);
   }
   
   // 3. Amortissement des travaux
   const worksValue = property.renovationCosts || 0;
   if (worksValue > 0 && yearsElapsed < worksAmortYears) {
-    totalAmortization += worksValue / worksAmortYears;
+    const annualWorksAmortization = worksValue / worksAmortYears;
+    totalAmortization += adjustForCoverage(annualWorksAmortization, coverage);
   }
   
   return totalAmortization;

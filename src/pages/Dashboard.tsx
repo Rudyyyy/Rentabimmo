@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Settings } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import {
@@ -25,7 +25,7 @@ import QuickPropertyForm from '../components/QuickPropertyForm';
 import TotalGainGoal from '../components/TotalGainGoal';
 import OnboardingTour from '../components/OnboardingTour';
 import { SCI } from '../types/sci';
-import { getSCIs, createSCI } from '../lib/api';
+import { getSCIs, createSCI, updateSCI } from '../lib/api';
 import SCIForm from '../components/SCIForm';
 
 ChartJS.register(
@@ -64,6 +64,7 @@ export default function Dashboard() {
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [showSCIForm, setShowSCIForm] = useState(false);
+  const [editingSCI, setEditingSCI] = useState<SCI | null>(null);
   
   // Objectifs de gain total par onglet (personal et par SCI)
   const [totalGainGoals, setTotalGainGoals] = useState<{
@@ -979,18 +980,42 @@ export default function Dashboard() {
     if (!user) return;
     
     try {
-      const newSCI = await createSCI(user.id, sciData);
-      if (newSCI) {
-        console.log('✅ SCI créée:', newSCI);
-        await loadProperties(); // Recharger les SCI
-        setShowSCIForm(false);
+      if (editingSCI) {
+        // Mode édition - mise à jour
+        const success = await updateSCI(editingSCI.id, sciData);
+        if (success) {
+          console.log('✅ SCI mise à jour:', sciData.name);
+          await loadProperties(); // Recharger les SCI
+          setShowSCIForm(false);
+          setEditingSCI(null);
+        } else {
+          setError('Erreur lors de la mise à jour de la SCI');
+        }
       } else {
-        setError('Erreur lors de la création de la SCI');
+        // Mode création
+        const newSCI = await createSCI(user.id, sciData);
+        if (newSCI) {
+          console.log('✅ SCI créée:', newSCI);
+          await loadProperties(); // Recharger les SCI
+          setShowSCIForm(false);
+        } else {
+          setError('Erreur lors de la création de la SCI');
+        }
       }
     } catch (error) {
-      console.error('Erreur lors de la création de la SCI:', error);
-      setError('Erreur lors de la création de la SCI');
+      console.error('Erreur lors de la sauvegarde de la SCI:', error);
+      setError('Erreur lors de la sauvegarde de la SCI');
     }
+  };
+  
+  const handleEditSCI = (sci: SCI) => {
+    setEditingSCI(sci);
+    setShowSCIForm(true);
+  };
+  
+  const handleCloseSCIForm = () => {
+    setShowSCIForm(false);
+    setEditingSCI(null);
   };
 
   // Séparer les biens en nom propre et les biens en SCI
@@ -1121,9 +1146,18 @@ export default function Dashboard() {
 
             {/* Section : SCI */}
             {scis.map((sci) => (
-              <div key={sci.id} className="bg-white border border-blue-200 rounded-lg shadow-lg p-6">
+              <div key={sci.id} className="bg-white border border-blue-200 rounded-lg shadow-lg p-6 group">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-blue-900">🏢 SCI {sci.name}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-blue-900">🏢 SCI {sci.name}</h2>
+                    <button
+                      onClick={() => handleEditSCI(sci)}
+                      className="p-1.5 rounded-full hover:bg-blue-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Modifier la SCI"
+                    >
+                      <Settings className="h-4 w-4 text-blue-600" />
+                    </button>
+                  </div>
                   <span className="text-xs text-gray-500">
                     {propertiesBySCI[sci.id]?.length || 0} bien(s)
                   </span>
@@ -1463,11 +1497,13 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Formulaire de création de SCI */}
+      {/* Formulaire de création/édition de SCI */}
       {showSCIForm && (
         <SCIForm
-          onClose={() => setShowSCIForm(false)}
+          onClose={handleCloseSCIForm}
           onSave={handleSCISave}
+          initialData={editingSCI || undefined}
+          title={editingSCI ? 'Modifier la SCI' : 'Créer une SCI'}
         />
       )}
 
