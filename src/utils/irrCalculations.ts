@@ -237,4 +237,155 @@ export function calculateAllIRRs(
     years,
     irrs
   };
+}
+
+/**
+ * Calcule le TRI pour un bien en SCI avec un type de location spécifique
+ * (location nue ou meublée)
+ * 
+ * @param investment Objet contenant les données de l'investissement
+ * @param sellingYear Année de revente pour le calcul
+ * @param saleBalance Solde obtenu en cas de vente
+ * @param rentalType Type de location ('unfurnished' ou 'furnished')
+ * @returns Le TRI exprimé en pourcentage
+ */
+export function calculateIRRSCI(
+  investment: Investment,
+  sellingYear: number,
+  saleBalance: number,
+  rentalType: 'unfurnished' | 'furnished'
+): number {
+  // Récupérer l'année de début de l'investissement
+  const startYear = new Date(investment.projectStartDate).getFullYear();
+  
+  // Calculer la durée de l'investissement en années
+  const investmentDuration = sellingYear - startYear;
+  
+  if (investmentDuration <= 0) {
+    return 0; // Retourner 0 si la durée est négative ou nulle
+  }
+  
+  // 1. Calculer l'investissement initial (flux négatif à l'année 0)
+  const initialInvestment = -(
+    Number(investment.purchasePrice || 0) +
+    Number(investment.agencyFees || 0) +
+    Number(investment.notaryFees || 0) +
+    Number(investment.bankFees || 0) +
+    Number(investment.bankGuaranteeFees || 0) +
+    Number(investment.mandatoryDiagnostics || 0) +
+    Number(investment.renovationCosts || 0) - 
+    Number(investment.loanAmount || 0) // Soustraire le montant du prêt car c'est un flux positif
+  );
+  
+  // 2. Créer un tableau de flux de trésorerie pour chaque année
+  // Le premier élément est l'investissement initial
+  const cashFlows = [initialInvestment];
+  
+  // 3. Ajouter les flux intermédiaires pour chaque année jusqu'à la vente
+  // Pour une SCI, on calcule le cash flow en fonction du type de location
+  // sans appliquer l'impôt sur le revenu (l'IS est calculé au niveau de la SCI)
+  for (let year = startYear; year < sellingYear; year++) {
+    const yearExpense = investment.expenses.find(e => e.year === year);
+    
+    if (yearExpense) {
+      // Calculer le prorata temporel pour cette année
+      const startDate = new Date(investment.startDate);
+      const endDate = new Date(investment.projectEndDate);
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31);
+      
+      // Déterminer les dates effectives pour cette année
+      const effectiveStart = year === startDate.getFullYear() 
+        ? Math.max(startDate.getTime(), yearStart.getTime())
+        : yearStart.getTime();
+      const effectiveEnd = year === new Date(endDate).getFullYear()
+        ? Math.min(endDate.getTime(), yearEnd.getTime())
+        : yearEnd.getTime();
+      
+      const daysInYear = (new Date(year + 1, 0, 1).getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24);
+      const effectiveDays = Math.max(0, (effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24));
+      const coverage = effectiveDays / daysInYear;
+      
+      // Fonction pour ajuster selon le prorata
+      const adjustForCoverage = (value: number) => value * coverage;
+      
+      // Revenus selon le type de location
+      const revenues = rentalType === 'furnished' 
+        ? adjustForCoverage(Number(yearExpense.furnishedRent || 0))
+        : adjustForCoverage(Number(yearExpense.rent || 0));
+      
+      // Charges
+      const charges = 
+        adjustForCoverage(Number(yearExpense.propertyTax || 0)) +
+        adjustForCoverage(Number(yearExpense.condoFees || 0)) +
+        adjustForCoverage(Number(yearExpense.insurance || 0)) +
+        adjustForCoverage(Number(yearExpense.maintenance || 0)) +
+        adjustForCoverage(Number(yearExpense.managementFees || 0)) +
+        adjustForCoverage(Number(yearExpense.otherDeductible || 0)) +
+        adjustForCoverage(Number(yearExpense.otherNonDeductible || 0)) -
+        adjustForCoverage(Number(yearExpense.tenantCharges || 0));
+      
+      // Coûts du prêt (remboursement + assurance)
+      const loanCosts = adjustForCoverage((yearExpense.loanPayment || 0) + (yearExpense.loanInsurance || 0));
+      
+      // Cash flow de l'année = revenus - charges - coûts du prêt
+      const yearlyCashFlow = revenues - charges - loanCosts;
+      
+      cashFlows.push(yearlyCashFlow);
+    } else {
+      cashFlows.push(0);
+    }
+  }
+  
+  // 4. Ajouter le flux final (solde après vente) à la dernière année
+  cashFlows.push(saleBalance);
+  
+  // 5. Calculer le TRI en utilisant la méthode de Newton-Raphson
+  return calculateIRRFromCashFlows(cashFlows) * 100; // Convertir en pourcentage
+}
+
+/**
+ * Calcule le TRI pour tous les types de location (nue/meublée) en SCI
+ * et pour chaque année possible de revente
+ * 
+ * @param investment Objet contenant les données de l'investissement
+ * @param calculateBalanceFunction Fonction pour calculer le solde après vente
+ * @returns Un tableau contenant le TRI pour chaque type de location et chaque année
+ */
+export function calculateAllIRRsSCI(
+  investment: Investment,
+  calculateBalanceFunction: (index: number, rentalType: 'unfurnished' | 'furnished') => number
+): {
+  years: number[];
+  irrs: Record<'unfurnished' | 'furnished', number[]>;
+} {
+  // Récupérer les années du projet
+  const startYear = new Date(investment.projectStartDate).getFullYear();
+  const endYear = new Date(investment.projectEndDate).getFullYear();
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+  
+  // Définir les types de location
+  const rentalTypes: ('unfurnished' | 'furnished')[] = ['unfurnished', 'furnished'];
+  
+  // Initialiser l'objet de résultats
+  const irrs: Record<'unfurnished' | 'furnished', number[]> = {
+    'unfurnished': [],
+    'furnished': []
+  };
+  
+  // Calculer le TRI pour chaque type de location et chaque année
+  rentalTypes.forEach(rentalType => {
+    irrs[rentalType] = years.map((year, index) => {
+      // Calculer le solde après vente pour cette année et ce type de location
+      const saleBalance = calculateBalanceFunction(index, rentalType);
+      
+      // Calculer le TRI
+      return calculateIRRSCI(investment, year, saleBalance, rentalType);
+    });
+  });
+  
+  return {
+    years,
+    irrs
+  };
 } 

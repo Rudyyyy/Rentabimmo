@@ -1,26 +1,20 @@
 /**
- * Composant ResultsDisplay
+ * Composant SCIResultsDisplay
  * 
- * Ce composant affiche l'analyse de rentabilité détaillée d'un investissement immobilier.
- * Il permet de comparer les différents régimes fiscaux (micro-foncier, réel-foncier, micro-BIC, réel-BIC)
- * et fournit une vue complète des performances financières.
+ * Ce composant affiche l'analyse de rentabilité spécifique aux biens détenus en SCI.
+ * Contrairement aux biens en nom propre, les régimes fiscaux IRPP ne s'appliquent pas.
  * 
  * Fonctionnalités principales :
- * - Affichage des graphiques d'évolution de la rentabilité (brute et nette)
- * - Tableau détaillé des résultats par année
- * - Comparaison des différents régimes fiscaux
- * - Calcul et affichage des métriques clés (rendement brut, hors impôts, charges)
- * - Persistance de la sélection du régime fiscal dans le localStorage
- * 
- * Le composant utilise Chart.js pour les visualisations et fournit une interface
- * interactive permettant de basculer entre les différents régimes fiscaux.
+ * - Comparaison entre location nue et location meublée
+ * - Calcul de la rentabilité brute (revenus / coût total)
+ * - Calcul de la rentabilité hors impôts (revenus - charges - prêt / coût total)
+ * - Inclusion des coûts du prêt dans les charges
+ * - Visualisation graphique de l'évolution de la rentabilité
  */
 
-import { useState, useEffect } from 'react';
-import { Investment, FinancialMetrics, TaxResults } from '../types/investment';
-import { TaxRegime } from '../types/tax';
-import { calculateAllTaxRegimes } from '../utils/taxCalculations';
-import { getYearCoverage } from '../utils/propertyCalculations';
+import { useState } from 'react';
+import { Investment, FinancialMetrics } from '../types/investment';
+import { getLoanInfoForYear, getYearCoverage } from '../utils/propertyCalculations';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -47,50 +41,18 @@ interface Props {
   metrics: FinancialMetrics;
   investment: Investment;
   onUpdate: (updatedInvestment: Investment) => void;
-  currentYearData?: {
-    rent: number;
-    expenses: number;
-    totalInvestmentCost: number;
-  };
-  historicalData?: {
-    years: number[];
-    cashFlow: number[];
-    revenue: number[];
-  };
-  projectionData?: {
-    years: number[];
-    cashFlow: number[];
-    revenue: number[];
-  };
 }
 
-const REGIME_LABELS: Record<TaxRegime, string> = {
-  'micro-foncier': 'Location nue - Micro-foncier',
-  'reel-foncier': 'Location nue - Frais réels',
-  'micro-bic': 'LMNP - Micro-BIC',
-  'reel-bic': 'LMNP - Frais réels'
+type RentalType = 'unfurnished' | 'furnished';
+
+const RENTAL_TYPE_LABELS: Record<RentalType, string> = {
+  'unfurnished': 'Location nue',
+  'furnished': 'Location meublée'
 };
 
-
-export default function ResultsDisplay({ investment }: Props) {
-  // État pour le régime fiscal sélectionné, initialisé depuis le localStorage
-  const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(() => {
-    const stored = localStorage.getItem(`selectedRegime_${investment.purchasePrice}_${investment.startDate}`);
-    return (stored as TaxRegime) || investment.selectedRegime || 'micro-foncier';
-  });
-
-  // Créer un identifiant unique basé sur le prix d'achat et la date de début
-  const investmentId = `${investment.purchasePrice}_${investment.startDate}`;
-
-  // Sauvegarde du régime sélectionné dans le localStorage
-  useEffect(() => {
-    localStorage.setItem(`selectedRegime_${investmentId}`, selectedRegime);
-  }, [selectedRegime, investmentId]);
-
-  // Mettre à jour le régime sélectionné si l'investissement change
-  useEffect(() => {
-    setSelectedRegime(investment.selectedRegime || 'micro-foncier');
-  }, [investment.selectedRegime]);
+export default function SCIResultsDisplay({ investment }: Props) {
+  // État pour le type de location sélectionné
+  const [selectedRentalType, setSelectedRentalType] = useState<RentalType>('unfurnished');
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value || 0);
@@ -98,19 +60,19 @@ export default function ResultsDisplay({ investment }: Props) {
   const formatPercent = (value: number) =>
     new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + ' %';
 
-  const calculateTotalCharges = (yearExpense: any) => {
-    return Number(yearExpense?.propertyTax || 0) +         // Taxe foncière
-           Number(yearExpense?.condoFees || 0) +           // Charges copropriété
-           Number(yearExpense?.propertyInsurance || 0) +   // Assurance propriétaire
-           Number(yearExpense?.managementFees || 0) +      // Frais d'agence
-           Number(yearExpense?.unpaidRentInsurance || 0) + // Assurance loyers impayés
-           Number(yearExpense?.repairs || 0) +             // Travaux
-           Number(yearExpense?.otherDeductible || 0) +     // Autres (déductibles)
-           Number(yearExpense?.otherNonDeductible || 0) -  // Autres (non déductibles)
-           Number(yearExpense?.tenantCharges || 0);        // Moins charges locataires
+  /**
+   * Ajuste une valeur selon le prorata temporel de l'année
+   * Pour les années incomplètes (première et dernière année du projet),
+   * seule la période effective est prise en compte.
+   * @param value - Valeur annuelle à ajuster
+   * @param coverage - Pourcentage de couverture de l'année (0-1)
+   * @returns Valeur ajustée au prorata temporel
+   */
+  const adjustForCoverage = (value: number, coverage: number): number => {
+    return value * coverage;
   };
 
-  const renderProfitabilityTable = (regime: TaxRegime) => {
+  const renderProfitabilityTable = (rentalType: RentalType) => {
     // Calculer le coût total de l'investissement
     const totalCost = Number(investment.purchasePrice || 0) +
                      Number(investment.agencyFees || 0) +
@@ -128,8 +90,6 @@ export default function ResultsDisplay({ investment }: Props) {
       (_, i) => startYear + i
     );
 
-    // Plus de calculs liés à l'imposition pour ce tableau
-
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -143,6 +103,9 @@ export default function ResultsDisplay({ investment }: Props) {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Charges
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Coûts prêt
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Coût total
@@ -161,34 +124,37 @@ export default function ResultsDisplay({ investment }: Props) {
               
               // Calculer le prorata temporel de l'année
               const coverage = getYearCoverage(investment, year);
-              const adjustForCoverage = (value: number) => value * coverage;
               
-              // Revenus avec prorata
-              const rent = adjustForCoverage(Number(yearExpense?.rent || 0));
-              const furnishedRent = adjustForCoverage(Number(yearExpense?.furnishedRent || 0));
-              const taxBenefit = adjustForCoverage(Number(yearExpense?.taxBenefit || 0));
-              const grossRevenue = (regime === 'micro-bic' || regime === 'reel-bic') 
+              // Revenus bruts selon le type de location (avec prorata)
+              const rent = adjustForCoverage(Number(yearExpense?.rent || 0), coverage);
+              const furnishedRent = adjustForCoverage(Number(yearExpense?.furnishedRent || 0), coverage);
+              const taxBenefit = adjustForCoverage(Number(yearExpense?.taxBenefit || 0), coverage);
+              const grossRevenue = rentalType === 'furnished' 
                 ? furnishedRent 
                 : rent + taxBenefit;
               
-              // Charges avec prorata
-              const totalCharges = 
-                adjustForCoverage(Number(yearExpense?.propertyTax || 0)) +
-                adjustForCoverage(Number(yearExpense?.condoFees || 0)) +
-                adjustForCoverage(Number(yearExpense?.propertyInsurance || 0)) +
-                adjustForCoverage(Number(yearExpense?.managementFees || 0)) +
-                adjustForCoverage(Number(yearExpense?.unpaidRentInsurance || 0)) +
-                adjustForCoverage(Number(yearExpense?.repairs || 0)) +
-                adjustForCoverage(Number(yearExpense?.otherDeductible || 0)) +
-                adjustForCoverage(Number(yearExpense?.otherNonDeductible || 0)) -
-                adjustForCoverage(Number(yearExpense?.tenantCharges || 0));
+              // Charges de gestion (sans le prêt, avec prorata)
+              const managementCharges = 
+                adjustForCoverage(Number(yearExpense?.propertyTax || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.condoFees || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.propertyInsurance || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.managementFees || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.unpaidRentInsurance || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.repairs || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.otherDeductible || 0), coverage) +
+                adjustForCoverage(Number(yearExpense?.otherNonDeductible || 0), coverage) -
+                adjustForCoverage(Number(yearExpense?.tenantCharges || 0), coverage);
+              
+              // Coûts du prêt (calculés dynamiquement avec prorata automatique) - pour affichage uniquement
+              const loanInfo = getLoanInfoForYear(investment, year);
+              const loanCosts = loanInfo.payment + loanInfo.insurance;
               
               // Annualiser pour les années partielles (rentabilité normalisée sur 12 mois)
               const annualizedGrossRevenue = coverage > 0 ? grossRevenue / coverage : 0;
-              const annualizedTotalCharges = coverage > 0 ? totalCharges / coverage : 0;
+              const annualizedManagementCharges = coverage > 0 ? managementCharges / coverage : 0;
               
               const grossYield = totalCost > 0 ? (annualizedGrossRevenue / totalCost) * 100 : 0;
-              const netYield = totalCost > 0 ? ((annualizedGrossRevenue - annualizedTotalCharges) / totalCost) * 100 : 0;
+              const netYield = totalCost > 0 ? ((annualizedGrossRevenue - annualizedManagementCharges) / totalCost) * 100 : 0;
 
               return (
                 <tr key={year}>
@@ -199,7 +165,10 @@ export default function ResultsDisplay({ investment }: Props) {
                     {formatCurrency(grossRevenue)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatCurrency(totalCharges)}
+                    {formatCurrency(managementCharges)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatCurrency(loanCosts)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(totalCost)}
@@ -219,8 +188,8 @@ export default function ResultsDisplay({ investment }: Props) {
     );
   };
 
-  const handleRegimeChange = (regime: TaxRegime) => {
-    setSelectedRegime(regime);
+  const handleRentalTypeChange = (rentalType: RentalType) => {
+    setSelectedRentalType(rentalType);
   };
 
   const prepareChartData = () => {
@@ -239,52 +208,48 @@ export default function ResultsDisplay({ investment }: Props) {
                      Number(investment.mandatoryDiagnostics || 0) +
                      Number(investment.renovationCosts || 0);
 
-    // Plus de calculs fiscaux nécessaires pour les graphiques hors impôts
-    // Plus de résultats fiscaux requis pour le calcul hors impôts
-
-    const datasets = (Object.keys(REGIME_LABELS) as TaxRegime[]).map(regime => {
+    const datasets = (['unfurnished', 'furnished'] as RentalType[]).map(rentalType => {
       const data = years.map(year => {
         const yearExpense = investment.expenses.find(e => e.year === year);
         
         // Calculer le prorata temporel de l'année
         const coverage = getYearCoverage(investment, year);
-        const adjustForCoverage = (value: number) => value * coverage;
         
-        // Revenus avec prorata
-        const rent = adjustForCoverage(Number(yearExpense?.rent || 0));
-        const furnishedRent = adjustForCoverage(Number(yearExpense?.furnishedRent || 0));
-        const taxBenefit = adjustForCoverage(Number(yearExpense?.taxBenefit || 0));
-        const grossRevenue = (regime === 'micro-bic' || regime === 'reel-bic') 
+        // Revenus bruts avec prorata
+        const rent = adjustForCoverage(Number(yearExpense?.rent || 0), coverage);
+        const furnishedRent = adjustForCoverage(Number(yearExpense?.furnishedRent || 0), coverage);
+        const taxBenefit = adjustForCoverage(Number(yearExpense?.taxBenefit || 0), coverage);
+        const grossRevenue = rentalType === 'furnished' 
           ? furnishedRent 
           : rent + taxBenefit;
         
-        // Charges avec prorata
-        const totalCharges = 
-          adjustForCoverage(Number(yearExpense?.propertyTax || 0)) +
-          adjustForCoverage(Number(yearExpense?.condoFees || 0)) +
-          adjustForCoverage(Number(yearExpense?.propertyInsurance || 0)) +
-          adjustForCoverage(Number(yearExpense?.managementFees || 0)) +
-          adjustForCoverage(Number(yearExpense?.unpaidRentInsurance || 0)) +
-          adjustForCoverage(Number(yearExpense?.repairs || 0)) +
-          adjustForCoverage(Number(yearExpense?.otherDeductible || 0)) +
-          adjustForCoverage(Number(yearExpense?.otherNonDeductible || 0)) -
-          adjustForCoverage(Number(yearExpense?.tenantCharges || 0));
+        // Charges de gestion avec prorata
+        const managementCharges = 
+          adjustForCoverage(Number(yearExpense?.propertyTax || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.condoFees || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.propertyInsurance || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.managementFees || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.unpaidRentInsurance || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.repairs || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.otherDeductible || 0), coverage) +
+          adjustForCoverage(Number(yearExpense?.otherNonDeductible || 0), coverage) -
+          adjustForCoverage(Number(yearExpense?.tenantCharges || 0), coverage);
         
-        // Annualiser pour les années partielles
+        // Annualiser pour les années partielles (rentabilité normalisée sur 12 mois)
         const annualizedGrossRevenue = coverage > 0 ? grossRevenue / coverage : 0;
-        const annualizedTotalCharges = coverage > 0 ? totalCharges / coverage : 0;
+        const annualizedManagementCharges = coverage > 0 ? managementCharges / coverage : 0;
         
         return {
           grossYield: totalCost > 0 ? (annualizedGrossRevenue / totalCost) * 100 : 0,
-          netYield: totalCost > 0 ? ((annualizedGrossRevenue - annualizedTotalCharges) / totalCost) * 100 : 0
+          netYield: totalCost > 0 ? ((annualizedGrossRevenue - annualizedManagementCharges) / totalCost) * 100 : 0
         };
       });
 
       return {
-        label: REGIME_LABELS[regime],
+        label: RENTAL_TYPE_LABELS[rentalType],
         data: data,
-        borderColor: getRegimeColor(regime),
-        backgroundColor: getRegimeColor(regime, 0.1),
+        borderColor: getRentalTypeColor(rentalType),
+        backgroundColor: getRentalTypeColor(rentalType, 0.1),
         tension: 0.4
       };
     });
@@ -295,14 +260,12 @@ export default function ResultsDisplay({ investment }: Props) {
     };
   };
 
-  const getRegimeColor = (regime: TaxRegime, alpha: number = 1) => {
+  const getRentalTypeColor = (rentalType: RentalType, alpha: number = 1) => {
     const colors = {
-      'micro-foncier': `rgba(59, 130, 246, ${alpha})`, // blue
-      'reel-foncier': `rgba(16, 185, 129, ${alpha})`, // emerald
-      'micro-bic': `rgba(245, 158, 11, ${alpha})`,    // yellow
-      'reel-bic': `rgba(239, 68, 68, ${alpha})`       // red
+      'unfurnished': `rgba(59, 130, 246, ${alpha})`, // blue
+      'furnished': `rgba(245, 158, 11, ${alpha})`    // yellow/orange
     };
-    return colors[regime];
+    return colors[rentalType];
   };
 
   const chartOptions = {
@@ -319,7 +282,7 @@ export default function ResultsDisplay({ investment }: Props) {
       tooltip: {
         callbacks: {
           label: function(context: any) {
-            return `${context.dataset.label}: ${formatPercent(context.raw)}`;
+            return `${context.dataset.label}: ${formatPercent(context.parsed.y)}`;
           }
         }
       }
@@ -340,6 +303,23 @@ export default function ResultsDisplay({ investment }: Props) {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Bannière d'information SCI */}
+      <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-blue-700">
+              <span className="font-medium">Bien détenu en SCI à l'IS</span> - Les régimes fiscaux IRPP (micro-foncier, LMNP, etc.) ne s'appliquent pas. 
+              La rentabilité est calculée hors imposition (l'IS sera calculé au niveau de la SCI sur l'ensemble de ses biens).
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Graphiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-md">
@@ -393,22 +373,22 @@ export default function ResultsDisplay({ investment }: Props) {
         </div>
       </div>
 
-      {/* Onglets des régimes */}
+      {/* Onglets des types de location */}
       <div className="bg-white shadow rounded-lg">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex" aria-label="Tabs">
-            {(Object.keys(REGIME_LABELS) as TaxRegime[]).map((regime) => (
+            {(['unfurnished', 'furnished'] as RentalType[]).map((rentalType) => (
               <div
-                key={regime}
-                onClick={() => handleRegimeChange(regime)}
+                key={rentalType}
+                onClick={() => handleRentalTypeChange(rentalType)}
                 className={`
                   flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm cursor-pointer
-                  ${selectedRegime === regime
+                  ${selectedRentalType === rentalType
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                 `}
               >
-                {REGIME_LABELS[regime]}
+                {RENTAL_TYPE_LABELS[rentalType]}
               </div>
             ))}
           </nav>
@@ -416,7 +396,7 @@ export default function ResultsDisplay({ investment }: Props) {
 
         {/* Contenu de l'onglet */}
         <div className="p-6">
-          {renderProfitabilityTable(selectedRegime)}
+          {renderProfitabilityTable(selectedRentalType)}
           
           {/* Section explicative */}
           <div className="mt-8 bg-gray-50 p-6 rounded-lg">
@@ -425,7 +405,7 @@ export default function ResultsDisplay({ investment }: Props) {
               <div>
                 <h4 className="font-medium text-gray-900">Revenus bruts</h4>
                 <p className="text-sm text-gray-600">
-                  {selectedRegime === 'micro-bic' || selectedRegime === 'reel-bic' 
+                  {selectedRentalType === 'furnished' 
                     ? 'Loyer meublé'
                     : 'Loyer nu + Aide fiscale'}
                 </p>
@@ -434,7 +414,7 @@ export default function ResultsDisplay({ investment }: Props) {
               <div>
                 <h4 className="font-medium text-gray-900">Charges</h4>
                 <p className="text-sm text-gray-600">
-                  Somme des charges déductibles et non déductibles :
+                  Somme des charges de gestion courante :
                   <ul className="list-disc ml-6 mt-2">
                     <li>Taxe foncière</li>
                     <li>Charges de copropriété</li>
@@ -445,6 +425,17 @@ export default function ResultsDisplay({ investment }: Props) {
                     <li>Autres charges déductibles</li>
                     <li>Autres charges non déductibles</li>
                     <li className="text-red-600">- Charges locataires</li>
+                  </ul>
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-900">Coûts prêt</h4>
+                <p className="text-sm text-gray-600">
+                  Coûts liés à l'emprunt :
+                  <ul className="list-disc ml-6 mt-2">
+                    <li>Remboursement du prêt (capital + intérêts)</li>
+                    <li>Assurance emprunteur</li>
                   </ul>
                 </p>
               </div>
@@ -478,9 +469,9 @@ export default function ResultsDisplay({ investment }: Props) {
                   ((Revenus bruts - Charges) / Coût total) × 100
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
-                  Note : Les coûts de financement (remboursements de prêt et assurance emprunteur) ne sont pas inclus 
-                  dans le calcul de la rentabilité hors impôts. Cette rentabilité mesure la performance économique du bien 
-                  indépendamment de son mode de financement.
+                  Note : Cette rentabilité est calculée hors imposition et hors coûts de financement (prêt). 
+                  L'impôt sur les sociétés (IS) est calculé au niveau de la SCI sur l'ensemble de ses biens dans l'onglet "Imposition".
+                  Les coûts du prêt sont affichés séparément dans la colonne "Coûts prêt" mais ne sont pas inclus dans le calcul de rentabilité.
                 </p>
               </div>
               
@@ -502,3 +493,4 @@ export default function ResultsDisplay({ investment }: Props) {
     </div>
   );
 }
+

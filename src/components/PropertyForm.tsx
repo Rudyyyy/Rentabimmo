@@ -21,27 +21,36 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Pencil, Info } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Info, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { Investment, defaultInvestment, FinancialMetrics } from '../types/investment';
+import { SCI } from '../types/sci';
 import { useAuth } from '../contexts/AuthContext';
 import { logger } from '../utils/logger';
+import { getSCIById } from '../lib/api';
 import AcquisitionForm from './AcquisitionForm';
 import LocationForm from './LocationForm';
 import LocationTables from './LocationTables';
 import ResultsDisplay from './ResultsDisplay';
+import SCIResultsDisplay from './SCIResultsDisplay';
 import CashFlowDisplay from './CashFlowDisplay';
+import SCICashFlowDisplay from './SCICashFlowDisplay';
 import TaxForm from './TaxForm';
-import { calculateFinancialMetrics } from '../utils/calculations';
+import { calculateFinancialMetrics, generateAmortizationSchedule } from '../utils/calculations';
+import { getLoanInfoForYear, getYearCoverage } from '../utils/propertyCalculations';
 import SaleDisplay from './SaleDisplay';
+import SCISaleDisplay from './SCISaleDisplay';
 import BalanceDisplay from './BalanceDisplay';
+import SCIBalanceDisplay from './SCIBalanceDisplay';
 import IRRDisplay from './IRRDisplay';
+import SCIIRRDisplay from './SCIIRRDisplay';
 import HierarchicalNavigation from './HierarchicalNavigation';
 import MobileNavigation from './MobileNavigation';
 import SidebarContent from './SidebarContent';
 import Notification from './Notification';
 import ObjectiveDetailsDisplay from './ObjectiveDetailsDisplay';
+import SCIObjectiveDetailsDisplay from './SCIObjectiveDetailsDisplay';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -94,6 +103,28 @@ export default function PropertyForm() {
   });
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<{ name: string, description?: string }>();
   const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
+  const [sciInfo, setSciInfo] = useState<SCI | null>(null);
+  
+  // Charger les informations de la SCI quand investmentData change
+  useEffect(() => {
+    async function loadSCI() {
+      if (investmentData.sciId) {
+        logger.debug('🏢 Chargement de la SCI avec ID:', investmentData.sciId);
+        const sci = await getSCIById(investmentData.sciId);
+        if (sci) {
+          logger.debug('✅ SCI chargée:', sci.name);
+          setSciInfo(sci);
+        } else {
+          logger.debug('❌ SCI non trouvée');
+          setSciInfo(null);
+        }
+      } else {
+        logger.debug('📄 Bien en nom propre (pas de sciId)');
+        setSciInfo(null);
+      }
+    }
+    loadSCI();
+  }, [investmentData.sciId]);
   
   // Surveiller les changements de nom dans l'état investmentData et synchroniser avec le formulaire
   useEffect(() => {
@@ -213,6 +244,8 @@ export default function PropertyForm() {
           ...data.investment_data as Investment,
           id: id || ''
         };
+        
+        logger.debug('🏢 sciId trouvé:', loadedInvestmentData.sciId || 'AUCUN (bien en nom propre)');
         
         setInvestmentData(loadedInvestmentData);
         reset({ name: data.name });
@@ -471,6 +504,57 @@ export default function PropertyForm() {
     return saleBalance;
   };
 
+  // Fonction pour calculer le solde après vente pour le TRI en SCI
+  // Cette fonction est utilisée par SCIIRRDisplay pour calculer le TRI
+  const calculateBalanceForIRRSCI = (yearIndex: number, rentalType: 'unfurnished' | 'furnished'): number => {
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    const year = startYear + yearIndex;
+    
+    // Récupérer les paramètres de vente depuis localStorage
+    const investmentId = `${investmentData.purchasePrice || 0}_${investmentData.startDate || ''}`;
+    const saleParamsStr = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
+    const saleParams = saleParamsStr ? JSON.parse(saleParamsStr) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
+
+    // Calculer le prix de vente revalorisé
+    const yearsSincePurchase = year - startYear;
+    const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+
+    // Capital restant dû (utiliser l'échéancier d'amortissement)
+    const amortizationSchedule = generateAmortizationSchedule(
+      Number(investmentData.loanAmount),
+      Number(investmentData.interestRate),
+      Number(investmentData.loanDuration),
+      investmentData.deferralType || 'none',
+      Number(investmentData.deferredPeriod) || 0,
+      investmentData.startDate
+    );
+
+    let remainingBalance = 0;
+    if (amortizationSchedule && amortizationSchedule.schedule && Array.isArray(amortizationSchedule.schedule)) {
+      const yearEndDate = new Date(year, 11, 31);
+      const yearPayments = amortizationSchedule.schedule.filter(row => new Date(row.date) <= yearEndDate);
+      
+      if (yearPayments.length > 0) {
+        const totalPaid = yearPayments.reduce((sum, row) => sum + row.principal, 0);
+        remainingBalance = Number(investmentData.loanAmount) - totalPaid;
+      } else {
+        remainingBalance = Number(investmentData.loanAmount);
+      }
+    }
+
+    const saleBalance = revaluedValue - saleParams.agencyFees - remainingBalance - saleParams.earlyRepaymentFees;
+
+    // Calculer l'impôt sur la plus-value (IS 25% pour SCI)
+    const acquisitionFees = (Number(investmentData.notaryFees) || 0) + (Number(investmentData.agencyFees) || 0);
+    const improvementWorks = Number(investmentData.improvementWorks) || 0;
+    const adjustedPurchasePrice = Number(investmentData.purchasePrice) + acquisitionFees + improvementWorks;
+    const grossCapitalGain = revaluedValue - adjustedPurchasePrice;
+    const capitalGainTax = grossCapitalGain > 0 ? grossCapitalGain * 0.25 : 0;
+
+    // Retourner le solde après impôt
+    return saleBalance - capitalGainTax;
+  };
+
   const renderContent = () => {
     if (!metrics) return null;
 
@@ -508,7 +592,13 @@ export default function PropertyForm() {
 
       case 'rentabilite':
         if (currentSubTab === 'rentabilite-brute-nette') {
-          return (
+          return investmentData.sciId ? (
+            <SCIResultsDisplay 
+              metrics={metrics}
+              investment={investmentData}
+              onUpdate={handleInvestmentUpdate}
+            />
+          ) : (
             <ResultsDisplay 
               metrics={metrics}
               investment={investmentData}
@@ -519,13 +609,22 @@ export default function PropertyForm() {
             />
           );
         } else if (currentSubTab === 'cashflow') {
-          return (
+          return investmentData.sciId ? (
+            <SCICashFlowDisplay
+              investment={investmentData}
+            />
+          ) : (
             <CashFlowDisplay
               investment={investmentData}
             />
           );
         } else if (currentSubTab === 'revente') {
-          return (
+          return investmentData.sciId ? (
+            <SCISaleDisplay 
+              investment={investmentData} 
+              onUpdate={handleInvestmentUpdate}
+            />
+          ) : (
             <SaleDisplay 
               investment={investmentData} 
               onUpdate={handleInvestmentUpdate}
@@ -536,8 +635,16 @@ export default function PropertyForm() {
 
       case 'bilan':
         if (currentSubTab === 'objectif') {
-          // Afficher le détail par régime fiscal dans la zone principale
-          return (
+          // Afficher le détail par type de location (SCI) ou régime fiscal (nom propre)
+          return investmentData.sciId ? (
+            <SCIObjectiveDetailsDisplay 
+              investment={investmentData}
+              objectiveType={objectiveType}
+              objectiveYear={objectiveYear}
+              objectiveTargetGain={objectiveTargetGain}
+              objectiveTargetCashflow={objectiveTargetCashflow}
+            />
+          ) : (
             <ObjectiveDetailsDisplay 
               investment={investmentData}
               objectiveType={objectiveType}
@@ -548,14 +655,24 @@ export default function PropertyForm() {
           );
         } else if (currentSubTab === 'tri') {
           // Afficher le TRI (Taux de Rentabilité Interne)
-          return (
+          return investmentData.sciId ? (
+            <SCIIRRDisplay
+              investment={investmentData}
+              calculateBalanceFunction={calculateBalanceForIRRSCI}
+            />
+          ) : (
             <IRRDisplay
               investment={investmentData}
               calculateBalanceFunction={calculateBalanceForIRR}
             />
           );
         } else if (currentSubTab === 'bilan' || currentSubTab === 'statistiques' || currentSubTab === 'analyse-ia' || !currentSubTab) {
-          return (
+          return investmentData.sciId ? (
+            <SCIBalanceDisplay
+              investment={investmentData}
+              currentSubTab={currentSubTab}
+            />
+          ) : (
             <BalanceDisplay
               investment={investmentData}
               currentSubTab={currentSubTab}
@@ -716,13 +833,20 @@ export default function PropertyForm() {
             {/* Informations générales centrées */}
             <div className="flex items-center gap-4 min-w-0 max-w-2xl">
               <div className="group relative min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <span className="text-lg font-semibold text-gray-900 truncate">
                     {investmentData?.name?.trim() || (id ? 'Bien sans nom' : 'Nouveau bien')}
                   </span>
                   {Boolean(investmentData?.description) && (
                     <span className="inline-flex items-center text-gray-500" aria-hidden>
                       <Info className="h-4 w-4" />
+                    </span>
+                  )}
+                  {/* Badge SCI */}
+                  {sciInfo && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                      <Building2 className="h-3.5 w-3.5" />
+                      SCI {sciInfo.name}
                     </span>
                   )}
                 </div>

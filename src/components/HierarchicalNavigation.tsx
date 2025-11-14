@@ -383,7 +383,7 @@ function SidebarContent({
             const grossRevenueMeuble = furnishedRent;
 
             // Charges identiques au tableau
-            const totalCharges =
+            let totalCharges =
               Number(yearExpenses?.propertyTax || 0) +
               Number(yearExpenses?.condoFees || 0) +
               Number(yearExpenses?.propertyInsurance || 0) +
@@ -393,6 +393,12 @@ function SidebarContent({
               Number(yearExpenses?.otherDeductible || 0) +
               Number(yearExpenses?.otherNonDeductible || 0) -
               Number(yearExpenses?.tenantCharges || 0);
+
+            // Pour les biens en SCI, ajouter les coûts du prêt
+            if (investment.sciId) {
+              totalCharges += Number(yearExpenses?.loanPayment || 0) +
+                             Number(yearExpenses?.loanInsurance || 0);
+            }
 
             if (totalCost > 0) {
               grossYieldNu = (grossRevenueNu / totalCost) * 100;

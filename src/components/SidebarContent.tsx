@@ -12,6 +12,7 @@ import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime, Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
+import { getLoanInfoForYear, getYearCoverage } from '../utils/propertyCalculations';
 import SCITaxSidebar from './SCITaxSidebar';
 import { Brain, X } from 'lucide-react';
 import { processUserMessageWithMistral } from '../services/mistral';
@@ -20,6 +21,7 @@ import { saveTargetSaleYear, saveTargetGain, saveTargetCashflow } from '../lib/a
 import TotalGainGoal from './TotalGainGoal';
 import CashFlowGoal from './CashFlowGoal';
 import IRRSummary from './IRRSummary';
+import SCIIRRSummary from './SCIIRRSummary';
 
 type MainTab = 'acquisition' | 'location' | 'imposition' | 'rentabilite' | 'bilan';
 
@@ -231,6 +233,7 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
   
   // État pour forcer le re-render quand le localStorage change
   const [selectedRegime, setSelectedRegime] = useState<TaxRegime>(getSelectedRegime);
+  const [selectedRentalTypeSCI, setSelectedRentalTypeSCI] = useState<'unfurnished' | 'furnished'>('unfurnished');
   
   // Synchroniser avec les changements dans localStorage (quand l'onglet change dans BalanceDisplay)
   useEffect(() => {
@@ -240,10 +243,17 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
       if (currentRegimeValue !== selectedRegime) {
         setSelectedRegime(currentRegimeValue);
       }
+      // Pour SCI : vérifier le type de location
+      if (investmentData?.sciId) {
+        const stored = localStorage.getItem(`selectedRentalType_${investmentId}`);
+        if (stored && stored !== selectedRentalTypeSCI) {
+          setSelectedRentalTypeSCI(stored as 'unfurnished' | 'furnished');
+        }
+      }
     }, 200); // Vérifier toutes les 200ms
     
     return () => clearInterval(interval);
-  }, [investmentId, selectedRegime]);
+  }, [investmentId, selectedRegime, selectedRentalTypeSCI, investmentData]);
   
   const [selectedSaleYear, setSelectedSaleYear] = useState<number>(() => {
     if (!investmentData?.projectStartDate) return new Date().getFullYear() + 10;
@@ -333,26 +343,44 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
     const expense = investmentData.expenses.find((e: any) => e.year === year);
     if (!expense) return 0;
 
-    const rent = Number(expense.rent || 0);
-    const furnishedRent = Number(expense.furnishedRent || 0);
-    const tenantCharges = Number(expense.tenantCharges || 0);
-    const taxBenefit = Number(expense.taxBenefit || 0);
+    const investment = investmentData as Investment;
+    
+    // Calculer le prorata temporel de l'année
+    const coverage = getYearCoverage(investment, year);
+    
+    /**
+     * Ajuste une valeur selon le prorata temporel
+     */
+    const adjustForCoverage = (value: number): number => {
+      return value * coverage;
+    };
+
+    // Revenus avec prorata
+    const rent = adjustForCoverage(Number(expense.rent || 0));
+    const furnishedRent = adjustForCoverage(Number(expense.furnishedRent || 0));
+    const tenantCharges = adjustForCoverage(Number(expense.tenantCharges || 0));
+    const taxBenefit = adjustForCoverage(Number(expense.taxBenefit || 0));
 
     const revenues = type === 'meuble'
       ? furnishedRent + tenantCharges
       : rent + taxBenefit + tenantCharges;
 
-    const totalExpenses =
-      Number(expense.propertyTax || 0) +
-      Number(expense.condoFees || 0) +
-      Number(expense.propertyInsurance || 0) +
-      Number(expense.managementFees || 0) +
-      Number(expense.unpaidRentInsurance || 0) +
-      Number(expense.repairs || 0) +
-      Number(expense.otherDeductible || 0) +
-      Number(expense.otherNonDeductible || 0) +
-      Number(expense.loanPayment || 0) +
-      Number(expense.loanInsurance || 0);
+    // Charges de gestion avec prorata
+    const managementExpenses =
+      adjustForCoverage(Number(expense.propertyTax || 0)) +
+      adjustForCoverage(Number(expense.condoFees || 0)) +
+      adjustForCoverage(Number(expense.propertyInsurance || 0)) +
+      adjustForCoverage(Number(expense.managementFees || 0)) +
+      adjustForCoverage(Number(expense.unpaidRentInsurance || 0)) +
+      adjustForCoverage(Number(expense.repairs || 0)) +
+      adjustForCoverage(Number(expense.otherDeductible || 0)) +
+      adjustForCoverage(Number(expense.otherNonDeductible || 0));
+
+    // Coûts du prêt calculés dynamiquement (prorata automatique)
+    const loanInfo = getLoanInfoForYear(investment, year);
+    const loanCosts = loanInfo.payment + loanInfo.insurance;
+
+    const totalExpenses = managementExpenses + loanCosts;
 
     return revenues - totalExpenses;
   };
@@ -562,6 +590,116 @@ export default function SidebarContent({ currentMainTab, currentSubTab, investme
     };
   };
 
+  // Fonction pour calculer le bilan pour un bien en SCI
+  const calculateBalanceForYearSCI = (year: number, rentalType: 'unfurnished' | 'furnished') => {
+    if (!investmentData) return null;
+
+    const startYear = new Date(investmentData.projectStartDate).getFullYear();
+    
+    // Cash flow cumulé AVANT IS
+    let cumulativeCashFlowBeforeTax = 0;
+    let cumulativeTax = 0; // IS calculé au niveau SCI, donc 0 ici
+
+    // Parcourir toutes les années jusqu'à l'année sélectionnée
+    Array.from({ length: year - startYear + 1 }, (_, i) => startYear + i).forEach(yr => {
+      const yearExpense = investmentData.expenses.find(e => e.year === yr);
+      if (!yearExpense) return;
+
+      // Calculer le prorata temporel de l'année
+      const coverage = getYearCoverage(investmentData as Investment, yr);
+      const adjustForCoverage = (value: number) => value * coverage;
+
+      // Revenus avec prorata
+      const revenues = rentalType === 'furnished'
+        ? adjustForCoverage(Number(yearExpense.furnishedRent || 0))
+        : adjustForCoverage(Number(yearExpense.rent || 0));
+
+      const taxBenefit = rentalType === 'unfurnished' 
+        ? adjustForCoverage(Number(yearExpense.taxBenefit || 0))
+        : 0;
+
+      const tenantCharges = adjustForCoverage(Number(yearExpense.tenantCharges || 0));
+
+      // Charges avec prorata
+      const charges =
+        adjustForCoverage(Number(yearExpense.propertyTax || 0)) +
+        adjustForCoverage(Number(yearExpense.condoFees || 0)) +
+        adjustForCoverage(Number(yearExpense.propertyInsurance || 0)) +
+        adjustForCoverage(Number(yearExpense.managementFees || 0)) +
+        adjustForCoverage(Number(yearExpense.unpaidRentInsurance || 0)) +
+        adjustForCoverage(Number(yearExpense.repairs || 0)) +
+        adjustForCoverage(Number(yearExpense.otherDeductible || 0)) +
+        adjustForCoverage(Number(yearExpense.otherNonDeductible || 0));
+
+      // Coûts du prêt calculés dynamiquement (prorata automatique)
+      const loanInfo = getLoanInfoForYear(investmentData as Investment, yr);
+      const loanCosts = loanInfo.payment + loanInfo.insurance;
+
+      // Cash flow annuel AVANT IS
+      const annualCashFlowBeforeTax = revenues + taxBenefit + tenantCharges - charges - loanCosts;
+      cumulativeCashFlowBeforeTax += annualCashFlowBeforeTax;
+    });
+
+    // Calculer le solde de revente
+    const storedParams = localStorage.getItem(`saleParameters_${investmentData.purchasePrice}_${investmentData.startDate}`);
+    const saleParams = storedParams ? JSON.parse(storedParams) : {
+      annualIncrease: 2,
+      agencyFees: 0,
+      earlyRepaymentFees: 0
+    };
+
+    const yearsSincePurchase = year - startYear;
+    const purchasePrice = Number(investmentData.purchasePrice) || 0;
+    const revaluedValue = purchasePrice * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase + 1);
+    
+    // Capital restant dû
+    const amortizationSchedule = generateAmortizationSchedule(
+      Number(investmentData.loanAmount),
+      Number(investmentData.interestRate),
+      Number(investmentData.loanDuration),
+      investmentData.deferralType || 'none',
+      Number(investmentData.deferredPeriod) || 0,
+      investmentData.startDate
+    );
+
+    let remainingBalance = 0;
+    if (amortizationSchedule && amortizationSchedule.schedule && Array.isArray(amortizationSchedule.schedule)) {
+      const yearEndDate = new Date(year, 11, 31);
+      const yearPayments = amortizationSchedule.schedule.filter(row => new Date(row.date) <= yearEndDate);
+      
+      if (yearPayments.length > 0) {
+        const totalPaid = yearPayments.reduce((sum, row) => sum + row.principal, 0);
+        remainingBalance = Number(investmentData.loanAmount) - totalPaid;
+      } else {
+        remainingBalance = Number(investmentData.loanAmount);
+      }
+    }
+
+    const saleBalance = revaluedValue - saleParams.agencyFees - remainingBalance - saleParams.earlyRepaymentFees;
+
+    // Impôt sur la plus-value (IS 25%)
+    const acquisitionFees = (Number(investmentData.notaryFees) || 0) + (Number(investmentData.agencyFees) || 0);
+    const improvementWorks = Number(investmentData.improvementWorks) || 0;
+    const correctedPurchasePrice = purchasePrice + acquisitionFees + improvementWorks;
+    const grossCapitalGain = revaluedValue - saleParams.agencyFees - correctedPurchasePrice;
+    
+    const capitalGainTax = grossCapitalGain > 0 ? grossCapitalGain * 0.25 : 0;
+
+    // Gain total
+    const downPayment = Number(investmentData.downPayment) || 0;
+    const totalGain = cumulativeCashFlowBeforeTax + saleBalance - capitalGainTax - downPayment;
+
+    return {
+      year,
+      downPayment,
+      cumulativeCashFlowBeforeTax,
+      cumulativeTax, // 0 pour SCI
+      saleBalance,
+      capitalGainTax,
+      totalGain
+    };
+  };
+
   // Fonction pour générer le prompt IA avec les données du bilan
   const generateBalanceAnalysisPrompt = () => {
     if (!investmentData) return '';
@@ -683,6 +821,414 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
       console.log('Fin de l\'analyse IA');
       setIsAnalyzing(false);
     }
+  };
+
+  // Fonction pour afficher la sidebar de l'onglet Objectif pour les biens en SCI
+  const renderObjectifSidebarForSCI = () => {
+    if (!investmentData) return null;
+
+    type RentalType = 'unfurnished' | 'furnished';
+
+    const RENTAL_TYPE_LABELS: Record<RentalType, string> = {
+      'unfurnished': 'Location nue',
+      'furnished': 'Location meublée'
+    };
+
+    // Fonction pour calculer le cashflow cumulé pour un type de location
+    const calculateCumulativeCashflowForRentalType = (year: number, rentalType: RentalType): number => {
+      if (!investmentData) return 0;
+      
+      const startYear = investmentData.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+      const years = Array.from({ length: year - startYear + 1 }, (_, i) => startYear + i);
+      
+      let cumulativeCashflow = 0;
+      
+      years.forEach(yr => {
+        const yearExpense = investmentData.expenses?.find((e: any) => e.year === yr);
+        if (!yearExpense) return;
+
+        const coverage = getYearCoverage(investmentData as Investment, yr);
+        const adjustForCoverage = (value: number) => value * coverage;
+
+        // Revenus selon le type de location
+        const revenues = rentalType === 'furnished' 
+          ? adjustForCoverage(Number(yearExpense.furnishedRent || 0))
+          : adjustForCoverage(Number(yearExpense.rent || 0));
+        
+        const tenantCharges = adjustForCoverage(Number(yearExpense.tenantCharges || 0));
+        const taxBenefit = adjustForCoverage(Number(yearExpense.taxBenefit || 0));
+
+        // Charges
+        const charges = 
+          adjustForCoverage(Number(yearExpense.propertyTax || 0)) +
+          adjustForCoverage(Number(yearExpense.condoFees || 0)) +
+          adjustForCoverage(Number(yearExpense.insurance || 0)) +
+          adjustForCoverage(Number(yearExpense.maintenance || 0)) +
+          adjustForCoverage(Number(yearExpense.managementFees || 0)) +
+          adjustForCoverage(Number(yearExpense.otherDeductible || 0)) +
+          adjustForCoverage(Number(yearExpense.otherNonDeductible || 0)) -
+          adjustForCoverage(Number(yearExpense.tenantCharges || 0));
+
+        // Coûts du prêt
+        const loanInfo = getLoanInfoForYear(investmentData as Investment, yr);
+        const loanCosts = loanInfo.payment + loanInfo.insurance;
+
+        // Cash flow annuel avant IS
+        const annualCashFlow = revenues + taxBenefit + tenantCharges - charges - loanCosts;
+        
+        cumulativeCashflow += annualCashFlow;
+      });
+
+      return cumulativeCashflow;
+    };
+
+    // Fonction pour calculer le gain total à une année donnée
+    const calculateBalanceForYearSCI = (year: number, rentalType: RentalType) => {
+      if (!investmentData) return null;
+
+      const startYear = new Date(investmentData.projectStartDate).getFullYear();
+      const cumulativeCashFlow = calculateCumulativeCashflowForRentalType(year, rentalType);
+
+      // Récupérer les paramètres de vente
+      const investmentId = `${investmentData.purchasePrice || 0}_${investmentData.startDate || ''}`;
+      const saleParamsStr = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
+      const saleParams = saleParamsStr ? JSON.parse(saleParamsStr) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
+
+      const yearsSincePurchase = year - startYear;
+      const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+
+      // Capital restant dû
+      const amortizationSchedule = generateAmortizationSchedule(
+        Number(investmentData.loanAmount),
+        Number(investmentData.interestRate),
+        Number(investmentData.loanDuration),
+        investmentData.deferralType || 'none',
+        Number(investmentData.deferredPeriod) || 0,
+        investmentData.startDate
+      );
+
+      let remainingBalance = 0;
+      if (amortizationSchedule && amortizationSchedule.schedule && Array.isArray(amortizationSchedule.schedule)) {
+        const yearEndDate = new Date(year, 11, 31);
+        const yearPayments = amortizationSchedule.schedule.filter(row => new Date(row.date) <= yearEndDate);
+        
+        if (yearPayments.length > 0) {
+          const totalPaid = yearPayments.reduce((sum, row) => sum + row.principal, 0);
+          remainingBalance = Number(investmentData.loanAmount) - totalPaid;
+        } else {
+          remainingBalance = Number(investmentData.loanAmount);
+        }
+      }
+
+      const saleBalance = revaluedValue - saleParams.agencyFees - remainingBalance - saleParams.earlyRepaymentFees;
+
+      // Impôt sur la plus-value (IS 25%)
+      const purchasePrice = Number(investmentData.purchasePrice) || 0;
+      const acquisitionFees = (Number(investmentData.notaryFees) || 0) + (Number(investmentData.agencyFees) || 0);
+      const improvementWorks = Number(investmentData.improvementWorks) || 0;
+      const adjustedPurchasePrice = purchasePrice + acquisitionFees + improvementWorks;
+      const grossCapitalGain = revaluedValue - adjustedPurchasePrice;
+      const capitalGainTax = grossCapitalGain > 0 ? grossCapitalGain * 0.25 : 0;
+
+      const downPayment = Number(investmentData.downPayment) || 0;
+      const totalGain = cumulativeCashFlow + saleBalance - capitalGainTax - downPayment;
+
+      return { year, totalGain, cumulativeCashFlow };
+    };
+
+    // Fonction pour trouver l'année optimale pour atteindre un gain
+    const findYearForTargetGainSCI = (targetGain: number, rentalType: RentalType): { year: number | null; balanceData: any } => {
+      if (!investmentData) return { year: null, balanceData: null };
+      
+      const startYear = investmentData.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+      const endYear = investmentData.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
+      
+      for (let year = startYear; year <= endYear; year++) {
+        const balanceData = calculateBalanceForYearSCI(year, rentalType);
+        if (balanceData && balanceData.totalGain >= targetGain) {
+          return { year, balanceData };
+        }
+      }
+      
+      const lastYearBalance = calculateBalanceForYearSCI(endYear, rentalType);
+      return { year: null, balanceData: lastYearBalance };
+    };
+
+    // Fonction pour trouver l'année optimale pour atteindre un cashflow cumulé
+    const findYearForTargetCashflowSCI = (targetCashflow: number, rentalType: RentalType): { year: number | null; cashflow: number | null } => {
+      if (!investmentData) return { year: null, cashflow: null };
+      
+      const startYear = investmentData.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+      const endYear = investmentData.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
+      
+      for (let year = startYear; year <= endYear; year++) {
+        const cashflow = calculateCumulativeCashflowForRentalType(year, rentalType);
+        if (cashflow >= targetCashflow) {
+          return { year, cashflow };
+        }
+      }
+      
+      return { year: null, cashflow: null };
+    };
+
+    // Calculer le type de location optimal
+    const calculateOptimalRentalType = () => {
+      if (objectiveType !== 'revente' || !investmentData) return null;
+      
+      const rentalTypes: RentalType[] = ['unfurnished', 'furnished'];
+      const results: Array<{ rentalType: RentalType; year: number | null; balanceData: any }> = [];
+      
+      rentalTypes.forEach(rentalType => {
+        const result = findYearForTargetGainSCI(objectiveTargetGain, rentalType);
+        results.push({ rentalType, ...result });
+      });
+      
+      const validResults = results.filter(r => r.year !== null);
+      if (validResults.length === 0) return null;
+      
+      const optimal = validResults.reduce((best, current) => {
+        if (!best || !current.year) return current;
+        if (!current.year) return best;
+        return current.year < best.year ? current : best;
+      });
+      
+      return { optimal, allResults: results };
+    };
+
+    const calculateOptimalRentalTypeForCashflow = () => {
+      if (objectiveType !== 'cashflow' || !investmentData) return null;
+      
+      const rentalTypes: RentalType[] = ['unfurnished', 'furnished'];
+      const results: Array<{ rentalType: RentalType; year: number | null; cashflow: number | null }> = [];
+      
+      rentalTypes.forEach(rentalType => {
+        const result = findYearForTargetCashflowSCI(objectiveTargetCashflow, rentalType);
+        results.push({ rentalType, ...result });
+      });
+      
+      const validResults = results.filter(r => r.year !== null);
+      if (validResults.length === 0) return null;
+      
+      const optimal = validResults.reduce((best, current) => {
+        if (!best || !current.year) return current;
+        if (!current.year) return best;
+        return current.year < best.year ? current : best;
+      });
+      
+      return { optimal, allResults: results };
+    };
+
+    const hasMinimumData = () => {
+      if (!investmentData) return false;
+      const hasAcquisitionData = investmentData.purchasePrice && investmentData.purchasePrice > 0;
+      if (!hasAcquisitionData) return false;
+      
+      const hasExpenseData = investmentData.expenses && investmentData.expenses.length > 0;
+      if (!hasExpenseData) return false;
+      
+      if (objectiveType === 'cashflow') {
+        return investmentData.expenses.some((e: any) => e.year === objectiveYear);
+      } else {
+        const startYear = investmentData.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
+        return investmentData.expenses.some((e: any) => {
+          const expenseYear = e.year;
+          return expenseYear >= startYear;
+        });
+      }
+    };
+
+    const canCalculate = hasMinimumData();
+    const optimalRentalTypeResult = objectiveType === 'revente' && canCalculate ? calculateOptimalRentalType() : null;
+    const optimalRentalTypeResultForCashflow = objectiveType === 'cashflow' && canCalculate ? calculateOptimalRentalTypeForCashflow() : null;
+
+    return (
+      <div className="space-y-4">
+        {/* Sélection du type d'objectif */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-gray-700">Type d'objectif</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleObjectiveTypeChange('revente')}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-200 ${
+                objectiveType === 'revente'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Revente
+            </button>
+            <button
+              type="button"
+              onClick={() => handleObjectiveTypeChange('cashflow')}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-200 ${
+                objectiveType === 'cashflow'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Cashflow
+            </button>
+          </div>
+        </div>
+
+        {/* Sélection selon le type d'objectif */}
+        {objectiveType === 'revente' ? (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              Gain total cumulé souhaité (€)
+            </label>
+            <input
+              type="number"
+              value={objectiveTargetGain}
+              onChange={(e) => handleObjectiveTargetGainChange(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="50000"
+              min="0"
+              step="1000"
+            />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              Cashflow cumulé souhaité (€)
+            </label>
+            <input
+              type="number"
+              value={objectiveTargetCashflow}
+              onChange={(e) => handleObjectiveTargetCashflowChange(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="10000"
+              min="0"
+              step="1000"
+            />
+          </div>
+        )}
+
+        {/* Affichage selon le type d'objectif */}
+        {!canCalculate && (
+          <div className="space-y-3 pt-2 border-t border-gray-200">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">
+                    Calculs non disponibles
+                  </h3>
+                  <div className="mt-2 text-sm text-yellow-700">
+                    <p>Les données nécessaires ne sont pas suffisamment renseignées.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {objectiveType === 'revente' && canCalculate && optimalRentalTypeResult && (
+          <div className="space-y-3 pt-2 border-t border-gray-200">
+            {optimalRentalTypeResult.optimal && optimalRentalTypeResult.optimal.year ? (
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-blue-900">
+                      Type optimal
+                    </span>
+                    <span className="text-lg font-bold text-blue-900">
+                      {RENTAL_TYPE_LABELS[optimalRentalTypeResult.optimal.rentalType]}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-800">
+                      Année de revente
+                    </span>
+                    <span className="text-xl font-bold text-blue-900">
+                      {optimalRentalTypeResult.optimal.year}
+                    </span>
+                  </div>
+                  {optimalRentalTypeResult.optimal.balanceData && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Gain total cumulé
+                        </span>
+                        <span className={`text-lg font-bold ${
+                          optimalRentalTypeResult.optimal.balanceData.totalGain >= 0 ? 'text-green-700' : 'text-red-700'
+                        }`}>
+                          {formatCurrency(optimalRentalTypeResult.optimal.balanceData.totalGain)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-xs text-amber-600 mt-2 italic">
+                    Note : L'IS est calculé au niveau de la SCI
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <p className="text-sm text-yellow-800">
+                  L'objectif de {formatCurrency(objectiveTargetGain)} ne peut pas être atteint dans la période du projet.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {objectiveType === 'cashflow' && canCalculate && optimalRentalTypeResultForCashflow && (
+          <div className="space-y-3 pt-2 border-t border-gray-200">
+            {optimalRentalTypeResultForCashflow.optimal && optimalRentalTypeResultForCashflow.optimal.year ? (
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-blue-900">
+                      Type optimal
+                    </span>
+                    <span className="text-lg font-bold text-blue-900">
+                      {RENTAL_TYPE_LABELS[optimalRentalTypeResultForCashflow.optimal.rentalType]}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-800">
+                      Année d'atteinte
+                    </span>
+                    <span className="text-xl font-bold text-blue-900">
+                      {optimalRentalTypeResultForCashflow.optimal.year}
+                    </span>
+                  </div>
+                  {optimalRentalTypeResultForCashflow.optimal.cashflow !== null && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Cashflow cumulé
+                        </span>
+                        <span className={`text-lg font-bold ${
+                          optimalRentalTypeResultForCashflow.optimal.cashflow >= 0 ? 'text-green-700' : 'text-red-700'
+                        }`}>
+                          {formatCurrency(optimalRentalTypeResultForCashflow.optimal.cashflow)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-xs text-amber-600 mt-2 italic">
+                    Note : Avant IS (calculé au niveau de la SCI)
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <p className="text-sm text-yellow-800">
+                  L'objectif de {formatCurrency(objectiveTargetCashflow)} ne peut pas être atteint dans la période du projet.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderSidebarContent = () => {
@@ -1127,8 +1673,14 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
         const currentYear = new Date().getFullYear();
         const cashFlowNu = calculateYearCashFlow(currentYear, 'nu');
         const cashFlowMeuble = calculateYearCashFlow(currentYear, 'meuble');
-        const monthlyNu = cashFlowNu / 12;
-        const monthlyMeuble = cashFlowMeuble / 12;
+        
+        // Calculer le nombre de mois effectifs dans l'année (pour le prorata)
+        const investment = investmentData as Investment;
+        const coverage = getYearCoverage(investment, currentYear);
+        const monthsInYear = coverage * 12;
+        
+        const monthlyNu = monthsInYear > 0 ? cashFlowNu / monthsInYear : 0;
+        const monthlyMeuble = monthsInYear > 0 ? cashFlowMeuble / monthsInYear : 0;
 
         // Calculer les rentabilités pour micro-foncier et micro-bic (identiques au tableau ResultsDisplay)
         let grossYieldNu = 0;
@@ -1158,7 +1710,7 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
             const grossRevenueMeuble = furnishedRent; // micro-bic
 
             // Charges identiques au tableau (hors charges locataires)
-            const totalCharges =
+            let totalCharges =
               Number(yearExpenses?.propertyTax || 0) +
               Number(yearExpenses?.condoFees || 0) +
               Number(yearExpenses?.propertyInsurance || 0) +
@@ -1168,6 +1720,12 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
               Number(yearExpenses?.otherDeductible || 0) +
               Number(yearExpenses?.otherNonDeductible || 0) -
               Number(yearExpenses?.tenantCharges || 0);
+
+            // Pour les biens en SCI, ajouter les coûts du prêt
+            if (investment.sciId) {
+              totalCharges += Number(yearExpenses?.loanPayment || 0) +
+                             Number(yearExpenses?.loanInsurance || 0);
+            }
 
             if (totalCost > 0) {
               grossYieldNu = (grossRevenueNu / totalCost) * 100;
@@ -1238,6 +1796,11 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
       case 'bilan':
         // Gérer les sous-onglets bilan
         if (currentSubTab === 'objectif') {
+          // Pour les biens en SCI
+          if (investmentData?.sciId) {
+            return renderObjectifSidebarForSCI();
+          }
+          
           // Sous-onglet Objectif - réutiliser le même fonctionnement que Projet - Objectif
           // Calculer les années disponibles
           const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
@@ -1757,6 +2320,67 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
           const endYear = investmentData?.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
           
+          // Pour les biens en SCI
+          if (investmentData?.sciId) {
+            // Fonction pour calculer le solde de revente pour SCI
+            const calculateBalanceForIRRSCI = (yearIndex: number, rentalType: 'unfurnished' | 'furnished'): number => {
+              const year = startYear + yearIndex;
+              
+              // Récupérer les paramètres de vente depuis localStorage
+              const investmentId = `${investmentData.purchasePrice || 0}_${investmentData.startDate || ''}`;
+              const saleParamsStr = typeof window !== 'undefined' ? localStorage.getItem(`saleParameters_${investmentId}`) : null;
+              const saleParams = saleParamsStr ? JSON.parse(saleParamsStr) : { annualIncrease: 2, agencyFees: 0, earlyRepaymentFees: 0 };
+
+              // Calculer le prix de vente revalorisé
+              const yearsSincePurchase = year - startYear;
+              const revaluedValue = Number(investmentData.purchasePrice) * Math.pow(1 + (saleParams.annualIncrease / 100), yearsSincePurchase);
+
+              // Capital restant dû (utiliser l'échéancier d'amortissement)
+              const amortizationSchedule = generateAmortizationSchedule(
+                Number(investmentData.loanAmount),
+                Number(investmentData.interestRate),
+                Number(investmentData.loanDuration),
+                investmentData.deferralType || 'none',
+                Number(investmentData.deferredPeriod) || 0,
+                investmentData.startDate
+              );
+
+              let remainingBalance = 0;
+              if (amortizationSchedule && amortizationSchedule.schedule && Array.isArray(amortizationSchedule.schedule)) {
+                const yearEndDate = new Date(year, 11, 31);
+                const yearPayments = amortizationSchedule.schedule.filter(row => new Date(row.date) <= yearEndDate);
+                
+                if (yearPayments.length > 0) {
+                  const totalPaid = yearPayments.reduce((sum, row) => sum + row.principal, 0);
+                  remainingBalance = Number(investmentData.loanAmount) - totalPaid;
+                } else {
+                  remainingBalance = Number(investmentData.loanAmount);
+                }
+              }
+
+              const saleBalance = revaluedValue - saleParams.agencyFees - remainingBalance - saleParams.earlyRepaymentFees;
+
+              // Calculer l'impôt sur la plus-value (IS 25% pour SCI)
+              const acquisitionFees = (Number(investmentData.notaryFees) || 0) + (Number(investmentData.agencyFees) || 0);
+              const improvementWorks = Number(investmentData.improvementWorks) || 0;
+              const adjustedPurchasePrice = Number(investmentData.purchasePrice) + acquisitionFees + improvementWorks;
+              const grossCapitalGain = revaluedValue - adjustedPurchasePrice;
+              const capitalGainTax = grossCapitalGain > 0 ? grossCapitalGain * 0.25 : 0;
+
+              // Retourner le solde après impôt
+              return saleBalance - capitalGainTax;
+            };
+
+            return (
+              <SCIIRRSummary
+                investment={investmentData as Investment}
+                calculateBalanceFunction={calculateBalanceForIRRSCI}
+                targetYear={selectedSaleYear}
+              />
+            );
+          }
+          
+          // Pour les biens en nom propre
           // Fonction pour calculer le solde de revente (réutilisée de PropertyForm)
           const calculateBalanceForIRR = (yearIndex: number, regime: TaxRegime): number => {
             const year = startYear + yearIndex;
@@ -1801,6 +2425,11 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           'reel-bic': 'LMNP - Frais réels'
         };
         
+        const RENTAL_TYPE_LABELS: Record<string, string> = {
+          'unfurnished': 'Location nue',
+          'furnished': 'Location meublée'
+        };
+        
         // Récupérer les années disponibles
         const startYear = investmentData?.projectStartDate ? new Date(investmentData.projectStartDate).getFullYear() : new Date().getFullYear();
         const endYear = investmentData?.projectEndDate ? new Date(investmentData.projectEndDate).getFullYear() : startYear;
@@ -1809,8 +2438,10 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
         // Lire le régime actuel depuis localStorage (synchronisé avec l'onglet sélectionné)
         const regimeForBalance = getSelectedRegime();
         
-        // Calculer les valeurs pour l'année et le régime sélectionnés
-        const balanceData = calculateBalanceForYear(selectedSaleYear, regimeForBalance);
+        // Calculer les valeurs pour l'année et le régime/type sélectionnés
+        const balanceData = investmentData.sciId 
+          ? calculateBalanceForYearSCI(selectedSaleYear, selectedRentalTypeSCI)
+          : calculateBalanceForYear(selectedSaleYear, regimeForBalance);
         
         return (
           <div className="space-y-4">
@@ -1832,13 +2463,16 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
               </select>
             </div>
 
-            {/* Affichage du régime fiscal (synchronisé avec l'onglet sélectionné) */}
+            {/* Affichage du régime fiscal ou type de location (synchronisé avec l'onglet sélectionné) */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Régime fiscal
+                {investmentData.sciId ? 'Type de location' : 'Régime fiscal'}
               </label>
               <div className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-gray-900">
-                {REGIME_LABELS[regimeForBalance] || regimeForBalance}
+                {investmentData.sciId 
+                  ? (RENTAL_TYPE_LABELS[selectedRentalTypeSCI] || selectedRentalTypeSCI)
+                  : (REGIME_LABELS[regimeForBalance] || regimeForBalance)
+                }
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Sélectionné via l'onglet au-dessus du graphique

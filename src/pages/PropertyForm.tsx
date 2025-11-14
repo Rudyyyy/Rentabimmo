@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Pencil, Info } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Info, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { Investment, defaultInvestment, FinancialMetrics, AmortizationRow } from '../types/investment';
+import { SCI } from '../types/sci';
 import { useAuth } from '../contexts/AuthContext';
 import InvestmentForm from '../components/InvestmentForm';
 import ResultsDisplay from '../components/ResultsDisplay';
+import SCIResultsDisplay from '../components/SCIResultsDisplay';
 import SaleEstimation from '../components/SaleEstimation';
 import { calculateFinancialMetrics } from '../utils/calculations';
+import { getSCIById } from '../lib/api';
 import Notification from '../components/Notification';
 
 type View = 'form' | 'profitability' | 'sale' | 'tax';
@@ -24,12 +27,34 @@ export default function PropertyForm() {
   const [currentView, setCurrentView] = useState<View>('form');
   const { register, handleSubmit, reset, formState } = useForm<{ name: string, description?: string }>();
   const [isGeneralModalOpen, setIsGeneralModalOpen] = useState(false);
+  const [sciInfo, setSciInfo] = useState<SCI | null>(null);
 
   useEffect(() => {
     if (id) {
       loadProperty();
     }
   }, [id]);
+
+  // Charger les informations de la SCI quand investmentData change
+  useEffect(() => {
+    async function loadSCI() {
+      if (investmentData.sciId) {
+        console.log('🏢 Chargement de la SCI avec ID:', investmentData.sciId);
+        const sci = await getSCIById(investmentData.sciId);
+        if (sci) {
+          console.log('✅ SCI chargée:', sci.name);
+          setSciInfo(sci);
+        } else {
+          console.log('❌ SCI non trouvée');
+          setSciInfo(null);
+        }
+      } else {
+        console.log('📄 Bien en nom propre (pas de sciId)');
+        setSciInfo(null);
+      }
+    }
+    loadSCI();
+  }, [investmentData.sciId]);
 
   async function loadProperty() {
     try {
@@ -60,6 +85,7 @@ export default function PropertyForm() {
         };
         
         console.log('✅ Données d\'investissement chargées avec succès');
+        console.log('🏢 sciId trouvé:', loadedInvestmentData.sciId || 'AUCUN (bien en nom propre)');
         
         // Vérifier spécifiquement le tableau d'amortissement
         if (loadedInvestmentData.amortizationSchedule && loadedInvestmentData.amortizationSchedule.length > 0) {
@@ -330,19 +356,35 @@ export default function PropertyForm() {
             <h2 className="text-xl font-semibold text-gray-900">
               Rentabilité globale
             </h2>
-            <ResultsDisplay 
-              metrics={metrics} 
-              investment={investmentData}
-              onUpdate={(updatedInvestment) => {
-                const newInvestment = {
-                  ...defaultInvestment,
-                  ...updatedInvestment
-                };
-                setInvestmentData(newInvestment);
-                const newMetrics = calculateFinancialMetrics(newInvestment);
-                setMetrics(newMetrics);
-              }}
-            />
+            {investmentData.sciId ? (
+              <SCIResultsDisplay 
+                metrics={metrics} 
+                investment={investmentData}
+                onUpdate={(updatedInvestment) => {
+                  const newInvestment = {
+                    ...defaultInvestment,
+                    ...updatedInvestment
+                  };
+                  setInvestmentData(newInvestment);
+                  const newMetrics = calculateFinancialMetrics(newInvestment);
+                  setMetrics(newMetrics);
+                }}
+              />
+            ) : (
+              <ResultsDisplay 
+                metrics={metrics} 
+                investment={investmentData}
+                onUpdate={(updatedInvestment) => {
+                  const newInvestment = {
+                    ...defaultInvestment,
+                    ...updatedInvestment
+                  };
+                  setInvestmentData(newInvestment);
+                  const newMetrics = calculateFinancialMetrics(newInvestment);
+                  setMetrics(newMetrics);
+                }}
+              />
+            )}
           </div>
         ) : null;
       case 'sale':
@@ -422,7 +464,7 @@ export default function PropertyForm() {
                   className="h-8 w-auto"
                 />
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <div className="group relative min-w-0">
                       <span className="text-xl font-semibold text-gray-900 truncate max-w-[52vw]">
                         {investmentData?.name?.trim() || (id ? 'Bien sans nom' : 'Nouveau bien')}
@@ -441,6 +483,13 @@ export default function PropertyForm() {
                         </div>
                       )}
                     </div>
+                    {/* Badge SCI */}
+                    {sciInfo && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        <Building2 className="h-3.5 w-3.5" />
+                        SCI {sciInfo.name}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 text-sm text-gray-600">
                     {investmentData?.projectStartDate && investmentData?.projectEndDate ? (
