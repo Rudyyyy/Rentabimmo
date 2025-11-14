@@ -64,14 +64,34 @@ export default function Dashboard() {
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [showSCIForm, setShowSCIForm] = useState(false);
-  const [totalGainGoal, setTotalGainGoal] = useState<number>(() => {
-    const savedGoal = localStorage.getItem('totalGainGoal');
-    return savedGoal ? parseFloat(savedGoal) : 0;
+  
+  // Objectifs de gain total par onglet (personal et par SCI)
+  const [totalGainGoals, setTotalGainGoals] = useState<{
+    personal: number;
+    sci: Record<string, number>;
+  }>(() => {
+    const savedGoals = localStorage.getItem('totalGainGoals');
+    if (savedGoals) {
+      return JSON.parse(savedGoals);
+    }
+    
+    // Migration : récupérer l'ancien objectif unique s'il existe
+    const oldGoal = localStorage.getItem('totalGainGoal');
+    if (oldGoal) {
+      const migratedGoals = { personal: parseFloat(oldGoal), sci: {} };
+      // Sauvegarder la migration et supprimer l'ancien
+      localStorage.setItem('totalGainGoals', JSON.stringify(migratedGoals));
+      localStorage.removeItem('totalGainGoal');
+      return migratedGoals;
+    }
+    
+    return { personal: 0, sci: {} };
   });
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     const completed = localStorage.getItem('onboarding_completed');
     return completed !== 'true';
   });
+  const [activeTab, setActiveTab] = useState<{ type: 'personal' } | { type: 'sci', sciId: string }>({ type: 'personal' });
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const location = useLocation();
@@ -86,10 +106,10 @@ export default function Dashboard() {
     localStorage.setItem('propertyOrder', JSON.stringify(propertyOrder));
   }, [propertyOrder]);
 
-  // Ajouter un useEffect pour sauvegarder l'objectif
+  // Sauvegarder les objectifs dans le localStorage quand ils changent
   useEffect(() => {
-    localStorage.setItem('totalGainGoal', totalGainGoal.toString());
-  }, [totalGainGoal]);
+    localStorage.setItem('totalGainGoals', JSON.stringify(totalGainGoals));
+  }, [totalGainGoals]);
 
   useEffect(() => {
     // Load properties on mount and navigation
@@ -117,12 +137,59 @@ export default function Dashboard() {
     calculateCashFlowData();
   }, [properties, showInDashboard]);
 
+  // Gérer le changement automatique d'onglet si l'onglet actif n'a plus de biens
+  useEffect(() => {
+    if (properties.length === 0) return;
+    
+    // Vérifier si l'onglet actif a des biens
+    const hasPropertiesInCurrentTab = properties.some(property => {
+      const investment = property.investment_data as unknown as Investment;
+      if (activeTab.type === 'personal') {
+        return !investment?.sciId;
+      } else {
+        return investment?.sciId === activeTab.sciId;
+      }
+    });
+    
+    // Si l'onglet actif n'a plus de biens, basculer vers un onglet valide
+    if (!hasPropertiesInCurrentTab) {
+      // Essayer d'abord les biens en nom propre
+      if (propertiesWithoutSCI.length > 0) {
+        setActiveTab({ type: 'personal' });
+      } else if (scis.length > 0) {
+        // Sinon basculer vers le premier SCI qui a des biens
+        const firstSCIWithProperties = scis.find(sci => 
+          properties.some(p => {
+            const inv = p.investment_data as unknown as Investment;
+            return inv?.sciId === sci.id;
+          })
+        );
+        if (firstSCIWithProperties) {
+          setActiveTab({ type: 'sci', sciId: firstSCIWithProperties.id });
+        }
+      }
+    }
+  }, [properties, scis, activeTab]);
+
+  // Fonction helper pour vérifier si une propriété doit être incluse selon l'onglet actif
+  const isPropertyInActiveTab = (property: Property): boolean => {
+    if (!showInDashboard[property.id]) return false;
+    
+    const investment = property.investment_data as unknown as Investment;
+    
+    if (activeTab.type === 'personal') {
+      return !investment?.sciId;
+    } else {
+      return investment?.sciId === activeTab.sciId;
+    }
+  };
+
   // Calculer les années disponibles depuis tous les biens inclus
   // Utilise targetSaleYear si défini, sinon projectEndDate
   const getAllYears = (): number[] => {
     const allYears = new Set<number>();
     properties.forEach(property => {
-      if (!showInDashboard[property.id]) return;
+      if (!isPropertyInActiveTab(property)) return;
       const investment = property.investment_data as unknown as Investment;
       if (!investment || typeof investment !== 'object') return;
       
@@ -274,7 +341,9 @@ export default function Dashboard() {
 
   // Préparation des données du graphique - Barres empilées par bien et courbe total
   const years = getAllYears();
-  const includedProperties = properties.filter(property => showInDashboard[property.id]);
+  
+  // Filtrer les propriétés selon l'onglet actif
+  const includedProperties = properties.filter(property => isPropertyInActiveTab(property));
   
   // Couleurs pour chaque bien
   const propertyColors = [
@@ -1163,17 +1232,69 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Chart */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="h-[500px]">
-                    <Line data={chartData} options={chartOptions} />
+                {/* Onglets pour basculer entre biens en nom propre et SCI */}
+                <div className="bg-white rounded-lg shadow">
+                  <div className="border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-4 px-6" aria-label="Tabs">
+                      {/* Onglet Biens en nom propre */}
+                      {propertiesWithoutSCI.length > 0 && (
+                        <button
+                          onClick={() => setActiveTab({ type: 'personal' })}
+                          className={`
+                            whitespace-nowrap py-4 px-3 border-b-2 font-medium text-sm transition-colors
+                            ${activeTab.type === 'personal'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          🏠 Biens en nom propre
+                        </button>
+                      )}
+                      
+                      {/* Onglets SCI */}
+                      {scis.map((sci) => (
+                        <button
+                          key={sci.id}
+                          onClick={() => setActiveTab({ type: 'sci', sciId: sci.id })}
+                          className={`
+                            whitespace-nowrap py-4 px-3 border-b-2 font-medium text-sm transition-colors
+                            ${activeTab.type === 'sci' && activeTab.sciId === sci.id
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }
+                          `}
+                        >
+                          🏢 SCI {sci.name}
+                        </button>
+                      ))}
+                    </nav>
                   </div>
-                  <p className="text-sm text-gray-500 mt-4">
-                    Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Barre violette: somme cumulative des ventes. Courbe: solde global (total de tous les biens + ventes).
-                  </p>
                 </div>
 
-                {/* Total Gain Goal */}
+                {/* Message si aucun bien dans l'onglet actif */}
+                {includedProperties.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow p-8 text-center">
+                    <p className="text-gray-500 text-lg">
+                      Aucun bien inclus dans cet onglet.
+                    </p>
+                    <p className="text-gray-400 text-sm mt-2">
+                      Ajoutez des biens ou activez l'affichage des biens existants depuis la barre latérale.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Chart */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                      <div className="h-[500px]">
+                        <Line data={chartData} options={chartOptions} />
+                      </div>
+                      <p className="text-sm text-gray-500 mt-4">
+                        Barres empilées: gain total cumulé de chaque bien (chaque bien avec sa couleur). Barre violette: somme cumulative des ventes. Courbe: solde global (total de tous les biens + ventes).
+                      </p>
+                    </div>
+
+                {/* Total Gain Goal - spécifique à l'onglet actif */}
                 <TotalGainGoal 
                   totalGainData={years.map((year, yearIndex) => {
                     let total = 0;
@@ -1200,7 +1321,27 @@ export default function Dashboard() {
                       totalGain: total
                     };
                   })}
-                  onGoalChange={setTotalGainGoal}
+                  onGoalChange={(newGoal) => {
+                    setTotalGainGoals(prev => {
+                      if (activeTab.type === 'personal') {
+                        return { ...prev, personal: newGoal };
+                      } else {
+                        return {
+                          ...prev,
+                          sci: { ...prev.sci, [activeTab.sciId]: newGoal }
+                        };
+                      }
+                    });
+                  }}
+                  initialGoal={activeTab.type === 'personal' 
+                    ? totalGainGoals.personal 
+                    : (totalGainGoals.sci[activeTab.sciId] || 0)
+                  }
+                  tabLabel={activeTab.type === 'personal' 
+                    ? 'Biens en nom propre' 
+                    : `SCI ${scis.find(sci => sci.id === activeTab.sciId)?.name || ''}`
+                  }
+                  key={activeTab.type === 'personal' ? 'personal' : `sci-${activeTab.sciId}`}
                 />
 
                 {/* Tableau de revente */}
@@ -1305,6 +1446,8 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
+                  </>
+                )}
               </div>
             )}
           </main>

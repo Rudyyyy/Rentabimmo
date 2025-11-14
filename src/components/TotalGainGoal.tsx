@@ -7,14 +7,18 @@ interface TotalGainGoalProps {
     totalGain: number;
   }[];
   onGoalChange: (goal: number) => void;
+  initialGoal?: number;
+  tabLabel?: string;
 }
 
-export default function TotalGainGoal({ totalGainData, onGoalChange }: TotalGainGoalProps) {
-  const [goal, setGoal] = useState<number>(() => {
-    const savedGoal = localStorage.getItem('totalGainGoal');
-    return savedGoal ? parseFloat(savedGoal) : 0;
-  });
+export default function TotalGainGoal({ totalGainData, onGoalChange, initialGoal = 0, tabLabel }: TotalGainGoalProps) {
+  const [goal, setGoal] = useState<number>(initialGoal);
   const [targetYear, setTargetYear] = useState<number | null>(null);
+
+  // Mettre à jour le goal local quand initialGoal change (changement d'onglet)
+  useEffect(() => {
+    setGoal(initialGoal);
+  }, [initialGoal]);
 
   useEffect(() => {
     if (goal > 0) {
@@ -28,11 +32,6 @@ export default function TotalGainGoal({ totalGainData, onGoalChange }: TotalGain
     }
   }, [goal, totalGainData]);
 
-  useEffect(() => {
-    // Sauvegarder l'objectif dans le localStorage
-    localStorage.setItem('totalGainGoal', goal.toString());
-  }, [goal]);
-
   const handleGoalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0;
     setGoal(value);
@@ -41,7 +40,10 @@ export default function TotalGainGoal({ totalGainData, onGoalChange }: TotalGain
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mt-6">
-      <h3 className="text-lg font-semibold mb-4">Objectif de gain total cumulé</h3>
+      <h3 className="text-lg font-semibold mb-4">
+        Objectif de gain total cumulé
+        {tabLabel && <span className="text-sm font-normal text-gray-600 ml-2">({tabLabel})</span>}
+      </h3>
       <div className="space-y-4">
         <div className="flex items-center space-x-4">
           <div className="flex-1">
