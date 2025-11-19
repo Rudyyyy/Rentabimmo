@@ -78,7 +78,7 @@ const InvestmentAssistant: React.FC<Props> = ({ onUpdateInvestment }) => {
         .map(m => m.investment)
         .pop();
 
-      // Process message with AI (Mistral in development, OpenAI in production)
+      // Process message with AI (GPT-4o-mini in both dev and prod)
       const aiResponse = isDevelopment
         ? await processUserMessageWithMistral(inputValue.trim(), {
             previousMessages: messages.map(m => ({

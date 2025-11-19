@@ -12,7 +12,7 @@ import AcquisitionDetails from './AcquisitionDetails';
 import { TaxRegime, Investment } from '../types/investment';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule } from '../utils/calculations';
-import { getLoanInfoForYear, getYearCoverage } from '../utils/propertyCalculations';
+import { getLoanInfoForYear, getYearCoverage, adjustForCoverage } from '../utils/propertyCalculations';
 import SCITaxSidebar from './SCITaxSidebar';
 import { Brain, X } from 'lucide-react';
 import { processUserMessageWithMistral } from '../services/mistral';
@@ -798,9 +798,9 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
       const prompt = generateBalanceAnalysisPrompt();
       console.log('Prompt généré:', prompt.substring(0, 200) + '...');
       
-      // Déterminer l'environnement (dev = Mistral, prod = OpenAI)
+      // Déterminer l'environnement (dev et prod utilisent OpenAI GPT-4o-mini)
       const isDevelopment = import.meta.env.DEV;
-      console.log('Environnement:', isDevelopment ? 'DEV (Mistral)' : 'PROD (OpenAI)');
+      console.log('Environnement:', isDevelopment ? 'DEV (GPT-4o-mini)' : 'PROD (GPT-4o-mini)');
       
       const response = isDevelopment
         ? await processUserMessageWithMistral(prompt, {
@@ -816,7 +816,7 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
       setAiAnalysis(response.response);
     } catch (error: any) {
       console.error('Erreur lors de l\'analyse IA:', error);
-      setAiAnalysis(`Erreur lors de l'analyse : ${error?.message || 'Erreur inconnue'}\n\nVérifiez que Ollama est démarré avec le modèle 'mixtral' installé si vous êtes en développement.`);
+      setAiAnalysis(`Erreur lors de l'analyse : ${error?.message || 'Erreur inconnue'}\n\nVérifiez que la clé API OpenAI (VITE_OPENAI_API_KEY) est correctement configurée.`);
     } finally {
       console.log('Fin de l\'analyse IA');
       setIsAnalyzing(false);
@@ -1671,12 +1671,33 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           );
         }
         const currentYear = new Date().getFullYear();
-        const cashFlowNu = calculateYearCashFlow(currentYear, 'nu');
-        const cashFlowMeuble = calculateYearCashFlow(currentYear, 'meuble');
+        let displayYear = currentYear;
+        
+        // Trouver la première année du projet qui a des données si l'année courante n'en a pas
+        if (investmentData) {
+          const investment = investmentData as Investment;
+          const startYear = investment.projectStartDate ? new Date(investment.projectStartDate).getFullYear() : new Date().getFullYear();
+          const endYear = investment.projectEndDate ? new Date(investment.projectEndDate).getFullYear() : startYear;
+          
+          const currentYearExpense = investment.expenses?.find(e => e.year === currentYear);
+          if (!currentYearExpense) {
+            // Utiliser la première année du projet qui a des données
+            for (let year = startYear; year <= endYear; year++) {
+              const expense = investment.expenses?.find(e => e.year === year);
+              if (expense) {
+                displayYear = year;
+                break;
+              }
+            }
+          }
+        }
+        
+        const cashFlowNu = calculateYearCashFlow(displayYear, 'nu');
+        const cashFlowMeuble = calculateYearCashFlow(displayYear, 'meuble');
         
         // Calculer le nombre de mois effectifs dans l'année (pour le prorata)
         const investment = investmentData as Investment;
-        const coverage = getYearCoverage(investment, currentYear);
+        const coverage = getYearCoverage(investment, displayYear);
         const monthsInYear = coverage * 12;
         
         const monthlyNu = monthsInYear > 0 ? cashFlowNu / monthsInYear : 0;
@@ -1690,7 +1711,23 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
 
         if (investmentData) {
           const investment = investmentData as Investment;
-          const yearExpenses = investment.expenses?.find(e => e.year === currentYear);
+          
+          // Chercher d'abord l'année courante, sinon utiliser la première année du projet (déjà calculée ci-dessus)
+          let yearExpenses = investment.expenses?.find(e => e.year === displayYear);
+          if (!yearExpenses) {
+            // Si displayYear n'a pas de données, chercher la première année disponible
+            const startYear = investment.projectStartDate ? new Date(investment.projectStartDate).getFullYear() : new Date().getFullYear();
+            const endYear = investment.projectEndDate ? new Date(investment.projectEndDate).getFullYear() : startYear;
+            
+            for (let year = startYear; year <= endYear; year++) {
+              const expense = investment.expenses?.find(e => e.year === year);
+              if (expense) {
+                yearExpenses = expense;
+                displayYear = year;
+                break;
+              }
+            }
+          }
           
           if (yearExpenses) {
             // Coût total identique au tableau (achat + frais annexes + travaux)
@@ -1702,36 +1739,44 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
                               Number(investment.mandatoryDiagnostics || 0) +
                               Number(investment.renovationCosts || 0);
 
-            // Revenus bruts par régime (sans charges locataires)
-            const rent = Number(yearExpenses?.rent || 0);
-            const furnishedRent = Number(yearExpenses?.furnishedRent || 0);
-            const taxBenefit = Number(yearExpenses?.taxBenefit || 0);
+            // Calculer le prorata temporel de l'année (comme dans ResultsDisplay)
+            const coverage = getYearCoverage(investment, displayYear);
+
+            // Revenus bruts par régime avec prorata (comme dans ResultsDisplay)
+            const rent = adjustForCoverage(Number(yearExpenses?.rent || 0), coverage);
+            const furnishedRent = adjustForCoverage(Number(yearExpenses?.furnishedRent || 0), coverage);
+            const taxBenefit = adjustForCoverage(Number(yearExpenses?.taxBenefit || 0), coverage);
             const grossRevenueNu = rent + taxBenefit; // micro-foncier
             const grossRevenueMeuble = furnishedRent; // micro-bic
 
-            // Charges identiques au tableau (hors charges locataires)
+            // Charges avec prorata (comme dans ResultsDisplay)
             let totalCharges =
-              Number(yearExpenses?.propertyTax || 0) +
-              Number(yearExpenses?.condoFees || 0) +
-              Number(yearExpenses?.propertyInsurance || 0) +
-              Number(yearExpenses?.managementFees || 0) +
-              Number(yearExpenses?.unpaidRentInsurance || 0) +
-              Number(yearExpenses?.repairs || 0) +
-              Number(yearExpenses?.otherDeductible || 0) +
-              Number(yearExpenses?.otherNonDeductible || 0) -
-              Number(yearExpenses?.tenantCharges || 0);
+              adjustForCoverage(Number(yearExpenses?.propertyTax || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.condoFees || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.propertyInsurance || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.managementFees || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.unpaidRentInsurance || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.repairs || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.otherDeductible || 0), coverage) +
+              adjustForCoverage(Number(yearExpenses?.otherNonDeductible || 0), coverage) -
+              adjustForCoverage(Number(yearExpenses?.tenantCharges || 0), coverage);
 
-            // Pour les biens en SCI, ajouter les coûts du prêt
+            // Pour les biens en SCI, ajouter les coûts du prêt (calculés dynamiquement)
             if (investment.sciId) {
-              totalCharges += Number(yearExpenses?.loanPayment || 0) +
-                             Number(yearExpenses?.loanInsurance || 0);
+              const loanInfo = getLoanInfoForYear(investment, displayYear);
+              totalCharges += loanInfo.payment + loanInfo.insurance;
             }
 
+            // Annualiser pour les années partielles (rentabilité normalisée sur 12 mois, comme dans ResultsDisplay)
+            const annualizedGrossRevenueNu = coverage > 0 ? grossRevenueNu / coverage : 0;
+            const annualizedGrossRevenueMeuble = coverage > 0 ? grossRevenueMeuble / coverage : 0;
+            const annualizedTotalCharges = coverage > 0 ? totalCharges / coverage : 0;
+
             if (totalCost > 0) {
-              grossYieldNu = (grossRevenueNu / totalCost) * 100;
-              grossYieldMeuble = (grossRevenueMeuble / totalCost) * 100;
-              netYieldNu = ((grossRevenueNu - totalCharges) / totalCost) * 100;
-              netYieldMeuble = ((grossRevenueMeuble - totalCharges) / totalCost) * 100;
+              grossYieldNu = (annualizedGrossRevenueNu / totalCost) * 100;
+              grossYieldMeuble = (annualizedGrossRevenueMeuble / totalCost) * 100;
+              netYieldNu = ((annualizedGrossRevenueNu - annualizedTotalCharges) / totalCost) * 100;
+              netYieldMeuble = ((annualizedGrossRevenueMeuble - annualizedTotalCharges) / totalCost) * 100;
             }
           }
         }
@@ -1740,6 +1785,11 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
           <div className="space-y-4">
             {!isCashflowView && (
               <div className="space-y-3">
+                {displayYear !== currentYear && (
+                  <div className="text-xs text-gray-500 mb-2 pb-2 border-b border-gray-200">
+                    Données pour l'année {displayYear}
+                  </div>
+                )}
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-gray-600">Rentabilité brute location nue</span>
                   <span className="text-sm font-semibold text-green-600">
@@ -1768,9 +1818,14 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
             )}
             {isCashflowView && (
               <div className="space-y-3">
+                {displayYear !== currentYear && (
+                  <div className="text-xs text-gray-500 mb-2 pb-2 border-b border-gray-200">
+                    Données pour l'année {displayYear}
+                  </div>
+                )}
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-gray-600">
-                    Location nue (Année {currentYear} • Mensuel {formatCurrency(monthlyNu)})
+                    Location nue (Année {displayYear} • Mensuel {formatCurrency(monthlyNu)})
                   </span>
                   <span className={`text-sm font-semibold ${
                     cashFlowNu >= 0 ? 'text-green-600' : 'text-red-600'
@@ -1780,7 +1835,7 @@ Réponds de manière professionnelle, concise et structurée avec des référenc
                 </div>
                 <div className="flex justify-between items-center py-2 border-t border-gray-200 pt-2">
                   <span className="text-sm text-gray-600">
-                    Location meublée (Année {currentYear} • Mensuel {formatCurrency(monthlyMeuble)})
+                    Location meublée (Année {displayYear} • Mensuel {formatCurrency(monthlyMeuble)})
                   </span>
                   <span className={`text-sm font-semibold ${
                     cashFlowMeuble >= 0 ? 'text-green-600' : 'text-red-600'

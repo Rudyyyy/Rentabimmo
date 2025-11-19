@@ -1,6 +1,10 @@
+import OpenAI from 'openai';
 import { InvestmentSuggestion } from './openai';
 
-const OLLAMA_API_URL = 'http://localhost:11434/api';
+const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+});
 
 export async function processUserMessageWithMistral(
   message: string,
@@ -49,37 +53,23 @@ export async function processUserMessageWithMistral(
     Si l'utilisateur te demande de remplir le formulaire détaillé, propose-lui de cliquer sur le bouton "Formulaire détaillé" 
     et indique-lui que tu peux l'aider à remplir ce formulaire avec les informations qu'il te fournit.`;
 
-    const messages = [
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...context.previousMessages,
+      ...context.previousMessages.map(msg => ({
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content
+      })),
       { role: 'user', content: message }
     ];
 
-    // Créer un AbortController pour le timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes
-
-    const response = await fetch(`${OLLAMA_API_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'mixtral',
-        messages: messages,
-        stream: false,
-      }),
-      signal: controller.signal
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      temperature: 0.7,
+      max_tokens: 1000
     });
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const responseText = data.message.content;
+    const responseText = completion.choices[0].message.content || '';
 
     // Tenter d'extraire une suggestion structurée si elle existe dans la réponse
     let suggestion: InvestmentSuggestion | undefined;
@@ -98,17 +88,6 @@ export async function processUserMessageWithMistral(
     };
   } catch (error: any) {
     console.error('Error in processUserMessageWithMistral:', error);
-    
-    // Gérer les erreurs de timeout
-    if (error.name === 'AbortError') {
-      throw new Error('Timeout: Ollama ne répond pas. Vérifiez que Ollama est démarré et que le modèle \'mixtral\' est installé.');
-    }
-    
-    // Gérer les erreurs de connexion
-    if (error.message && error.message.includes('fetch')) {
-      throw new Error('Impossible de se connecter à Ollama. Vérifiez que Ollama est démarré sur http://localhost:11434');
-    }
-    
-    throw error;
+    throw new Error('Impossible de traiter votre message pour le moment. Veuillez réessayer.');
   }
 } 

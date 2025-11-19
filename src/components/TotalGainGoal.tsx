@@ -12,13 +12,42 @@ interface TotalGainGoalProps {
 }
 
 export default function TotalGainGoal({ totalGainData, onGoalChange, initialGoal = 0, tabLabel }: TotalGainGoalProps) {
-  const [goal, setGoal] = useState<number>(initialGoal);
+  // Charger la valeur initiale depuis localStorage ou utiliser initialGoal
+  const getInitialGoal = () => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = localStorage.getItem('totalGainGoal');
+      if (stored) {
+        const parsed = parseFloat(stored);
+        if (!isNaN(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return initialGoal;
+  };
+
+  const [goal, setGoal] = useState<number>(getInitialGoal());
   const [targetYear, setTargetYear] = useState<number | null>(null);
 
   // Mettre à jour le goal local quand initialGoal change (changement d'onglet)
+  // Seulement si localStorage est vide
   useEffect(() => {
-    setGoal(initialGoal);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = localStorage.getItem('totalGainGoal');
+      if (!stored && initialGoal !== goal) {
+        setGoal(initialGoal);
+      }
+    } else if (initialGoal !== goal) {
+      setGoal(initialGoal);
+    }
   }, [initialGoal]);
+
+  // Sauvegarder dans localStorage quand goal change (sauf au montage initial)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('totalGainGoal', goal.toString());
+    }
+  }, [goal]);
 
   useEffect(() => {
     if (goal > 0) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Settings } from 'lucide-react';
+import { Plus, Pencil, Settings, MessageSquare } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import {
@@ -22,6 +22,7 @@ import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { generateAmortizationSchedule, calculateRevenuesWithVacancy } from '../utils/calculations';
 import { useLocation } from 'react-router-dom';
 import QuickPropertyForm from '../components/QuickPropertyForm';
+import PropertyCreationChatbot from '../components/PropertyCreationChatbot';
 import TotalGainGoal from '../components/TotalGainGoal';
 import OnboardingTour from '../components/OnboardingTour';
 import { SCI } from '../types/sci';
@@ -63,6 +64,7 @@ export default function Dashboard() {
     return savedOrder ? JSON.parse(savedOrder) : [];
   });
   const [showQuickForm, setShowQuickForm] = useState(false);
+  const [showChatbot, setShowChatbot] = useState(false);
   const [showSCIForm, setShowSCIForm] = useState(false);
   const [editingSCI, setEditingSCI] = useState<SCI | null>(null);
   
@@ -1073,76 +1075,105 @@ export default function Dashboard() {
           <div className="sticky top-4 space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             
             {/* Section : Biens en nom propre */}
-            {propertiesWithoutSCI.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">🏠 Biens en nom propre</h2>
-                <div className="space-y-3">
-                  {propertiesWithoutSCI.map((property) => {
-                    const investment = property.investment_data as unknown as Investment;
-                    if (!investment || typeof investment !== 'object') return null;
-                    
-                    return (
-                      <div
-                        key={property.id}
-                        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative"
-                      >
-                        {/* Bouton de modification */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/property/${property.id}`);
-                          }}
-                          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Modifier le bien"
+            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">🏠 Biens en nom propre</h2>
+              {propertiesWithoutSCI.length > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {propertiesWithoutSCI.map((property) => {
+                      const investment = property.investment_data as unknown as Investment;
+                      if (!investment || typeof investment !== 'object') return null;
+                      
+                      return (
+                        <div
+                          key={property.id}
+                          className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 group hover:shadow-md transition-shadow relative"
                         >
-                          <Pencil className="h-4 w-4 text-gray-500" />
-                        </button>
+                          {/* Bouton de modification */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/property/${property.id}`);
+                            }}
+                            className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Modifier le bien"
+                          >
+                            <Pencil className="h-4 w-4 text-gray-500" />
+                          </button>
 
-                        {/* Contenu principal */}
-                        <div className="pr-10">
-                          <div className="flex justify-between items-start mb-2">
-                            <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
-                              }}
-                              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
-                                showInDashboard[property.id] 
-                                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              }`}
-                            >
-                              {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
-                            </button>
-                          </div>
-                          {investment.description && (
-                            <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                              {investment.description}
-                            </p>
-                          )}
-                          <div className="text-sm">
-                            <div className="flex justify-between items-center">
-                              <span className="text-gray-600">Régime</span>
-                              <span className="font-medium text-gray-900">{getRegimeLabel(investment.selectedRegime)}</span>
+                          {/* Contenu principal */}
+                          <div className="pr-10">
+                            <div className="flex justify-between items-start mb-2">
+                              <h3 className="text-base font-semibold text-gray-900">{property.name}</h3>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowInDashboard(prev => ({ ...prev, [property.id]: !prev[property.id] }));
+                                }}
+                                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                                  showInDashboard[property.id] 
+                                    ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                {showInDashboard[property.id] ? 'Inclus' : 'Exclu'}
+                              </button>
+                            </div>
+                            {investment.description && (
+                              <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                                {investment.description}
+                              </p>
+                            )}
+                            <div className="text-sm">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-600">Régime</span>
+                                <span className="font-medium text-gray-900">{getRegimeLabel(investment.selectedRegime)}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                    <button
+                      onClick={() => setShowChatbot(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg shadow-sm hover:bg-purple-700"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Créer via chatbot
+                    </button>
+                    <button
+                      onClick={() => setShowQuickForm(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Ajouter un bien
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 mb-4">Aucun bien en nom propre pour le moment.</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setShowChatbot(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg shadow-sm hover:bg-purple-700"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Créer via chatbot
+                    </button>
+                    <button
+                      onClick={() => setShowQuickForm(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Ajouter un bien
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => setShowQuickForm(true)}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Ajouter un bien
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Section : SCI */}
             {scis.map((sci) => (
@@ -1224,10 +1255,19 @@ export default function Dashboard() {
                   })}
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-blue-200">
+                <div className="mt-4 pt-4 border-t border-blue-200 space-y-2">
                   <button
                     onClick={() => {
-                      // TODO: Ajouter un bien à cette SCI
+                      console.log('Ajouter un bien à la SCI via chatbot:', sci.id);
+                      setShowChatbot(true);
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg shadow-sm hover:bg-purple-700"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Créer via chatbot
+                  </button>
+                  <button
+                    onClick={() => {
                       console.log('Ajouter un bien à la SCI:', sci.id);
                       setShowQuickForm(true);
                     }}
@@ -1487,6 +1527,14 @@ export default function Dashboard() {
           </main>
         </div>
       </div>
+
+      {/* Chatbot de création de bien */}
+      {showChatbot && (
+        <PropertyCreationChatbot
+          onClose={() => setShowChatbot(false)}
+          onSave={handleQuickPropertySave}
+        />
+      )}
 
       {/* Formulaire rapide */}
       {showQuickForm && (

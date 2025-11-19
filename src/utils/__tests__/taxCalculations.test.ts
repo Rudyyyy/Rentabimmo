@@ -33,6 +33,8 @@ describe('taxCalculations', () => {
     managementFees: 600,
     unpaidRentInsurance: 200,
     startDate: '2023-01-01',
+    projectStartDate: '2023-01-01',
+    projectEndDate: '2043-01-01',
     appreciationType: 'annual',
     appreciationValue: 3,
     address: 'Test Address',

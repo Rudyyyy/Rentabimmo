@@ -14,7 +14,7 @@
 
 import { useState } from 'react';
 import { Investment } from '../types/investment';
-import { getLoanInfoForYear, getYearCoverage } from '../utils/propertyCalculations';
+import { getLoanInfoForYear, getYearCoverage, isPartialYear } from '../utils/propertyCalculations';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -242,10 +242,17 @@ export default function SCICashFlowDisplay({ investment }: Props) {
               const monthsInYear = coverage * 12;
               const monthlyCashFlow = monthsInYear > 0 ? cashFlow / monthsInYear : 0;
 
+              const isPartial = isPartialYear(investment, year);
+
               return (
-                <tr key={year}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {year}
+                <tr key={year} className={isPartial ? 'bg-amber-50' : ''}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <span>{year}</span>
+                      {isPartial && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">partiel</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(revenues)}

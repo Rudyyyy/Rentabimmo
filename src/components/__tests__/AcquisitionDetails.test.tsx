@@ -18,6 +18,29 @@ vi.mock('lucide-react', () => ({
   ),
 }));
 
+// Mock SCISelector component
+vi.mock('../SCISelector', () => ({
+  default: ({ selectedSCIId, propertyValue, purchasePrice, onChange }: any) => (
+    <div data-testid="sci-selector">
+      <select
+        data-testid="sci-select"
+        value={selectedSCIId || ''}
+        onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value, propertyValue || purchasePrice)}
+      >
+        <option value="">Nom propre</option>
+      </select>
+      {selectedSCIId && (
+        <input
+          data-testid="property-value-input"
+          type="number"
+          value={propertyValue || purchasePrice}
+          onChange={(e) => onChange(selectedSCIId, Number(e.target.value))}
+        />
+      )}
+    </div>
+  ),
+}));
+
 describe('AcquisitionDetails', () => {
   const mockOnUpdate = vi.fn();
 

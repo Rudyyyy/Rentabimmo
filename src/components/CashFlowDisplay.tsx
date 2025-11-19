@@ -23,6 +23,7 @@ import { Investment, TaxResults } from '../types/investment';
 import { TaxRegime } from '../types/tax';
 import { calculateAllTaxRegimes } from '../utils/taxCalculations';
 import { calculateRevenuesWithVacancy } from '../utils/calculations';
+import { getYearCoverage, getLoanInfoForYear, adjustForCoverage, isPartialYear } from '../utils/propertyCalculations';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -95,28 +96,50 @@ export default function CashFlowDisplay({ investment }: Props) {
         const yearExpense = investment.expenses.find(e => e.year === year);
         if (!yearExpense) return 0;
 
-        // Calcul des revenus selon le régime avec vacance locative
+        // Calculer le prorata temporel de l'année
+        const coverage = getYearCoverage(investment, year);
+
+        // Ajuster les valeurs de revenus pour la couverture avant de calculer avec vacance
+        const adjustedRent = adjustForCoverage(Number(yearExpense.rent || 0), coverage);
+        const adjustedFurnishedRent = adjustForCoverage(Number(yearExpense.furnishedRent || 0), coverage);
+        const adjustedTenantCharges = adjustForCoverage(Number(yearExpense.tenantCharges || 0), coverage);
+        const adjustedTaxBenefit = adjustForCoverage(Number(yearExpense.taxBenefit || 0), coverage);
+        
+        // Créer un yearExpense ajusté temporaire pour calculateRevenuesWithVacancy
+        const adjustedYearExpense = {
+          ...yearExpense,
+          rent: adjustedRent,
+          furnishedRent: adjustedFurnishedRent,
+          tenantCharges: adjustedTenantCharges,
+          taxBenefit: adjustedTaxBenefit
+        };
+        
+        // Calcul des revenus selon le régime avec vacance locative (sur valeurs ajustées)
         const revenues = calculateRevenuesWithVacancy(
-          yearExpense,
+          adjustedYearExpense,
           regime,
           investment.expenseProjection.vacancyRate || 0
         );
 
-        // Total des dépenses
-        const expenses = 
-          Number(yearExpense.propertyTax || 0) +
-          Number(yearExpense.condoFees || 0) +
-          Number(yearExpense.propertyInsurance || 0) +
-          Number(yearExpense.managementFees || 0) +
-          Number(yearExpense.unpaidRentInsurance || 0) +
-          Number(yearExpense.repairs || 0) +
-          Number(yearExpense.otherDeductible || 0) +
-          Number(yearExpense.otherNonDeductible || 0) +
-          Number(yearExpense.loanPayment || 0) +
-          Number(yearExpense.loanInsurance || 0);
+        // Charges de gestion avec prorata
+        const managementExpenses = 
+          adjustForCoverage(Number(yearExpense.propertyTax || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.condoFees || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.propertyInsurance || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.managementFees || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.unpaidRentInsurance || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.repairs || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.otherDeductible || 0), coverage) +
+          adjustForCoverage(Number(yearExpense.otherNonDeductible || 0), coverage);
+
+        // Coûts du prêt calculés dynamiquement (prorata automatique)
+        const loanInfo = getLoanInfoForYear(investment, year);
+        const loanCosts = loanInfo.payment + loanInfo.insurance;
+
+        const totalExpenses = managementExpenses + loanCosts;
 
         // Cash flow (sans imposition)
-        const cashFlow = revenues - expenses;
+        const cashFlow = revenues - totalExpenses;
         return cashFlow;
       });
 
@@ -229,40 +252,72 @@ export default function CashFlowDisplay({ investment }: Props) {
               const yearExpense = investment.expenses.find(e => e.year === year);
               if (!yearExpense) return null;
 
-              // Calcul des revenus selon le régime avec vacance locative
+              // Calculer le prorata temporel de l'année
+              const coverage = getYearCoverage(investment, year);
+
+              // Ajuster les valeurs de revenus pour la couverture avant de calculer avec vacance
+              const adjustedRent = adjustForCoverage(Number(yearExpense.rent || 0), coverage);
+              const adjustedFurnishedRent = adjustForCoverage(Number(yearExpense.furnishedRent || 0), coverage);
+              const adjustedTenantCharges = adjustForCoverage(Number(yearExpense.tenantCharges || 0), coverage);
+              const adjustedTaxBenefit = adjustForCoverage(Number(yearExpense.taxBenefit || 0), coverage);
+              
+              // Créer un yearExpense ajusté temporaire pour calculateRevenuesWithVacancy
+              const adjustedYearExpense = {
+                ...yearExpense,
+                rent: adjustedRent,
+                furnishedRent: adjustedFurnishedRent,
+                tenantCharges: adjustedTenantCharges,
+                taxBenefit: adjustedTaxBenefit
+              };
+              
+              // Calcul des revenus selon le régime avec vacance locative (sur valeurs ajustées)
               const revenues = calculateRevenuesWithVacancy(
-                yearExpense,
+                adjustedYearExpense,
                 regime,
                 investment.expenseProjection.vacancyRate || 0
               );
 
-              // Total des dépenses
-              const expenses = 
-                Number(yearExpense.propertyTax || 0) +
-                Number(yearExpense.condoFees || 0) +
-                Number(yearExpense.propertyInsurance || 0) +
-                Number(yearExpense.managementFees || 0) +
-                Number(yearExpense.unpaidRentInsurance || 0) +
-                Number(yearExpense.repairs || 0) +
-                Number(yearExpense.otherDeductible || 0) +
-                Number(yearExpense.otherNonDeductible || 0) +
-                Number(yearExpense.loanPayment || 0) +
-                Number(yearExpense.loanInsurance || 0);
+              // Charges de gestion avec prorata
+              const managementExpenses = 
+                adjustForCoverage(Number(yearExpense.propertyTax || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.condoFees || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.propertyInsurance || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.managementFees || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.unpaidRentInsurance || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.repairs || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.otherDeductible || 0), coverage) +
+                adjustForCoverage(Number(yearExpense.otherNonDeductible || 0), coverage);
+
+              // Coûts du prêt calculés dynamiquement (prorata automatique)
+              const loanInfo = getLoanInfoForYear(investment, year);
+              const loanCosts = loanInfo.payment + loanInfo.insurance;
+
+              const totalExpenses = managementExpenses + loanCosts;
 
               // Cash flow (sans imposition)
-              const cashFlow = revenues - expenses;
-              const monthlyCashFlow = cashFlow / 12;
+              const cashFlow = revenues - totalExpenses;
+              
+              // Calculer le mensualisé en fonction de la couverture
+              const monthsInYear = coverage * 12;
+              const monthlyCashFlow = monthsInYear > 0 ? cashFlow / monthsInYear : 0;
+
+              const isPartial = isPartialYear(investment, year);
 
               return (
-                <tr key={year}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {year}
+                <tr key={year} className={isPartial ? 'bg-amber-50' : ''}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <span>{year}</span>
+                      {isPartial && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">partiel</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatCurrency(revenues)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatCurrency(expenses)}
+                    {formatCurrency(totalExpenses)}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
                     cashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'
